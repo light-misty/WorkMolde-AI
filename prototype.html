@@ -1,0 +1,1677 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocAgent - AI文档处理Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#FFFFFF;--bg-sub:#F7F8FA;--bg-hover:#F0F1F5;
+  --text-primary:#1F2329;--text-secondary:#646A73;--text-tertiary:#8F959E;
+  --accent:#3370FF;--accent-light:#EBF1FF;--accent-hover:#2860E1;
+  --success:#34C724;--success-light:#EDFAE8;
+  --warning:#FF9F18;--warning-light:#FFF3E0;
+  --error:#F54A45;--error-light:#FEF0EF;
+  --border:#E5E6EB;--border-light:#F0F1F5;
+  --radius-sm:6px;--radius-md:8px;--radius-lg:12px;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.05);
+  --shadow-md:0 4px 12px rgba(0,0,0,.08);
+  --shadow-lg:0 8px 24px rgba(0,0,0,.12);
+  --font-sans:'DM Sans','PingFang SC','Microsoft YaHei',sans-serif;
+  --font-mono:'JetBrains Mono','SF Mono',monospace;
+}
+html,body{height:100%;font-family:var(--font-sans);font-size:14px;color:var(--text-primary);background:var(--bg);overflow:hidden;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer;border:none;background:none;font-size:inherit;color:inherit}
+input,textarea{font-family:inherit;font-size:inherit;color:inherit;border:none;outline:none;background:none}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#D0D3D9;border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#B0B3BA}
+
+.app{display:flex;flex-direction:column;height:100vh}
+
+/* ===== 顶部栏 ===== */
+.topbar{
+  display:flex;align-items:center;height:52px;padding:0 16px;
+  border-bottom:1px solid var(--border);background:var(--bg);
+  flex-shrink:0;gap:12px;z-index:100;
+}
+.topbar-sep{width:1px;height:24px;background:var(--border);margin:0 4px}
+.workspace-selector{
+  display:flex;align-items:center;gap:6px;padding:5px 10px;
+  border-radius:var(--radius-sm);cursor:pointer;transition:background .15s;
+  font-size:13px;font-weight:500;color:var(--text-secondary);
+  white-space:nowrap;
+}
+.workspace-selector:hover{background:var(--bg-sub)}
+.workspace-selector .ws-dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.topbar-spacer{flex:1}
+.topbar-actions{display:flex;align-items:center;gap:4px}
+.topbar-btn{
+  width:34px;height:34px;border-radius:var(--radius-sm);
+  display:flex;align-items:center;justify-content:center;
+  transition:background .15s;color:var(--text-secondary);
+}
+.topbar-btn:hover{background:var(--bg-sub);color:var(--text-primary)}
+.topbar-btn svg{width:18px;height:18px}
+
+/* ===== 主体布局 ===== */
+.main-layout{display:flex;flex:1;overflow:hidden}
+
+/* ===== 主界面区 ===== */
+.main-area{flex:1;display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--border)}
+
+/* 工作流区域 */
+.workflow-area{flex:1;overflow-y:auto;padding:24px 32px}
+.workflow-empty{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;color:var(--text-tertiary);gap:16px;
+}
+.workflow-empty .empty-icon{width:64px;height:64px;border-radius:16px;background:var(--bg-sub);display:flex;align-items:center;justify-content:center}
+.workflow-empty .empty-icon svg{width:32px;height:32px;color:var(--text-tertiary)}
+.workflow-empty h3{font-size:16px;font-weight:600;color:var(--text-secondary)}
+.workflow-empty p{font-size:13px;max-width:320px;text-align:center;line-height:1.6}
+
+/* 工作流时间线 */
+.workflow-timeline{position:relative;padding-left:28px}
+.workflow-timeline::before{
+  content:'';position:absolute;left:11px;top:8px;bottom:8px;width:1.5px;
+  background:var(--border);
+}
+
+/* 工作流节点 */
+.wf-node{position:relative;margin-bottom:4px;animation:nodeIn .3s ease}
+@keyframes nodeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.wf-node-dot{
+  position:absolute;left:-28px;top:14px;width:22px;height:22px;
+  border-radius:50%;display:flex;align-items:center;justify-content:center;
+  z-index:2;font-size:10px;
+}
+.wf-node-dot.user{background:var(--accent-light);color:var(--accent)}
+.wf-node-dot.thinking{background:#F3F0FF;color:#6C5CE7}
+.wf-node-dot.tool{background:var(--bg-sub);color:var(--text-secondary)}
+.wf-node-dot.result{background:var(--success-light);color:var(--success)}
+.wf-node-dot.error{background:var(--error-light);color:var(--error)}
+.wf-node-dot.reply{background:var(--accent-light);color:var(--accent)}
+
+.wf-node-card{
+  border-radius:var(--radius-md);border:1px solid var(--border);
+  background:var(--bg);overflow:hidden;transition:border-color .15s;
+}
+.wf-node-card:hover{border-color:#D0D3D9}
+.wf-node-header{
+  display:flex;align-items:center;gap:8px;padding:10px 14px;
+  cursor:pointer;user-select:none;
+}
+.wf-node-label{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+.wf-node-label.user{color:var(--accent)}
+.wf-node-label.thinking{color:#6C5CE7}
+.wf-node-label.tool{color:var(--text-secondary)}
+.wf-node-label.result{color:var(--success)}
+.wf-node-label.error{color:var(--error)}
+.wf-node-label.reply{color:var(--accent)}
+.wf-node-time{font-size:11px;color:var(--text-tertiary);font-family:var(--font-mono);margin-left:auto}
+.wf-node-toggle{
+  width:20px;height:20px;display:flex;align-items:center;justify-content:center;
+  border-radius:4px;transition:background .15s;color:var(--text-tertiary);
+}
+.wf-node-toggle:hover{background:var(--bg-sub)}
+.wf-node-toggle svg{width:14px;height:14px;transition:transform .2s}
+.wf-node.collapsed .wf-node-toggle svg{transform:rotate(-90deg)}
+.wf-node-body{padding:0 14px 12px}
+.wf-node.collapsed .wf-node-body{display:none}
+
+/* 用户指令节点 */
+.wf-user-text{font-size:14px;line-height:1.6;color:var(--text-primary);padding:4px 0}
+
+/* 思考节点 */
+.wf-thinking-text{font-size:13px;line-height:1.7;color:var(--text-secondary);font-style:italic;padding:4px 0}
+.wf-thinking-text .cursor-blink{
+  display:inline-block;width:2px;height:14px;background:var(--accent);
+  margin-left:2px;vertical-align:middle;animation:blink 1s step-end infinite;
+}
+@keyframes blink{50%{opacity:0}}
+
+/* Tool调用节点 */
+.wf-tool-info{display:flex;flex-direction:column;gap:8px;padding:4px 0}
+.wf-tool-name{
+  display:inline-flex;align-items:center;gap:6px;
+  font-family:var(--font-mono);font-size:12px;font-weight:500;
+  padding:3px 8px;background:var(--bg-sub);border-radius:4px;color:var(--text-primary);
+  width:fit-content
+}
+.wf-tool-name .tool-badge{
+  font-size:10px;font-weight:600;padding:1px 5px;border-radius:3px;
+  background:var(--accent-light);color:var(--accent);font-family:var(--font-sans);
+}
+.wf-tool-args{font-family:var(--font-mono);font-size:12px;color:var(--text-secondary);line-height:1.6;background:var(--bg-sub);padding:8px 10px;border-radius:var(--radius-sm);white-space:pre-wrap;word-break:break-all}
+
+/* 执行结果节点 */
+.wf-result-text{font-size:13px;line-height:1.6;padding:4px 0}
+.wf-result-text.success{color:var(--success)}
+.wf-result-text.error{color:var(--error)}
+.wf-result-file{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 10px;background:var(--accent-light);border-radius:var(--radius-sm);
+  font-size:12px;color:var(--accent);cursor:pointer;margin-top:4px;
+  transition:background .15s;
+}
+.wf-result-file:hover{background:#D9E5FF}
+
+/* 最终回复节点 */
+.wf-reply-text{font-size:14px;line-height:1.7;color:var(--text-primary);padding:4px 0}
+.wf-reply-text code{
+  font-family:var(--font-mono);font-size:12px;
+  padding:2px 6px;background:var(--bg-sub);border-radius:3px;
+}
+
+/* 确认对话框 */
+.confirm-dialog{
+  margin-top:8px;padding:12px;border:1px solid var(--warning);border-radius:var(--radius-md);
+  background:#FFFBF5;
+}
+.confirm-dialog-title{font-size:13px;font-weight:600;color:var(--warning);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.confirm-dialog-desc{font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px}
+.confirm-dialog-actions{display:flex;gap:8px}
+.btn{
+  padding:6px 14px;border-radius:var(--radius-sm);font-size:12px;font-weight:500;
+  transition:all .15s;
+}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent-hover)}
+.btn-danger{background:var(--error);color:#fff}
+.btn-danger:hover{background:#D63D39}
+.btn-ghost{background:var(--bg-sub);color:var(--text-secondary)}
+.btn-ghost:hover{background:var(--bg-hover)}
+
+/* ===== 输入框区域 ===== */
+.input-area{
+  padding:16px 32px 20px;border-top:1px solid var(--border);
+  background:var(--bg);flex-shrink:0;
+}
+.input-box{
+  display:flex;align-items:flex-end;gap:8px;
+  border:1.5px solid var(--border);border-radius:var(--radius-md);
+  padding:10px 12px;transition:border-color .2s,box-shadow .2s;
+  background:var(--bg);
+}
+.input-box:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(51,112,255,.1)}
+.input-box textarea{
+  flex:1;resize:none;min-height:22px;max-height:120px;
+  line-height:1.5;font-size:14px;
+}
+.input-actions{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.input-btn{
+  width:32px;height:32px;border-radius:var(--radius-sm);
+  display:flex;align-items:center;justify-content:center;
+  transition:background .15s;color:var(--text-tertiary);
+}
+.input-btn:hover{background:var(--bg-sub);color:var(--text-secondary)}
+.input-btn.send{
+  background:var(--accent);color:#fff;width:34px;height:34px;
+}
+.input-btn.send:hover{background:var(--accent-hover)}
+.input-btn svg{width:18px;height:18px}
+.input-hint{font-size:11px;color:var(--text-tertiary);margin-top:6px;display:flex;align-items:center;gap:12px}
+.input-hint kbd{
+  font-family:var(--font-mono);font-size:10px;padding:1px 5px;
+  background:var(--bg-sub);border:1px solid var(--border);border-radius:3px;
+}
+
+/* ===== 右侧栏 ===== */
+.sidebar{
+  width:300px;flex-shrink:0;display:flex;flex-direction:column;
+  background:var(--bg-sub);overflow:hidden;
+}
+.sidebar-section{border-bottom:1px solid var(--border)}
+.sidebar-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;cursor:pointer;user-select:none;
+  transition:background .15s;
+}
+.sidebar-header:hover{background:rgba(0,0,0,.02)}
+.sidebar-title{font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px}
+.sidebar-toggle{color:var(--text-tertiary);transition:transform .2s}
+.sidebar-toggle svg{width:14px;height:14px}
+.sidebar-section.collapsed .sidebar-toggle svg{transform:rotate(-90deg)}
+.sidebar-section.collapsed .sidebar-body{display:none}
+.sidebar-body{padding:0 16px 12px}
+
+/* 文件树 */
+.file-tree{font-size:13px}
+.ft-item{
+  display:flex;align-items:center;gap:6px;padding:4px 8px;
+  border-radius:var(--radius-sm);cursor:pointer;transition:background .1s;
+  color:var(--text-primary);
+}
+.ft-item:hover{background:rgba(0,0,0,.04)}
+.ft-item.active{background:var(--accent-light);color:var(--accent)}
+.ft-item .ft-icon{width:16px;height:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px}
+.ft-item .ft-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ft-item .ft-badge{
+  font-size:10px;padding:1px 5px;border-radius:3px;
+  background:var(--accent-light);color:var(--accent);font-weight:500;
+}
+.ft-item .ft-modified{
+  width:6px;height:6px;border-radius:50%;background:var(--warning);flex-shrink:0;
+}
+.ft-folder{font-weight:500}
+.ft-indent{padding-left:20px}
+.ft-search{
+  display:flex;align-items:center;gap:6px;padding:6px 8px;margin-bottom:6px;
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);
+}
+.ft-search svg{width:14px;height:14px;color:var(--text-tertiary);flex-shrink:0}
+.ft-search input{flex:1;font-size:12px}
+.ft-search input::placeholder{color:var(--text-tertiary)}
+
+/* Agent信息 */
+.agent-info{display:flex;flex-direction:column;gap:10px}
+.agent-row{display:flex;align-items:center;justify-content:space-between}
+.agent-label{font-size:12px;color:var(--text-tertiary)}
+.agent-value{font-size:13px;font-weight:500;color:var(--text-primary)}
+.agent-value.editable{
+  padding:2px 8px;border-radius:4px;cursor:pointer;
+  border:1px solid transparent;transition:all .15s;
+}
+.agent-value.editable:hover{border-color:var(--border);background:var(--bg)}
+.agent-model{
+  display:flex;align-items:center;gap:6px;
+  padding:4px 10px;background:var(--bg);border-radius:var(--radius-sm);
+  font-size:12px;font-weight:500;
+}
+.agent-model .model-dot{width:6px;height:6px;border-radius:50%;background:var(--success)}
+
+/* Todo列表 */
+.todo-list{display:flex;flex-direction:column;gap:4px}
+.todo-item{
+  display:flex;align-items:center;gap:8px;padding:6px 8px;
+  border-radius:var(--radius-sm);font-size:13px;
+}
+.todo-item.done{color:var(--text-tertiary)}
+.todo-item.done .todo-text{text-decoration:line-through}
+.todo-item.active{color:var(--accent);font-weight:500}
+.todo-item.pending{color:var(--text-secondary)}
+.todo-check{
+  width:16px;height:16px;border-radius:50%;border:1.5px solid var(--border);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  transition:all .15s;
+}
+.todo-item.done .todo-check{background:var(--success);border-color:var(--success);color:#fff}
+.todo-item.active .todo-check{border-color:var(--accent);background:var(--accent-light)}
+.todo-item.active .todo-check::after{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* Token统计 */
+.token-stats{display:flex;flex-direction:column;gap:8px}
+.token-row{display:flex;align-items:center;justify-content:space-between;font-size:12px}
+.token-label{color:var(--text-tertiary)}
+.token-value{font-family:var(--font-mono);font-weight:500;color:var(--text-primary)}
+.token-bar{height:4px;background:var(--border-light);border-radius:2px;overflow:hidden}
+.token-bar-fill{height:100%;border-radius:2px;transition:width .5s ease}
+.token-bar-fill.input{background:var(--accent)}
+.token-bar-fill.output{background:#6C5CE7}
+.token-divider{height:1px;background:var(--border);margin:4px 0}
+
+/* ===== 预览面板 ===== */
+.preview-overlay{
+  position:fixed;top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,.3);z-index:200;display:none;
+  animation:fadeIn .2s ease;
+}
+.preview-overlay.active{display:flex;align-items:center;justify-content:center}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.preview-panel{
+  width:80%;max-width:960px;height:85vh;background:var(--bg);
+  border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);
+  display:flex;flex-direction:column;overflow:hidden;
+  animation:slideUp .25s ease;
+}
+@keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.preview-topbar{
+  display:flex;align-items:center;padding:12px 20px;
+  border-bottom:1px solid var(--border);gap:12px;flex-shrink:0;
+}
+.preview-topbar .close-btn{
+  width:30px;height:30px;border-radius:var(--radius-sm);
+  display:flex;align-items:center;justify-content:center;
+  transition:background .15s;color:var(--text-secondary);
+}
+.preview-topbar .close-btn:hover{background:var(--bg-sub)}
+.preview-filename{font-weight:600;font-size:14px;flex:1}
+.preview-topbar-actions{display:flex;gap:6px}
+.preview-topbar-actions .btn{font-size:11px;padding:4px 10px}
+.preview-content{flex:1;overflow-y:auto;padding:32px 40px;line-height:1.8}
+.preview-content h1{font-size:24px;font-weight:700;margin-bottom:16px;color:var(--text-primary)}
+.preview-content h2{font-size:18px;font-weight:600;margin:24px 0 12px;color:var(--text-primary);padding-bottom:8px;border-bottom:1px solid var(--border)}
+.preview-content h3{font-size:15px;font-weight:600;margin:16px 0 8px;color:var(--text-primary)}
+.preview-content p{margin-bottom:12px;color:var(--text-secondary)}
+.preview-content ul,.preview-content ol{margin-bottom:12px;padding-left:24px;color:var(--text-secondary)}
+.preview-content li{margin-bottom:4px}
+.preview-content code{
+  font-family:var(--font-mono);font-size:12px;
+  padding:2px 6px;background:var(--bg-sub);border-radius:3px;
+}
+.preview-content pre{
+  background:#1E1E2E;color:#CDD6F4;padding:16px;border-radius:var(--radius-md);
+  overflow-x:auto;margin-bottom:16px;font-family:var(--font-mono);font-size:12px;line-height:1.6;
+}
+.preview-content table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px}
+.preview-content th,.preview-content td{padding:8px 12px;border:1px solid var(--border);text-align:left}
+.preview-content th{background:var(--bg-sub);font-weight:600}
+
+/* 差异对比 */
+.diff-view{display:flex;gap:0;height:100%}
+.diff-pane{flex:1;overflow-y:auto;padding:20px;font-family:var(--font-mono);font-size:12px;line-height:1.8}
+.diff-pane-left{background:#FAFAFA;border-right:1px solid var(--border)}
+.diff-pane-right{background:var(--bg)}
+.diff-add{background:var(--success-light);color:var(--success)}
+.diff-remove{background:var(--error-light);color:var(--error)}
+.diff-line-num{
+  display:inline-block;width:36px;color:var(--text-tertiary);
+  text-align:right;margin-right:12px;user-select:none;
+}
+
+/* ===== 设置弹窗 ===== */
+.settings-overlay{
+  position:fixed;top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,.35);z-index:300;display:none;
+  animation:fadeIn .2s ease;
+}
+.settings-overlay.active{display:flex;align-items:center;justify-content:center}
+.settings-panel{
+  width:720px;max-height:80vh;background:var(--bg);
+  border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);
+  display:flex;flex-direction:column;overflow:hidden;
+  animation:slideUp .25s ease;
+}
+.settings-topbar{
+  display:flex;align-items:center;padding:16px 24px;
+  border-bottom:1px solid var(--border);gap:12px;flex-shrink:0;
+}
+.settings-topbar h2{font-size:16px;font-weight:700;flex:1}
+.settings-body{display:flex;flex:1;overflow:hidden}
+.settings-nav{
+  width:180px;flex-shrink:0;border-right:1px solid var(--border);
+  padding:12px 8px;overflow-y:auto;
+}
+.settings-nav-item{
+  padding:8px 12px;border-radius:var(--radius-sm);font-size:13px;
+  cursor:pointer;transition:background .15s;color:var(--text-secondary);
+  margin-bottom:2px;
+}
+.settings-nav-item:hover{background:var(--bg-sub)}
+.settings-nav-item.active{background:var(--accent-light);color:var(--accent);font-weight:500}
+.settings-content{flex:1;overflow-y:auto;padding:24px}
+.settings-group{margin-bottom:24px}
+.settings-group-title{font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:12px;text-transform:uppercase;letter-spacing:.3px}
+.settings-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border-light)}
+.settings-row:last-child{border-bottom:none}
+.settings-row-label{font-size:13px;color:var(--text-primary)}
+.settings-row-desc{font-size:11px;color:var(--text-tertiary);margin-top:2px}
+.settings-input{
+  padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);
+  font-size:13px;width:240px;transition:border-color .15s;
+}
+.settings-input:focus{border-color:var(--accent)}
+.settings-select{
+  padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);
+  font-size:13px;background:var(--bg);cursor:pointer;
+}
+.provider-card{
+  padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);
+  margin-bottom:8px;transition:border-color .15s;
+}
+.provider-card:hover{border-color:#D0D3D9}
+.provider-card-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.provider-card-name{font-weight:600;font-size:13px}
+.provider-card-type{
+  font-size:10px;font-weight:600;padding:2px 6px;border-radius:3px;
+  background:var(--accent-light);color:var(--accent);text-transform:uppercase;
+}
+.provider-card-model{font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary)}
+.provider-card-actions{margin-left:auto;display:flex;gap:4px}
+
+/* ===== 历史会话面板 ===== */
+.history-panel{
+  position:fixed;top:52px;left:0;width:280px;bottom:0;
+  background:var(--bg);border-right:1px solid var(--border);
+  z-index:150;transform:translateX(-100%);transition:transform .25s ease;
+  display:flex;flex-direction:column;
+}
+.history-panel.active{transform:translateX(0)}
+.history-panel-header{
+  padding:16px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.history-panel-header h3{font-size:14px;font-weight:600}
+.history-list{flex:1;overflow-y:auto;padding:8px}
+.history-item{
+  padding:10px 12px;border-radius:var(--radius-sm);cursor:pointer;
+  transition:background .15s;margin-bottom:2px;
+}
+.history-item:hover{background:var(--bg-sub)}
+.history-item.active{background:var(--accent-light)}
+.history-item-title{font-size:13px;font-weight:500;margin-bottom:4px;color:var(--text-primary)}
+.history-item.active .history-item-title{color:var(--accent)}
+.history-item-meta{font-size:11px;color:var(--text-tertiary);display:flex;gap:8px}
+
+/* ===== 提示标签 ===== */
+.template-tag{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:3px 8px;background:var(--accent-light);border-radius:4px;
+  font-size:11px;color:var(--accent);font-weight:500;margin-bottom:8px;
+}
+.template-tag svg{width:12px;height:12px}
+
+/* ===== 状态指示器 ===== */
+.status-indicator{
+  display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-tertiary);
+}
+.status-dot{width:6px;height:6px;border-radius:50%}
+.status-dot.online{background:var(--success)}
+.status-dot.offline{background:var(--text-tertiary)}
+
+/* ===== 动画 ===== */
+.fade-in{animation:fadeIn .3s ease}
+.slide-in{animation:slideUp .3s ease}
+
+/* ===== 响应式 ===== */
+@media(max-width:900px){
+  .sidebar{width:240px}
+  .workflow-area{padding:16px 20px}
+  .input-area{padding:12px 20px 16px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- 顶部栏 -->
+  <div class="topbar">
+    <div class="workspace-selector" onclick="toggleWorkspaceMenu()">
+      <span class="ws-dot"></span>
+      <span>项目文档</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="status-indicator">
+      <span class="status-dot online"></span>
+      <span>GPT-4o 已连接</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="topbar-btn" title="历史会话" onclick="toggleHistory()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </button>
+      <button class="topbar-btn" title="新建会话" onclick="newSession()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <button class="topbar-btn" title="设置" onclick="toggleSettings()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- 主体 -->
+  <div class="main-layout">
+    <!-- 主界面区 -->
+    <div class="main-area">
+      <!-- 工作流区域 -->
+      <div class="workflow-area" id="workflowArea">
+        <div class="workflow-timeline" id="workflowTimeline">
+          <!-- 节点1: 用户指令 -->
+          <div class="wf-node" id="node1">
+            <div class="wf-node-dot user">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </div>
+            <div class="wf-node-card">
+              <div class="wf-node-header" onclick="toggleNode('node1')">
+                <span class="wf-node-label user">用户指令</span>
+                <span class="wf-node-time">14:32:05</span>
+                <span class="wf-node-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+              </div>
+              <div class="wf-node-body">
+                <div class="wf-user-text">帮我在工作区生成一份项目周报，Word格式，包含本周开发进度、遇到的问题和下周计划三个部分</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 节点2: LLM思考 -->
+          <div class="wf-node" id="node2">
+            <div class="wf-node-dot thinking">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 1 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+            </div>
+            <div class="wf-node-card">
+              <div class="wf-node-header" onclick="toggleNode('node2')">
+                <span class="wf-node-label thinking">思考中</span>
+                <span class="wf-node-time">14:32:06</span>
+                <span class="wf-node-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+              </div>
+              <div class="wf-node-body">
+                <div class="wf-thinking-text">用户需要生成一份Word格式的项目周报，包含三个部分：开发进度、问题、下周计划。我需要调用 generate_document 工具来完成这个任务。首先确定文档类型为 docx，然后构建文档内容结构...<span class="cursor-blink"></span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 节点3: Tool调用 -->
+          <div class="wf-node" id="node3">
+            <div class="wf-node-dot tool">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+            </div>
+            <div class="wf-node-card">
+              <div class="wf-node-header" onclick="toggleNode('node3')">
+                <span class="wf-node-label tool">工具调用</span>
+                <span class="wf-node-time">14:32:08</span>
+                <span class="wf-node-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+              </div>
+              <div class="wf-node-body">
+                <div class="wf-tool-info">
+                  <div class="wf-tool-name">
+                    <span class="tool-badge">Skill</span>
+                    generate_document
+                  </div>
+                  <div class="wf-tool-args">{
+  "document_type": "docx",
+  "filename": "项目周报_2026W20.docx",
+  "content": {
+    "title": "项目周报 - 2026年第20周",
+    "sections": [
+      {"heading": "本周开发进度", "content": "..."},
+      {"heading": "遇到的问题", "content": "..."},
+      {"heading": "下周计划", "content": "..."}
+    ],
+    "author": "张明"
+  }
+}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 节点4: 执行结果 -->
+          <div class="wf-node" id="node4">
+            <div class="wf-node-dot result">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="wf-node-card">
+              <div class="wf-node-header" onclick="toggleNode('node4')">
+                <span class="wf-node-label result">执行成功</span>
+                <span class="wf-node-time">14:32:12</span>
+                <span class="wf-node-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+              </div>
+              <div class="wf-node-body">
+                <div class="wf-result-text success">文档生成成功，已保存至工作区目录</div>
+                <div class="wf-result-file" onclick="openPreview()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  项目周报_2026W20.docx
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 节点5: 最终回复 -->
+          <div class="wf-node" id="node5">
+            <div class="wf-node-dot reply">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <div class="wf-node-card">
+              <div class="wf-node-header" onclick="toggleNode('node5')">
+                <span class="wf-node-label reply">回复</span>
+                <span class="wf-node-time">14:32:13</span>
+                <span class="wf-node-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+              </div>
+              <div class="wf-node-body">
+                <div class="wf-reply-text">已为您生成项目周报文档 <code>项目周报_2026W20.docx</code>，包含以下三个部分：<br><br>1. <strong>本周开发进度</strong> - 已填充模板结构<br>2. <strong>遇到的问题</strong> - 已预留问题描述区域<br>3. <strong>下周计划</strong> - 已预留计划填写区域<br><br>作者已自动设置为"张明"。您可以点击文件名预览文档，或告诉我需要修改的具体内容。</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 节点6: 用户指令2 -->
+          <div class="wf-node" id="node6">
+            <div class="wf-node-dot user">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </div>
+            <div class="wf-node-card">
+              <div class="wf-node-header" onclick="toggleNode('node6')">
+                <span class="wf-node-label user">用户指令</span>
+                <span class="wf-node-time">14:33:41</span>
+                <span class="wf-node-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+              </div>
+              <div class="wf-node-body">
+                <div class="wf-user-text">把这份周报转成PDF格式，同时把周报的Markdown版本也保存一份</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 节点7: LLM思考2 -->
+          <div class="wf-node" id="node7">
+            <div class="wf-node-dot thinking">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 0 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+            </div>
+            <div class="wf-node-card">
+              <div class="wf-node-header" onclick="toggleNode('node7')">
+                <span class="wf-node-label thinking">思考中</span>
+                <span class="wf-node-time">14:33:42</span>
+                <span class="wf-node-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+              </div>
+              <div class="wf-node-body">
+                <div class="wf-thinking-text">用户需要两个操作：1) 将周报转为PDF格式 2) 生成Markdown版本。我需要分别调用 convert_format 和 generate_document 工具。先执行格式转换，再生成Markdown版本...<span class="cursor-blink"></span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 节点8: Tool调用 - 格式转换 -->
+          <div class="wf-node" id="node8">
+            <div class="wf-node-dot tool">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+            </div>
+            <div class="wf-node-card">
+              <div class="wf-node-header" onclick="toggleNode('node8')">
+                <span class="wf-node-label tool">工具调用</span>
+                <span class="wf-node-time">14:33:44</span>
+                <span class="wf-node-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+              </div>
+              <div class="wf-node-body">
+                <div class="wf-tool-info">
+                  <div class="wf-tool-name">
+                    <span class="tool-badge">Skill</span>
+                    convert_format
+                  </div>
+                  <div class="wf-tool-args">{
+  "source_path": "项目周报_2026W20.docx",
+  "target_format": "pdf"
+}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 节点9: 执行结果2 -->
+          <div class="wf-node" id="node9">
+            <div class="wf-node-dot result">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="wf-node-card">
+              <div class="wf-node-header" onclick="toggleNode('node9')">
+                <span class="wf-node-label result">执行成功</span>
+                <span class="wf-node-time">14:33:48</span>
+                <span class="wf-node-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+              </div>
+              <div class="wf-node-body">
+                <div class="wf-result-text success">格式转换成功：docx -> pdf</div>
+                <div class="wf-result-file" onclick="openPreview()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  项目周报_2026W20.pdf
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 节点10: Tool调用2 - 生成MD -->
+          <div class="wf-node" id="node10">
+            <div class="wf-node-dot tool">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+            </div>
+            <div class="wf-node-card">
+              <div class="wf-node-header" onclick="toggleNode('node10')">
+                <span class="wf-node-label tool">工具调用</span>
+                <span class="wf-node-time">14:33:49</span>
+                <span class="wf-node-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+              </div>
+              <div class="wf-node-body">
+                <div class="wf-tool-info">
+                  <div class="wf-tool-name">
+                    <span class="tool-badge">Skill</span>
+                    generate_document
+                  </div>
+                  <div class="wf-tool-args">{
+  "document_type": "md",
+  "filename": "项目周报_2026W20.md",
+  "content": {
+    "title": "项目周报 - 2026年第20周",
+    "source": "项目周报_2026W20.docx"
+  }
+}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 节点11: 执行结果3 -->
+          <div class="wf-node" id="node11">
+            <div class="wf-node-dot result">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="wf-node-card">
+              <div class="wf-node-header" onclick="toggleNode('node11')">
+                <span class="wf-node-label result">执行成功</span>
+                <span class="wf-node-time">14:33:52</span>
+                <span class="wf-node-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+              </div>
+              <div class="wf-node-body">
+                <div class="wf-result-text success">Markdown文档生成成功</div>
+                <div class="wf-result-file" onclick="openPreview()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  项目周报_2026W20.md
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 节点12: 最终回复2 -->
+          <div class="wf-node" id="node12">
+            <div class="wf-node-dot reply">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <div class="wf-node-card">
+              <div class="wf-node-header" onclick="toggleNode('node12')">
+                <span class="wf-node-label reply">回复</span>
+                <span class="wf-node-time">14:33:53</span>
+                <span class="wf-node-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+              </div>
+              <div class="wf-node-body">
+                <div class="wf-reply-text">已完成两项操作：<br><br>1. <strong>PDF版本</strong> - 已将周报转换为 <code>项目周报_2026W20.pdf</code><br>2. <strong>Markdown版本</strong> - 已生成 <code>项目周报_2026W20.md</code><br><br>现在您的工作区中有三种格式的周报：Word、PDF 和 Markdown。点击文件名可预览内容。</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 节点13: 用户指令3 - 删除确认 -->
+          <div class="wf-node" id="node13">
+            <div class="wf-node-dot user">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </div>
+            <div class="wf-node-card">
+              <div class="wf-node-header" onclick="toggleNode('node13')">
+                <span class="wf-node-label user">用户指令</span>
+                <span class="wf-node-time">14:35:10</span>
+                <span class="wf-node-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+              </div>
+              <div class="wf-node-body">
+                <div class="wf-user-text">把旧的会议纪要.docx删掉</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 节点14: 确认对话框 -->
+          <div class="wf-node" id="node14">
+            <div class="wf-node-dot thinking">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            </div>
+            <div class="wf-node-card" style="border-color:var(--warning)">
+              <div class="wf-node-header" onclick="toggleNode('node14')">
+                <span class="wf-node-label" style="color:var(--warning)">操作确认</span>
+                <span class="wf-node-time">14:35:11</span>
+                <span class="wf-node-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+              </div>
+              <div class="wf-node-body">
+                <div class="confirm-dialog" style="border:none;padding:0;background:none">
+                  <div class="confirm-dialog-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                    破坏性操作确认
+                  </div>
+                  <div class="confirm-dialog-desc">即将删除文件 <strong>会议纪要.docx</strong>，此操作不可撤销。已自动创建版本快照，可从版本历史中恢复。</div>
+                  <div class="confirm-dialog-actions">
+                    <button class="btn btn-danger" onclick="confirmDelete()">确认删除</button>
+                    <button class="btn btn-ghost" onclick="cancelDelete()">取消</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 输入框 -->
+      <div class="input-area">
+        <div class="template-tag" id="templateTag" style="display:none">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>
+          <span id="templateName"></span>
+        </div>
+        <div class="input-box">
+          <button class="input-btn" title="附加文件">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <textarea id="inputField" rows="1" placeholder="输入指令，让Agent帮你处理文档..." oninput="autoResize(this)"></textarea>
+          <button class="input-btn" title="Prompt模板" onclick="showTemplateMenu()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          </button>
+          <button class="input-btn send" title="发送" onclick="sendMessage()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+        <div class="input-hint">
+          <span><kbd>Enter</kbd> 发送</span>
+          <span><kbd>Shift + Enter</kbd> 换行</span>
+          <span><kbd>Ctrl + N</kbd> 新建会话</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右侧栏 -->
+    <div class="sidebar">
+      <!-- 文件树 -->
+      <div class="sidebar-section" id="fileTreeSection">
+        <div class="sidebar-header" onclick="toggleSection('fileTreeSection')">
+          <span class="sidebar-title">工作区文件</span>
+          <span class="sidebar-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+        </div>
+        <div class="sidebar-body">
+          <div class="ft-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" placeholder="搜索文件...">
+          </div>
+          <div class="file-tree">
+            <div class="ft-item ft-folder" onclick="toggleFolder(this)">
+              <span class="ft-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              </span>
+              <span class="ft-name">docs</span>
+            </div>
+            <div class="ft-indent">
+              <div class="ft-item" onclick="openPreview()">
+                <span class="ft-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                </span>
+                <span class="ft-name">技术方案.docx</span>
+              </div>
+              <div class="ft-item" onclick="openPreview()">
+                <span class="ft-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+                </span>
+                <span class="ft-name">数据报表.xlsx</span>
+              </div>
+            </div>
+            <div class="ft-item ft-folder" onclick="toggleFolder(this)">
+              <span class="ft-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              </span>
+              <span class="ft-name">reports</span>
+            </div>
+            <div class="ft-indent">
+              <div class="ft-item active" onclick="openPreview()">
+                <span class="ft-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                </span>
+                <span class="ft-name">项目周报_2026W20.docx</span>
+                <span class="ft-modified" title="最近修改"></span>
+              </div>
+              <div class="ft-item" onclick="openPreview()">
+                <span class="ft-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><circle cx="12" cy="15" r="2"/><path d="M12 7v4"/></svg>
+                </span>
+                <span class="ft-name">项目周报_2026W20.pdf</span>
+                <span class="ft-modified" title="最近修改"></span>
+              </div>
+              <div class="ft-item" onclick="openPreview()">
+                <span class="ft-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                </span>
+                <span class="ft-name">项目周报_2026W20.md</span>
+                <span class="ft-modified" title="最近修改"></span>
+              </div>
+              <div class="ft-item" onclick="openPreview()">
+                <span class="ft-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                </span>
+                <span class="ft-name">项目周报_2026W19.docx</span>
+              </div>
+            </div>
+            <div class="ft-item" onclick="openPreview()">
+              <span class="ft-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              </span>
+              <span class="ft-name">README.md</span>
+            </div>
+            <div class="ft-item" onclick="openPreview()">
+              <span class="ft-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              </span>
+              <span class="ft-name">会议纪要.docx</span>
+            </div>
+            <div class="ft-item" onclick="openPreview()">
+              <span class="ft-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+              </span>
+              <span class="ft-name">需求清单.xlsx</span>
+            </div>
+            <div class="ft-item" onclick="openPreview()">
+              <span class="ft-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+              </span>
+              <span class="ft-name">产品介绍.pptx</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Agent信息 -->
+      <div class="sidebar-section" id="agentInfoSection">
+        <div class="sidebar-header" onclick="toggleSection('agentInfoSection')">
+          <span class="sidebar-title">Agent 信息</span>
+          <span class="sidebar-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+        </div>
+        <div class="sidebar-body">
+          <div class="agent-info">
+            <div class="agent-row">
+              <span class="agent-label">当前模型</span>
+              <div class="agent-model">
+                <span class="model-dot"></span>
+                GPT-4o
+              </div>
+            </div>
+            <div class="agent-row">
+              <span class="agent-label">Provider</span>
+              <span class="agent-value">OpenAI</span>
+            </div>
+            <div class="agent-row">
+              <span class="agent-label">作者名</span>
+              <span class="agent-value editable" id="authorName" onclick="editAuthor()">张明</span>
+            </div>
+            <div class="agent-row">
+              <span class="agent-label">确认级别</span>
+              <span class="agent-value">仅破坏性操作</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Todo列表 -->
+      <div class="sidebar-section" id="todoSection">
+        <div class="sidebar-header" onclick="toggleSection('todoSection')">
+          <span class="sidebar-title">任务进度</span>
+          <span class="sidebar-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+        </div>
+        <div class="sidebar-body">
+          <div class="todo-list">
+            <div class="todo-item done">
+              <span class="todo-check">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="10" height="10"><polyline points="20 6 9 17 4 12"/></svg>
+              </span>
+              <span class="todo-text">生成Word格式周报</span>
+            </div>
+            <div class="todo-item done">
+              <span class="todo-check">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="10" height="10"><polyline points="20 6 9 17 4 12"/></svg>
+              </span>
+              <span class="todo-text">转换为PDF格式</span>
+            </div>
+            <div class="todo-item done">
+              <span class="todo-check">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="10" height="10"><polyline points="20 6 9 17 4 12"/></svg>
+              </span>
+              <span class="todo-text">生成Markdown版本</span>
+            </div>
+            <div class="todo-item active">
+              <span class="todo-check"></span>
+              <span class="todo-text">等待删除确认</span>
+            </div>
+            <div class="todo-item pending">
+              <span class="todo-check"></span>
+              <span class="todo-text">更新文件索引</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Token统计 -->
+      <div class="sidebar-section" id="tokenSection">
+        <div class="sidebar-header" onclick="toggleSection('tokenSection')">
+          <span class="sidebar-title">Token 统计</span>
+          <span class="sidebar-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+        </div>
+        <div class="sidebar-body">
+          <div class="token-stats">
+            <div class="token-row">
+              <span class="token-label">本次会话</span>
+              <span class="token-value">4,286</span>
+            </div>
+            <div class="token-bar"><div class="token-bar-fill input" style="width:60%"></div></div>
+            <div class="token-row">
+              <span class="token-label" style="font-size:11px">输入</span>
+              <span class="token-value" style="font-size:11px;color:var(--accent)">2,571</span>
+            </div>
+            <div class="token-row">
+              <span class="token-label" style="font-size:11px">输出</span>
+              <span class="token-value" style="font-size:11px;color:#6C5CE7">1,715</span>
+            </div>
+            <div class="token-divider"></div>
+            <div class="token-row">
+              <span class="token-label">今日累计</span>
+              <span class="token-value">18,942</span>
+            </div>
+            <div class="token-row">
+              <span class="token-label">本月累计</span>
+              <span class="token-value">287,651</span>
+            </div>
+            <div class="token-divider"></div>
+            <div class="token-row">
+              <span class="token-label">日预算</span>
+              <span class="token-value" style="color:var(--text-tertiary)">未设置</span>
+            </div>
+            <div class="token-row">
+              <span class="token-label">月预算</span>
+              <span class="token-value" style="color:var(--text-tertiary)">未设置</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 预览面板 -->
+<div class="preview-overlay" id="previewOverlay" onclick="closePreview(event)">
+  <div class="preview-panel" onclick="event.stopPropagation()">
+    <div class="preview-topbar">
+      <button class="close-btn" onclick="closePreview()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <span class="preview-filename">项目周报_2026W20.md</span>
+      <div class="preview-topbar-actions">
+        <button class="btn btn-ghost" onclick="toggleDiff()" id="diffBtn">差异对比</button>
+        <button class="btn btn-ghost">在资源管理器中打开</button>
+        <button class="btn btn-ghost">版本历史</button>
+      </div>
+    </div>
+    <div class="preview-content" id="previewContent">
+      <h1>项目周报 - 2026年第20周</h1>
+      <p><strong>作者：</strong>张明 &nbsp;&nbsp; <strong>日期：</strong>2026-05-14</p>
+
+      <h2>一、本周开发进度</h2>
+      <ul>
+        <li>完成用户认证模块的开发与单元测试</li>
+        <li>实现文档预览组件，支持 Word/Excel/PDF 格式</li>
+        <li>优化 Agent Tool Calling 的响应速度，延迟降低 30%</li>
+        <li>完成 LLM 多 Provider 适配层的基础架构</li>
+      </ul>
+
+      <h2>二、遇到的问题</h2>
+      <ol>
+        <li><strong>PDF渲染性能问题</strong>：大文件（>20MB）渲染时出现卡顿，已定位到 pdfjs-dist 的内存管理问题，计划下周优化</li>
+        <li><strong>Claude API兼容性</strong>：Claude 的 Tool Calling 格式与 OpenAI 有差异，需要额外的适配逻辑</li>
+        <li><strong>版本快照存储</strong>：频繁修改的文档快照占用磁盘空间较大，需要实现增量存储</li>
+      </ol>
+
+      <h2>三、下周计划</h2>
+      <table>
+        <thead>
+          <tr><th>任务</th><th>负责人</th><th>优先级</th><th>预计完成</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>PDF渲染性能优化</td><td>张明</td><td>高</td><td>周三</td></tr>
+          <tr><td>Claude API适配器开发</td><td>李华</td><td>高</td><td>周四</td></tr>
+          <tr><td>增量快照存储实现</td><td>王磊</td><td>中</td><td>周五</td></tr>
+          <tr><td>自定义Skill编辑器UI</td><td>张明</td><td>中</td><td>周五</td></tr>
+        </tbody>
+      </table>
+
+      <h3>备注</h3>
+      <p>本周整体进度符合预期，核心功能开发完成度约 <code>65%</code>。下周重点解决性能瓶颈和兼容性问题。</p>
+    </div>
+    <div class="diff-view" id="diffView" style="display:none">
+      <div class="diff-pane diff-pane-left">
+        <div style="padding:8px 12px;background:var(--bg-sub);font-family:var(--font-sans);font-weight:600;font-size:12px;margin-bottom:12px;position:sticky;top:0">修改前</div>
+        <div><span class="diff-line-num">1</span><span># 项目周报 - 2026年第20周</span></div>
+        <div><span class="diff-line-num">2</span><span></span></div>
+        <div><span class="diff-line-num">3</span><span>**作者：** 张明</span></div>
+        <div><span class="diff-line-num">4</span><span></span></div>
+        <div class="diff-remove"><span class="diff-line-num">5</span><span>## 一、本周开发进度</span></div>
+        <div class="diff-remove"><span class="diff-line-num">6</span><span>- 完成用户认证模块</span></div>
+        <div class="diff-remove"><span class="diff-line-num">7</span><span>- 实现文档预览组件</span></div>
+        <div class="diff-remove"><span class="diff-line-num">8</span><span>- 优化Agent响应速度</span></div>
+        <div><span class="diff-line-num">9</span><span></span></div>
+        <div><span class="diff-line-num">10</span><span>## 二、遇到的问题</span></div>
+        <div class="diff-remove"><span class="diff-line-num">11</span><span>- PDF渲染卡顿</span></div>
+        <div><span class="diff-line-num">12</span><span></span></div>
+        <div><span class="diff-line-num">13</span><span>## 三、下周计划</span></div>
+        <div class="diff-remove"><span class="diff-line-num">14</span><span>- 优化PDF渲染</span></div>
+        <div class="diff-remove"><span class="diff-line-num">15</span><span>- Claude API适配</span></div>
+      </div>
+      <div class="diff-pane diff-pane-right">
+        <div style="padding:8px 12px;background:var(--bg-sub);font-family:var(--font-sans);font-weight:600;font-size:12px;margin-bottom:12px;position:sticky;top:0">修改后</div>
+        <div><span class="diff-line-num">1</span><span># 项目周报 - 2026年第20周</span></div>
+        <div><span class="diff-line-num">2</span><span></span></div>
+        <div><span class="diff-line-num">3</span><span>**作者：** 张明 &nbsp;&nbsp; **日期：** 2026-05-14</span></div>
+        <div><span class="diff-line-num">4</span><span></span></div>
+        <div class="diff-add"><span class="diff-line-num">5</span><span>## 一、本周开发进度</span></div>
+        <div class="diff-add"><span class="diff-line-num">6</span><span>- 完成用户认证模块的开发与单元测试</span></div>
+        <div class="diff-add"><span class="diff-line-num">7</span><span>- 实现文档预览组件，支持 Word/Excel/PDF 格式</span></div>
+        <div class="diff-add"><span class="diff-line-num">8</span><span>- 优化 Agent Tool Calling 的响应速度，延迟降低 30%</span></div>
+        <div class="diff-add"><span class="diff-line-num">9</span><span>- 完成 LLM 多 Provider 适配层的基础架构</span></div>
+        <div><span class="diff-line-num">10</span><span></span></div>
+        <div><span class="diff-line-num">11</span><span>## 二、遇到的问题</span></div>
+        <div class="diff-add"><span class="diff-line-num">12</span><span>1. **PDF渲染性能问题**：大文件渲染卡顿，已定位问题</span></div>
+        <div class="diff-add"><span class="diff-line-num">13</span><span>2. **Claude API兼容性**：Tool Calling格式有差异</span></div>
+        <div class="diff-add"><span class="diff-line-num">14</span><span>3. **版本快照存储**：频繁修改占用磁盘空间大</span></div>
+        <div><span class="diff-line-num">15</span><span></span></div>
+        <div><span class="diff-line-num">16</span><span>## 三、下周计划</span></div>
+        <div class="diff-add"><span class="diff-line-num">17</span><span>| 任务 | 负责人 | 优先级 |</span></div>
+        <div class="diff-add"><span class="diff-line-num">18</span><span>| PDF渲染优化 | 张明 | 高 |</span></div>
+        <div class="diff-add"><span class="diff-line-num">19</span><span>| Claude API适配 | 李华 | 高 |</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 设置弹窗 -->
+<div class="settings-overlay" id="settingsOverlay" onclick="closeSettings(event)">
+  <div class="settings-panel" onclick="event.stopPropagation()">
+    <div class="settings-topbar">
+      <h2>设置</h2>
+      <button class="close-btn" onclick="closeSettings()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="settings-body">
+      <div class="settings-nav">
+        <div class="settings-nav-item active" onclick="switchSettingsTab(this,'tab-llm')">LLM 配置</div>
+        <div class="settings-nav-item" onclick="switchSettingsTab(this,'tab-workspace')">工作区管理</div>
+        <div class="settings-nav-item" onclick="switchSettingsTab(this,'tab-skills')">Skills 管理</div>
+        <div class="settings-nav-item" onclick="switchSettingsTab(this,'tab-templates')">Prompt 模板</div>
+        <div class="settings-nav-item" onclick="switchSettingsTab(this,'tab-general')">通用设置</div>
+      </div>
+      <div class="settings-content">
+        <!-- LLM配置 -->
+        <div class="settings-tab" id="tab-llm">
+          <div class="settings-group">
+            <div class="settings-group-title">已配置的 Provider</div>
+            <div class="provider-card">
+              <div class="provider-card-header">
+                <span class="provider-card-name">我的 GPT-4o</span>
+                <span class="provider-card-type">OpenAI</span>
+                <span style="font-size:11px;color:var(--success);margin-left:4px">默认</span>
+                <div class="provider-card-actions">
+                  <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px">编辑</button>
+                  <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px">测试</button>
+                </div>
+              </div>
+              <div class="provider-card-model">gpt-4o &nbsp;|&nbsp; https://api.openai.com/v1 &nbsp;|&nbsp; 延迟: 320ms</div>
+            </div>
+            <div class="provider-card">
+              <div class="provider-card-header">
+                <span class="provider-card-name">Claude Sonnet</span>
+                <span class="provider-card-type">Claude</span>
+                <div class="provider-card-actions">
+                  <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px">编辑</button>
+                  <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px">测试</button>
+                </div>
+              </div>
+              <div class="provider-card-model">claude-3-5-sonnet &nbsp;|&nbsp; https://api.anthropic.com &nbsp;|&nbsp; 未测试</div>
+            </div>
+            <div class="provider-card">
+              <div class="provider-card-header">
+                <span class="provider-card-name">Gemini Pro</span>
+                <span class="provider-card-type">Gemini</span>
+                <div class="provider-card-actions">
+                  <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px">编辑</button>
+                  <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px">测试</button>
+                </div>
+              </div>
+              <div class="provider-card-model">gemini-1.5-pro &nbsp;|&nbsp; https://generativelanguage.googleapis.com &nbsp;|&nbsp; 未测试</div>
+            </div>
+            <button class="btn btn-primary" style="margin-top:8px">+ 添加 Provider</button>
+          </div>
+          <div class="settings-group">
+            <div class="settings-group-title">Fallback 顺序</div>
+            <div style="font-size:12px;color:var(--text-secondary);line-height:1.8">
+              <div style="display:flex;align-items:center;gap:8px;padding:6px 0"><span style="color:var(--accent);font-weight:600">1.</span> 我的 GPT-4o <span style="font-size:10px;padding:2px 6px;background:var(--success-light);color:var(--success);border-radius:3px">默认</span></div>
+              <div style="display:flex;align-items:center;gap:8px;padding:6px 0"><span style="color:var(--accent);font-weight:600">2.</span> Claude Sonnet</div>
+              <div style="display:flex;align-items:center;gap:8px;padding:6px 0"><span style="color:var(--accent);font-weight:600">3.</span> Gemini Pro</div>
+            </div>
+          </div>
+        </div>
+        <!-- 工作区管理 -->
+        <div class="settings-tab" id="tab-workspace" style="display:none">
+          <div class="settings-group">
+            <div class="settings-group-title">工作区列表</div>
+            <div class="provider-card">
+              <div class="provider-card-header">
+                <span class="provider-card-name">项目文档</span>
+                <span style="font-size:11px;color:var(--success)">当前</span>
+              </div>
+              <div class="provider-card-model">D:\Documents\ProjectDocs &nbsp;|&nbsp; 创建于 2026-05-10</div>
+            </div>
+            <div class="provider-card">
+              <div class="provider-card-header">
+                <span class="provider-card-name">个人笔记</span>
+              </div>
+              <div class="provider-card-model">D:\Notes &nbsp;|&nbsp; 创建于 2026-05-08</div>
+            </div>
+            <button class="btn btn-primary" style="margin-top:8px">+ 添加工作区</button>
+          </div>
+        </div>
+        <!-- Skills管理 -->
+        <div class="settings-tab" id="tab-skills" style="display:none">
+          <div class="settings-group">
+            <div class="settings-group-title">内置 Skills</div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-row-label">generate_document</div>
+                <div class="settings-row-desc">生成文档（Word/Excel/PPT/PDF/MD）</div>
+              </div>
+              <label style="position:relative;display:inline-block;width:36px;height:20px;cursor:pointer">
+                <input type="checkbox" checked style="display:none" onchange="this.parentElement.querySelector('span').className=this.checked?'toggle-on':'toggle-off'">
+                <span class="toggle-on" style="position:absolute;top:0;left:0;right:0;bottom:0;background:var(--accent);border-radius:10px;transition:.2s"></span>
+                <span style="position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:.2s;transform:translateX(16px)"></span>
+              </label>
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-row-label">modify_document</div>
+                <div class="settings-row-desc">修改已有文档内容</div>
+              </div>
+              <label style="position:relative;display:inline-block;width:36px;height:20px;cursor:pointer">
+                <input type="checkbox" checked style="display:none">
+                <span style="position:absolute;top:0;left:0;right:0;bottom:0;background:var(--accent);border-radius:10px;transition:.2s"></span>
+                <span style="position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:.2s;transform:translateX(16px)"></span>
+              </label>
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-row-label">convert_format</div>
+                <div class="settings-row-desc">文档格式转换</div>
+              </div>
+              <label style="position:relative;display:inline-block;width:36px;height:20px;cursor:pointer">
+                <input type="checkbox" checked style="display:none">
+                <span style="position:absolute;top:0;left:0;right:0;bottom:0;background:var(--accent);border-radius:10px;transition:.2s"></span>
+                <span style="position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:.2s;transform:translateX(16px)"></span>
+              </label>
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-row-label">read_document</div>
+                <div class="settings-row-desc">读取文档内容</div>
+              </div>
+              <label style="position:relative;display:inline-block;width:36px;height:20px;cursor:pointer">
+                <input type="checkbox" checked style="display:none">
+                <span style="position:absolute;top:0;left:0;right:0;bottom:0;background:var(--accent);border-radius:10px;transition:.2s"></span>
+                <span style="position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:.2s;transform:translateX(16px)"></span>
+              </label>
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-row-label">delete_document</div>
+                <div class="settings-row-desc">删除文档</div>
+              </div>
+              <label style="position:relative;display:inline-block;width:36px;height:20px;cursor:pointer">
+                <input type="checkbox" checked style="display:none">
+                <span style="position:absolute;top:0;left:0;right:0;bottom:0;background:var(--accent);border-radius:10px;transition:.2s"></span>
+                <span style="position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:.2s;transform:translateX(16px)"></span>
+              </label>
+            </div>
+          </div>
+          <div class="settings-group">
+            <div class="settings-group-title">自定义 Skills</div>
+            <div style="font-size:13px;color:var(--text-tertiary);padding:16px 0;text-align:center">暂无自定义 Skill，点击下方按钮添加</div>
+            <button class="btn btn-primary">+ 添加自定义 Skill</button>
+          </div>
+        </div>
+        <!-- Prompt模板 -->
+        <div class="settings-tab" id="tab-templates" style="display:none">
+          <div class="settings-group">
+            <div class="settings-group-title">内置模板</div>
+            <div class="provider-card" style="cursor:pointer">
+              <div class="provider-card-header">
+                <span class="provider-card-name">生成周报</span>
+              </div>
+              <div class="provider-card-model">根据要点生成Word格式周报</div>
+            </div>
+            <div class="provider-card" style="cursor:pointer">
+              <div class="provider-card-header">
+                <span class="provider-card-name">Markdown转PPT</span>
+              </div>
+              <div class="provider-card-model">将Markdown内容转为PPT演示文稿</div>
+            </div>
+            <div class="provider-card" style="cursor:pointer">
+              <div class="provider-card-header">
+                <span class="provider-card-name">Excel数据摘要</span>
+              </div>
+              <div class="provider-card-model">读取Excel文件并生成数据摘要报告</div>
+            </div>
+            <div class="provider-card" style="cursor:pointer">
+              <div class="provider-card-header">
+                <span class="provider-card-name">会议纪要</span>
+              </div>
+              <div class="provider-card-model">根据要点生成会议纪要文档</div>
+            </div>
+          </div>
+          <div class="settings-group">
+            <div class="settings-group-title">自定义模板</div>
+            <div style="font-size:13px;color:var(--text-tertiary);padding:16px 0;text-align:center">暂无自定义模板</div>
+            <button class="btn btn-primary">+ 创建模板</button>
+          </div>
+        </div>
+        <!-- 通用设置 -->
+        <div class="settings-tab" id="tab-general" style="display:none">
+          <div class="settings-group">
+            <div class="settings-group-title">基本设置</div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-row-label">作者名（全局默认）</div>
+                <div class="settings-row-desc">生成文档时自动填充的作者元数据</div>
+              </div>
+              <input class="settings-input" value="张明" style="width:160px">
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-row-label">操作确认级别</div>
+                <div class="settings-row-desc">Agent执行文件操作时的确认策略</div>
+              </div>
+              <select class="settings-select">
+                <option>全部自动确认</option>
+                <option selected>仅破坏性操作确认</option>
+                <option>全部需确认</option>
+              </select>
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-row-label">语言</div>
+              </div>
+              <select class="settings-select">
+                <option selected>简体中文</option>
+                <option>English</option>
+              </select>
+            </div>
+          </div>
+          <div class="settings-group">
+            <div class="settings-group-title">Token 预算</div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-row-label">日预算上限</div>
+                <div class="settings-row-desc">超出时触发提醒</div>
+              </div>
+              <input class="settings-input" placeholder="不限制" style="width:120px">
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-row-label">月预算上限</div>
+              </div>
+              <input class="settings-input" placeholder="不限制" style="width:120px">
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-row-label">超出预算行为</div>
+              </div>
+              <select class="settings-select">
+                <option selected>仅提醒</option>
+                <option>暂停Agent</option>
+                <option>切换到更便宜的模型</option>
+              </select>
+            </div>
+          </div>
+          <div class="settings-group">
+            <div class="settings-group-title">版本快照</div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-row-label">保留策略</div>
+              </div>
+              <select class="settings-select">
+                <option selected>按数量（最近50个）</option>
+                <option>按时间（最近30天）</option>
+              </select>
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-row-label">应用数据目录</div>
+                <div class="settings-row-desc">快照和配置的存储位置</div>
+              </div>
+              <span style="font-size:12px;color:var(--text-tertiary);font-family:var(--font-mono)">%APPDATA%/DocAgent</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 历史会话面板 -->
+<div class="history-panel" id="historyPanel">
+  <div class="history-panel-header">
+    <h3>历史会话</h3>
+    <button class="close-btn" onclick="toggleHistory()" style="width:28px;height:28px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;transition:background .15s;color:var(--text-secondary)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="history-list">
+    <div class="history-item active">
+      <div class="history-item-title">项目周报生成与格式转换</div>
+      <div class="history-item-meta">
+        <span>今天 14:32</span>
+        <span>4,286 tokens</span>
+      </div>
+    </div>
+    <div class="history-item">
+      <div class="history-item-title">技术方案文档撰写</div>
+      <div class="history-item-meta">
+        <span>今天 10:15</span>
+        <span>8,102 tokens</span>
+      </div>
+    </div>
+    <div class="history-item">
+      <div class="history-item-title">Excel数据整理与报表</div>
+      <div class="history-item-meta">
+        <span>昨天 16:40</span>
+        <span>6,543 tokens</span>
+      </div>
+    </div>
+    <div class="history-item">
+      <div class="history-item-title">Markdown转PPT演示</div>
+      <div class="history-item-meta">
+        <span>昨天 14:22</span>
+        <span>12,876 tokens</span>
+      </div>
+    </div>
+    <div class="history-item">
+      <div class="history-item-title">需求文档修改</div>
+      <div class="history-item-meta">
+        <span>5月12日</span>
+        <span>3,210 tokens</span>
+      </div>
+    </div>
+    <div class="history-item">
+      <div class="history-item-title">API文档生成</div>
+      <div class="history-item-meta">
+        <span>5月11日</span>
+        <span>9,445 tokens</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// 工作流节点折叠/展开
+function toggleNode(id) {
+  const node = document.getElementById(id);
+  node.classList.toggle('collapsed');
+}
+
+// 右侧栏区域折叠/展开
+function toggleSection(id) {
+  const section = document.getElementById(id);
+  section.classList.toggle('collapsed');
+}
+
+// 文件树文件夹展开/折叠
+function toggleFolder(el) {
+  const indent = el.nextElementSibling;
+  if (indent && indent.classList.contains('ft-indent')) {
+    indent.style.display = indent.style.display === 'none' ? '' : 'none';
+  }
+}
+
+// 输入框自动调整高度
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+// 发送消息（演示用）
+function sendMessage() {
+  const input = document.getElementById('inputField');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  input.style.height = 'auto';
+}
+
+// 打开预览面板
+function openPreview() {
+  document.getElementById('previewOverlay').classList.add('active');
+  document.getElementById('previewContent').style.display = '';
+  document.getElementById('diffView').style.display = 'none';
+  document.getElementById('diffBtn').textContent = '差异对比';
+}
+
+// 关闭预览面板
+function closePreview(e) {
+  if (e && e.target !== document.getElementById('previewOverlay')) return;
+  document.getElementById('previewOverlay').classList.remove('active');
+}
+
+// 切换差异对比
+function toggleDiff() {
+  const content = document.getElementById('previewContent');
+  const diff = document.getElementById('diffView');
+  const btn = document.getElementById('diffBtn');
+  if (diff.style.display === 'none') {
+    content.style.display = 'none';
+    diff.style.display = 'flex';
+    btn.textContent = '文档预览';
+  } else {
+    content.style.display = '';
+    diff.style.display = 'none';
+    btn.textContent = '差异对比';
+  }
+}
+
+// 打开设置
+function toggleSettings() {
+  document.getElementById('settingsOverlay').classList.add('active');
+}
+
+// 关闭设置
+function closeSettings(e) {
+  if (e && e.target !== document.getElementById('settingsOverlay')) return;
+  document.getElementById('settingsOverlay').classList.remove('active');
+}
+
+// 切换设置标签页
+function switchSettingsTab(navItem, tabId) {
+  document.querySelectorAll('.settings-nav-item').forEach(i => i.classList.remove('active'));
+  navItem.classList.add('active');
+  document.querySelectorAll('.settings-tab').forEach(t => t.style.display = 'none');
+  document.getElementById(tabId).style.display = '';
+}
+
+// 切换历史会话
+function toggleHistory() {
+  document.getElementById('historyPanel').classList.toggle('active');
+}
+
+// 新建会话
+function newSession() {
+  const timeline = document.getElementById('workflowTimeline');
+  timeline.innerHTML = '';
+  const empty = document.createElement('div');
+  empty.className = 'workflow-empty';
+  empty.innerHTML = `
+    <div class="empty-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+    </div>
+    <h3>开始新的会话</h3>
+    <p>在下方输入框中输入指令，Agent将帮你处理文档。你可以生成、修改、转换或分析各种格式的文档。</p>
+  `;
+  const area = document.getElementById('workflowArea');
+  area.innerHTML = '';
+  area.appendChild(empty);
+}
+
+// 编辑作者名
+function editAuthor() {
+  const el = document.getElementById('authorName');
+  const current = el.textContent;
+  const input = document.createElement('input');
+  input.value = current;
+  input.className = 'settings-input';
+  input.style.cssText = 'width:80px;padding:2px 6px;font-size:13px';
+  el.replaceWith(input);
+  input.focus();
+  input.select();
+  const save = () => {
+    const span = document.createElement('span');
+    span.className = 'agent-value editable';
+    span.id = 'authorName';
+    span.textContent = input.value || current;
+    span.onclick = editAuthor;
+    input.replaceWith(span);
+  };
+  input.onblur = save;
+  input.onkeydown = (e) => { if (e.key === 'Enter') input.blur(); };
+}
+
+// 确认删除
+function confirmDelete() {
+  const node = document.getElementById('node14');
+  const body = node.querySelector('.wf-node-body');
+  body.innerHTML = '<div class="wf-result-text success">文件已删除：会议纪要.docx（已创建版本快照，可从版本历史恢复）</div>';
+  node.querySelector('.wf-node-dot').className = 'wf-node-dot result';
+  node.querySelector('.wf-node-dot').innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg>';
+  node.querySelector('.wf-node-label').className = 'wf-node-label result';
+  node.querySelector('.wf-node-label').textContent = '执行成功';
+  node.querySelector('.wf-node-card').style.borderColor = '';
+}
+
+// 取消删除
+function cancelDelete() {
+  const node = document.getElementById('node14');
+  const body = node.querySelector('.wf-node-body');
+  body.innerHTML = '<div class="wf-result-text error">操作已取消</div>';
+  node.querySelector('.wf-node-dot').className = 'wf-node-dot error';
+  node.querySelector('.wf-node-dot').innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  node.querySelector('.wf-node-label').className = 'wf-node-label error';
+  node.querySelector('.wf-node-label').textContent = '已取消';
+  node.querySelector('.wf-node-card').style.borderColor = '';
+}
+
+// 显示模板菜单（简化演示）
+function showTemplateMenu() {
+  const tag = document.getElementById('templateTag');
+  const name = document.getElementById('templateName');
+  if (tag.style.display === 'none') {
+    tag.style.display = 'inline-flex';
+    name.textContent = '生成周报';
+  } else {
+    tag.style.display = 'none';
+  }
+}
+
+// 工作区菜单（简化演示）
+function toggleWorkspaceMenu() {
+  alert('工作区切换菜单（演示）\n\n- 项目文档（当前）\n- 个人笔记');
+}
+
+// 键盘快捷键
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    document.getElementById('previewOverlay').classList.remove('active');
+    document.getElementById('settingsOverlay').classList.remove('active');
+    document.getElementById('historyPanel').classList.remove('active');
+  }
+  if (e.ctrlKey && e.key === 'n') {
+    e.preventDefault();
+    newSession();
+  }
+});
+
+// Enter发送
+document.getElementById('inputField').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+</script>
+</body>
+</html>
