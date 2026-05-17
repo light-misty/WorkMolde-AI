@@ -74,6 +74,11 @@ impl LlmRouter {
         }
     }
 
+    /// 检查路由器是否为空（无可用 Provider）
+    pub fn is_empty(&self) -> bool {
+        self.providers.is_empty()
+    }
+
     /// 非流式对话，自动选择 Provider
     pub async fn chat(
         &self,

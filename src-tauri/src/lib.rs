@@ -16,6 +16,9 @@ pub struct AppState {
     pub db: Arc<crate::db::Database>,
     pub config: Arc<tokio::sync::Mutex<crate::config::ConfigManager>>,
     pub active_agents: Arc<tokio::sync::Mutex<std::collections::HashMap<String, bool>>>,
+    pub doc_service: Arc<crate::services::document::DocumentService>,
+    pub llm_router: Arc<tokio::sync::RwLock<Arc<crate::services::llm::router::LlmRouter>>>,
+    pub skill_registry: Arc<crate::services::skill::registry::SkillRegistry>,
 }
 
 pub fn run() {
@@ -35,23 +38,56 @@ pub fn run() {
                 .expect("数据库初始化失败");
 
             // 初始化配置管理器
-            let config_manager = crate::config::ConfigManager::new(app_data_dir);
+            let config_manager = crate::config::ConfigManager::new(app_data_dir.clone());
 
-            // 创建应用状态
-            let state = AppState {
-                db: Arc::new(database),
-                config: Arc::new(tokio::sync::Mutex::new(config_manager)),
-                active_agents: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+            let llm_config = config_manager.load_llm_config().unwrap_or_default();
+            let llm_router = crate::services::llm::router::LlmRouter::from_config(&llm_config);
+
+            let python_path = std::env::var("DOCGENT_PYTHON")
+                .unwrap_or_else(|_| "python".to_string());
+            let sidecar_script = app_data_dir.join("sidecar").join("main.py");
+            let sidecar_script_str = if sidecar_script.exists() {
+                sidecar_script.to_string_lossy().to_string()
+            } else {
+                let project_sidecar = std::path::Path::new("sidecar/main.py");
+                if project_sidecar.exists() {
+                    project_sidecar.to_string_lossy().to_string()
+                } else {
+                    let abs_sidecar = std::path::Path::new("d:/DeskTop/DocAgent/sidecar/main.py");
+                    abs_sidecar.to_string_lossy().to_string()
+                }
             };
+            log::info!("Sidecar 脚本路径: {}", sidecar_script_str);
 
-            app.manage(state);
+            let sidecar_manager = crate::services::document::SidecarManager::new(
+                python_path,
+                sidecar_script_str,
+            );
+            let doc_service = crate::services::document::DocumentService::new(sidecar_manager);
 
-            // 初始化日志系统（日志输出到项目根目录 log/ 下，每次启动覆盖）
+            let mut skill_registry = crate::services::skill::registry::SkillRegistry::new();
+            let doc_service_for_skills = Arc::new(doc_service);
+            crate::services::skill::builtin::register_builtin_skills(
+                &mut skill_registry,
+                Arc::clone(&doc_service_for_skills),
+            );
+
             let log_dir = std::path::Path::new("log");
             crate::utils::logger::init(log_dir)
                 .expect("日志系统初始化失败");
 
             log::info!("DocAgent 应用初始化完成");
+
+            let state = AppState {
+                db: Arc::new(database),
+                config: Arc::new(tokio::sync::Mutex::new(config_manager)),
+                active_agents: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+                doc_service: doc_service_for_skills,
+                llm_router: Arc::new(tokio::sync::RwLock::new(Arc::new(llm_router))),
+                skill_registry: Arc::new(skill_registry),
+            };
+
+            app.manage(state);
 
             Ok(())
         })

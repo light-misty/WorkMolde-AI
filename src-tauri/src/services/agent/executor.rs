@@ -23,6 +23,8 @@ pub struct AgentExecutor<R: Runtime> {
     emitter: AgentEmitter<R>,
     /// 最大迭代次数
     max_iterations: u32,
+    /// 停止标志检查：返回 true 表示 Agent 应该停止
+    should_stop: Arc<dyn Fn(&str) -> bool + Send + Sync>,
 }
 
 impl<R: Runtime> AgentExecutor<R> {
@@ -36,7 +38,28 @@ impl<R: Runtime> AgentExecutor<R> {
             registry,
             emitter,
             max_iterations: 20,
+            should_stop: Arc::new(|_| false),
         }
+    }
+
+    /// 设置停止检查回调
+    pub fn with_stop_check(
+        mut self,
+        check: Arc<dyn Fn(&str) -> bool + Send + Sync>,
+    ) -> Self {
+        self.should_stop = check;
+        self
+    }
+
+    /// 设置最大迭代次数
+    pub fn with_max_iterations(mut self, max: u32) -> Self {
+        self.max_iterations = max;
+        self
+    }
+
+    /// 检查是否应该停止
+    fn check_stopped(&self, session_id: &str) -> bool {
+        (self.should_stop)(session_id)
     }
 
     /// 执行 Agent 循环
@@ -62,6 +85,17 @@ impl<R: Runtime> AgentExecutor<R> {
             .collect();
 
         for iteration in 0..self.max_iterations {
+            // 检查是否被用户停止
+            if self.check_stopped(&ctx.session_id) {
+                log::info!("Agent 被用户停止, session_id={}, iteration={}", ctx.session_id, iteration);
+                self.emitter.emit_stopped(StoppedPayload {
+                    session_id: ctx.session_id.clone(),
+                    reason: "用户手动停止".to_string(),
+                    completed_steps: total_steps,
+                }).ok();
+                return Ok("Agent 已被用户停止".to_string());
+            }
+
             total_steps += 1;
             log::debug!("Agent 迭代 #{}, session_id={}", iteration + 1, ctx.session_id);
 
@@ -118,7 +152,6 @@ impl<R: Runtime> AgentExecutor<R> {
                         }
                     }
                     Err(e) => {
-                        // stream_done 是正常结束标记
                         if e.message == "stream_done" {
                             break;
                         }
@@ -153,6 +186,17 @@ impl<R: Runtime> AgentExecutor<R> {
 
                 // 执行每个 tool_call
                 for tool_call in &collected_tool_calls {
+                    // 检查是否被停止
+                    if self.check_stopped(&ctx.session_id) {
+                        log::info!("Agent 在 Tool 执行前被停止, session_id={}", ctx.session_id);
+                        self.emitter.emit_stopped(StoppedPayload {
+                            session_id: ctx.session_id.clone(),
+                            reason: "用户手动停止".to_string(),
+                            completed_steps: total_steps,
+                        }).ok();
+                        return Ok("Agent 已被用户停止".to_string());
+                    }
+
                     log::info!("执行 Tool, session_id={}, tool={}, call_id={}", ctx.session_id, tool_call.name, tool_call.id);
 
                     self.emitter.emit_tool_call(ToolCallPayload {

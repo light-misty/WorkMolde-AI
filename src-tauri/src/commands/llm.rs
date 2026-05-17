@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use tauri::State;
 
 use crate::errors::{CommandError, LLM_CONNECTION_FAILED};
@@ -11,148 +13,21 @@ pub async fn test_connection(
     state: State<'_, AppState>,
 ) -> Result<ConnectionResult, CommandError> {
     log::info!("测试 LLM Provider 连接: provider_id={}", provider_id);
-    let config = state.config.lock().await;
-    let llm_config = config.load_llm_config().map_err(|e| {
-        log::error!("加载 LLM 配置失败: {}", e);
-        e
-    })?;
-
-    let provider = llm_config
-        .providers
-        .iter()
-        .find(|p| p.id == provider_id)
-        .ok_or_else(|| {
-            log::error!("Provider 不存在: provider_id={}", provider_id);
-            CommandError::llm(
-                LLM_CONNECTION_FAILED,
-                format!("Provider '{}' 不存在", provider_id),
-            )
-        })?;
-
-    log::debug!(
-        "找到 Provider: provider_id={}, model={}",
-        provider_id,
-        provider.model
-    );
-
-    // 构造测试请求，向 LLM 发送简单消息以验证连接
-    let client = reqwest::Client::new();
-    let start = std::time::Instant::now();
-
-    let body = serde_json::json!({
-        "model": provider.model,
-        "messages": [{"role": "user", "content": "Hi"}],
-        "max_tokens": 1,
-        "temperature": provider.advanced.temperature,
-    });
-
-    let url = format!(
-        "{}/chat/completions",
-        provider.api_base_url.trim_end_matches('/')
-    );
-
-    let result = client
-        .post(&url)
-        .header("Authorization", format!("Bearer {}", provider.api_key_encrypted))
-        .header("Content-Type", "application/json")
-        .timeout(std::time::Duration::from_secs(provider.advanced.timeout_seconds as u64))
-        .json(&body)
-        .send()
-        .await;
-
-    let latency_ms = start.elapsed().as_millis() as u64;
-
-    match result {
-        Ok(response) => {
-            if response.status().is_success() {
-                log::info!(
-                    "Provider 连接测试成功: provider_id={}, model={}, latency_ms={}",
-                    provider_id,
-                    provider.model,
-                    latency_ms
-                );
-                Ok(ConnectionResult {
-                    success: true,
-                    provider_id: Some(provider_id),
-                    latency_ms,
-                    model_info: None,
-                    model: Some(provider.model.clone()),
-                    error_message: None,
-                    error: None,
-                })
-            } else {
-                let status = response.status();
-                let body_text = response.text().await.unwrap_or_default();
-                log::warn!(
-                    "Provider 连接测试失败: provider_id={}, model={}, http_status={}, latency_ms={}",
-                    provider_id,
-                    provider.model,
-                    status,
-                    latency_ms
-                );
-                Ok(ConnectionResult {
-                    success: false,
-                    provider_id: Some(provider_id),
-                    latency_ms,
-                    model_info: None,
-                    model: None,
-                    error_message: Some(format!("HTTP {}: {}", status, body_text)),
-                    error: Some(format!("HTTP {}: {}", status, body_text)),
-                })
-            }
-        }
-        Err(e) => {
-            log::warn!(
-                "Provider 连接测试网络错误: provider_id={}, model={}, error={}, latency_ms={}",
-                provider_id,
-                provider.model,
-                e,
-                latency_ms
-            );
-            Ok(ConnectionResult {
-                success: false,
-                provider_id: Some(provider_id),
-                latency_ms,
-                model_info: None,
-                model: None,
-                error_message: Some(e.to_string()),
-                error: Some(e.to_string()),
-            })
-        }
-    }
+    let router = state.llm_router.read().await;
+    router.test_connection(&provider_id).await
 }
 
 /// 列出所有 LLM Provider
 #[tauri::command]
 pub async fn list_providers(state: State<'_, AppState>) -> Result<Vec<ProviderInfo>, CommandError> {
     log::info!("列出所有 LLM Provider");
-    let config = state.config.lock().await;
-    let llm_config = config.load_llm_config().map_err(|e| {
-        log::error!("加载 LLM 配置失败: {}", e);
-        e
-    })?;
-
-    let providers: Vec<ProviderInfo> = llm_config
-        .providers
-        .iter()
-        .map(|p| ProviderInfo {
-            id: p.id.clone(),
-            name: p.name.clone(),
-            provider_type: format!("{:?}", p.provider_type).to_lowercase(),
-            api_base: p.api_base_url.clone(),
-            model: p.model.clone(),
-            is_default: p.is_default,
-            is_available: true,
-            created_at: String::new(),
-            is_connected: None,
-        })
-        .collect();
-
+    let router = state.llm_router.read().await;
+    let providers = router.list_providers();
     log::info!("列出 Provider 完成: count={}", providers.len());
     Ok(providers)
 }
 
-/// 添加 LLM Provider
+/// 添加 LLM Provider 并重建路由器
 #[tauri::command]
 pub async fn add_provider(
     config: ProviderConfig,
@@ -196,11 +71,15 @@ pub async fn add_provider(
         log::error!("保存 LLM 配置失败: {}", e);
         e
     })?;
+
+    // 重建 LlmRouter
+    rebuild_router(&state, &llm_config).await;
+
     log::info!("Provider 添加成功");
     Ok(())
 }
 
-/// 更新 LLM Provider
+/// 更新 LLM Provider 并重建路由器
 #[tauri::command]
 pub async fn update_provider(
     provider_id: String,
@@ -227,7 +106,6 @@ pub async fn update_provider(
         _ => crate::config::llm_config::ProviderType::Custom,
     };
 
-    // 保留原有的 id、is_default、advanced 配置
     let existing = llm_config
         .providers
         .iter()
@@ -259,11 +137,15 @@ pub async fn update_provider(
         log::error!("保存 LLM 配置失败: {}", e);
         e
     })?;
+
+    // 重建 LlmRouter
+    rebuild_router(&state, &llm_config).await;
+
     log::info!("Provider 更新成功: provider_id={}", provider_id);
     Ok(())
 }
 
-/// 删除 LLM Provider
+/// 删除 LLM Provider 并重建路由器
 #[tauri::command]
 pub async fn delete_provider(
     provider_id: String,
@@ -283,11 +165,15 @@ pub async fn delete_provider(
         log::error!("保存 LLM 配置失败: {}", e);
         e
     })?;
+
+    // 重建 LlmRouter
+    rebuild_router(&state, &llm_config).await;
+
     log::info!("Provider 删除成功: provider_id={}", provider_id);
     Ok(())
 }
 
-/// 设置默认 LLM Provider
+/// 设置默认 LLM Provider 并重建路由器
 #[tauri::command]
 pub async fn set_default_provider(
     provider_id: String,
@@ -307,6 +193,18 @@ pub async fn set_default_provider(
         log::error!("保存 LLM 配置失败: {}", e);
         e
     })?;
+
+    // 重建 LlmRouter
+    rebuild_router(&state, &llm_config).await;
+
     log::info!("默认 Provider 设置成功: provider_id={}", provider_id);
     Ok(())
+}
+
+/// 根据 LLM 配置重建 LlmRouter
+async fn rebuild_router(state: &State<'_, AppState>, llm_config: &crate::config::llm_config::LlmConfig) {
+    let new_router = crate::services::llm::router::LlmRouter::from_config(llm_config);
+    let mut guard = state.llm_router.write().await;
+    *guard = Arc::new(new_router);
+    log::info!("LlmRouter 已重建");
 }

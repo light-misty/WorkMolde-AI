@@ -1,26 +1,41 @@
+use std::sync::Arc;
+use std::time::Instant;
+
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
 use crate::models::skill::SkillResult;
+use crate::services::document::DocumentService;
 use super::registry::Skill;
 
 /// 注册所有内置技能
-pub fn register_builtin_skills(registry: &mut super::registry::SkillRegistry) {
+pub fn register_builtin_skills(
+    registry: &mut super::registry::SkillRegistry,
+    doc_service: Arc<DocumentService>,
+) {
     log::info!("开始注册内置技能");
-    registry.register(Box::new(GenerateDocumentSkill));
-    registry.register(Box::new(ReadDocumentSkill));
-    registry.register(Box::new(ModifyDocumentSkill));
-    registry.register(Box::new(DeleteDocumentSkill));
-    registry.register(Box::new(ConvertFormatSkill));
-    registry.register(Box::new(SearchDocumentsSkill));
-    registry.register(Box::new(AnalyzeDocumentSkill));
-    registry.register(Box::new(ListWorkspaceSkill));
-    registry.register(Box::new(BatchProcessSkill));
+    registry.register(Box::new(GenerateDocumentSkill::new(doc_service.clone())));
+    registry.register(Box::new(ReadDocumentSkill::new(doc_service.clone())));
+    registry.register(Box::new(ModifyDocumentSkill::new(doc_service.clone())));
+    registry.register(Box::new(DeleteDocumentSkill::new(doc_service.clone())));
+    registry.register(Box::new(ConvertFormatSkill::new(doc_service.clone())));
+    registry.register(Box::new(SearchDocumentsSkill::new(doc_service.clone())));
+    registry.register(Box::new(AnalyzeDocumentSkill::new(doc_service.clone())));
+    registry.register(Box::new(ListWorkspaceSkill::new(doc_service.clone())));
+    registry.register(Box::new(BatchProcessSkill::new(doc_service)));
     log::info!("内置技能注册完成, 共注册 9 个技能");
 }
 
 /// 生成文档技能
-struct GenerateDocumentSkill;
+struct GenerateDocumentSkill {
+    doc_service: Arc<DocumentService>,
+}
+
+impl GenerateDocumentSkill {
+    fn new(doc_service: Arc<DocumentService>) -> Self {
+        Self { doc_service }
+    }
+}
 
 #[async_trait]
 impl Skill for GenerateDocumentSkill {
@@ -59,19 +74,49 @@ impl Skill for GenerateDocumentSkill {
             "required": ["format", "path", "content"]
         })
     }
-    async fn execute(&self, _params: Value) -> SkillResult {
-        log::debug!("执行生成文档技能 (占位实现)");
-        SkillResult {
-            success: true,
-            output: Some(json!({"placeholder": true, "message": "文档生成功能待接入 Sidecar"})),
-            error: None,
-            duration_ms: 0,
+    async fn execute(&self, params: Value) -> SkillResult {
+        let start = Instant::now();
+        let doc_type = params["format"].as_str().unwrap_or("docx");
+        let output_path = params["path"].as_str().unwrap_or("");
+        let title = params["title"].as_str().unwrap_or("");
+        let content = params["content"].as_str().unwrap_or("");
+
+        let sidecar_params = json!({
+            "output_path": output_path,
+            "title": title,
+            "content": content,
+            "variables": {
+                "title": title,
+            },
+        });
+
+        match self.doc_service.process("generate", doc_type, sidecar_params).await {
+            Ok(data) => SkillResult {
+                success: true,
+                output: Some(data),
+                error: None,
+                duration_ms: start.elapsed().as_millis() as u64,
+            },
+            Err(e) => SkillResult {
+                success: false,
+                output: None,
+                error: Some(e.message),
+                duration_ms: start.elapsed().as_millis() as u64,
+            },
         }
     }
 }
 
 /// 读取文档技能
-struct ReadDocumentSkill;
+struct ReadDocumentSkill {
+    doc_service: Arc<DocumentService>,
+}
+
+impl ReadDocumentSkill {
+    fn new(doc_service: Arc<DocumentService>) -> Self {
+        Self { doc_service }
+    }
+}
 
 #[async_trait]
 impl Skill for ReadDocumentSkill {
@@ -98,19 +143,56 @@ impl Skill for ReadDocumentSkill {
             "required": ["path"]
         })
     }
-    async fn execute(&self, _params: Value) -> SkillResult {
-        log::debug!("执行读取文档技能 (占位实现)");
-        SkillResult {
-            success: true,
-            output: Some(json!({"placeholder": true, "message": "文档读取功能待接入 Sidecar"})),
-            error: None,
-            duration_ms: 0,
+    async fn execute(&self, params: Value) -> SkillResult {
+        let start = Instant::now();
+        let file_path = params["path"].as_str().unwrap_or("");
+        let extension = std::path::Path::new(file_path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("docx");
+        let doc_type = match extension {
+            "docx" => "docx",
+            "xlsx" => "xlsx",
+            "pptx" => "pptx",
+            "pdf" => "pdf",
+            "md" | "markdown" => "md",
+            _ => "docx",
+        };
+
+        let sidecar_params = json!({
+            "input_path": file_path,
+            "options": {
+                "include_formatting": params["include_formatting"].as_bool().unwrap_or(false),
+            },
+        });
+
+        match self.doc_service.process("read", doc_type, sidecar_params).await {
+            Ok(data) => SkillResult {
+                success: true,
+                output: Some(data),
+                error: None,
+                duration_ms: start.elapsed().as_millis() as u64,
+            },
+            Err(e) => SkillResult {
+                success: false,
+                output: None,
+                error: Some(e.message),
+                duration_ms: start.elapsed().as_millis() as u64,
+            },
         }
     }
 }
 
 /// 修改文档技能
-struct ModifyDocumentSkill;
+struct ModifyDocumentSkill {
+    doc_service: Arc<DocumentService>,
+}
+
+impl ModifyDocumentSkill {
+    fn new(doc_service: Arc<DocumentService>) -> Self {
+        Self { doc_service }
+    }
+}
 
 #[async_trait]
 impl Skill for ModifyDocumentSkill {
@@ -146,19 +228,54 @@ impl Skill for ModifyDocumentSkill {
             "required": ["path", "operations"]
         })
     }
-    async fn execute(&self, _params: Value) -> SkillResult {
-        log::debug!("执行修改文档技能 (占位实现)");
-        SkillResult {
-            success: true,
-            output: Some(json!({"placeholder": true, "message": "文档修改功能待接入 Sidecar"})),
-            error: None,
-            duration_ms: 0,
+    async fn execute(&self, params: Value) -> SkillResult {
+        let start = Instant::now();
+        let file_path = params["path"].as_str().unwrap_or("");
+        let extension = std::path::Path::new(file_path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("docx");
+        let doc_type = match extension {
+            "docx" => "docx",
+            "xlsx" => "xlsx",
+            "pptx" => "pptx",
+            "md" | "markdown" => "md",
+            _ => "docx",
+        };
+
+        let sidecar_params = json!({
+            "input_path": file_path,
+            "output_path": file_path,
+            "operations": params["operations"],
+        });
+
+        match self.doc_service.process("modify", doc_type, sidecar_params).await {
+            Ok(data) => SkillResult {
+                success: true,
+                output: Some(data),
+                error: None,
+                duration_ms: start.elapsed().as_millis() as u64,
+            },
+            Err(e) => SkillResult {
+                success: false,
+                output: None,
+                error: Some(e.message),
+                duration_ms: start.elapsed().as_millis() as u64,
+            },
         }
     }
 }
 
 /// 删除文档技能
-struct DeleteDocumentSkill;
+struct DeleteDocumentSkill {
+    doc_service: Arc<DocumentService>,
+}
+
+impl DeleteDocumentSkill {
+    fn new(doc_service: Arc<DocumentService>) -> Self {
+        Self { doc_service }
+    }
+}
 
 #[async_trait]
 impl Skill for DeleteDocumentSkill {
@@ -182,19 +299,42 @@ impl Skill for DeleteDocumentSkill {
             "required": ["path"]
         })
     }
-    async fn execute(&self, _params: Value) -> SkillResult {
-        log::debug!("执行删除文档技能 (占位实现)");
-        SkillResult {
-            success: true,
-            output: Some(json!({"placeholder": true, "message": "文档删除功能待接入 Sidecar"})),
-            error: None,
-            duration_ms: 0,
+    async fn execute(&self, params: Value) -> SkillResult {
+        let start = Instant::now();
+        let file_path = params["path"].as_str().unwrap_or("");
+
+        let sidecar_params = json!({
+            "input_path": file_path,
+            "create_snapshot": params["create_snapshot"].as_bool().unwrap_or(true),
+        });
+
+        match self.doc_service.process("delete", "docx", sidecar_params).await {
+            Ok(data) => SkillResult {
+                success: true,
+                output: Some(data),
+                error: None,
+                duration_ms: start.elapsed().as_millis() as u64,
+            },
+            Err(e) => SkillResult {
+                success: false,
+                output: None,
+                error: Some(e.message),
+                duration_ms: start.elapsed().as_millis() as u64,
+            },
         }
     }
 }
 
 /// 格式转换技能
-struct ConvertFormatSkill;
+struct ConvertFormatSkill {
+    doc_service: Arc<DocumentService>,
+}
+
+impl ConvertFormatSkill {
+    fn new(doc_service: Arc<DocumentService>) -> Self {
+        Self { doc_service }
+    }
+}
 
 #[async_trait]
 impl Skill for ConvertFormatSkill {
@@ -225,19 +365,61 @@ impl Skill for ConvertFormatSkill {
             "required": ["source_path", "target_format"]
         })
     }
-    async fn execute(&self, _params: Value) -> SkillResult {
-        log::debug!("执行格式转换技能 (占位实现)");
-        SkillResult {
-            success: true,
-            output: Some(json!({"placeholder": true, "message": "格式转换功能待接入 Sidecar"})),
-            error: None,
-            duration_ms: 0,
+    async fn execute(&self, params: Value) -> SkillResult {
+        let start = Instant::now();
+        let source_path = params["source_path"].as_str().unwrap_or("");
+        let target_format = params["target_format"].as_str().unwrap_or("pdf");
+        let output_path = params["output_path"].as_str().unwrap_or("");
+
+        let source_extension = std::path::Path::new(source_path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("docx");
+
+        let output_path = if output_path.is_empty() {
+            let stem = std::path::Path::new(source_path)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("output");
+            format!("{}.{}", stem, target_format)
+        } else {
+            output_path.to_string()
+        };
+
+        let sidecar_params = json!({
+            "input_path": source_path,
+            "output_path": output_path,
+            "source_type": source_extension,
+            "options": {},
+        });
+
+        match self.doc_service.process("convert", target_format, sidecar_params).await {
+            Ok(data) => SkillResult {
+                success: true,
+                output: Some(data),
+                error: None,
+                duration_ms: start.elapsed().as_millis() as u64,
+            },
+            Err(e) => SkillResult {
+                success: false,
+                output: None,
+                error: Some(e.message),
+                duration_ms: start.elapsed().as_millis() as u64,
+            },
         }
     }
 }
 
 /// 搜索文档技能
-struct SearchDocumentsSkill;
+struct SearchDocumentsSkill {
+    doc_service: Arc<DocumentService>,
+}
+
+impl SearchDocumentsSkill {
+    fn new(doc_service: Arc<DocumentService>) -> Self {
+        Self { doc_service }
+    }
+}
 
 #[async_trait]
 impl Skill for SearchDocumentsSkill {
@@ -271,19 +453,43 @@ impl Skill for SearchDocumentsSkill {
             "required": ["query"]
         })
     }
-    async fn execute(&self, _params: Value) -> SkillResult {
-        log::debug!("执行搜索文档技能 (占位实现)");
-        SkillResult {
-            success: true,
-            output: Some(json!({"placeholder": true, "message": "文档搜索功能待接入 Sidecar"})),
-            error: None,
-            duration_ms: 0,
+    async fn execute(&self, params: Value) -> SkillResult {
+        let start = Instant::now();
+
+        let sidecar_params = json!({
+            "query": params["query"],
+            "extensions": params["extensions"],
+            "include_content": params["include_content"].as_bool().unwrap_or(false),
+            "max_results": params["max_results"].as_u64().unwrap_or(50),
+        });
+
+        match self.doc_service.process("search", "docx", sidecar_params).await {
+            Ok(data) => SkillResult {
+                success: true,
+                output: Some(data),
+                error: None,
+                duration_ms: start.elapsed().as_millis() as u64,
+            },
+            Err(e) => SkillResult {
+                success: false,
+                output: None,
+                error: Some(e.message),
+                duration_ms: start.elapsed().as_millis() as u64,
+            },
         }
     }
 }
 
 /// 分析文档技能
-struct AnalyzeDocumentSkill;
+struct AnalyzeDocumentSkill {
+    doc_service: Arc<DocumentService>,
+}
+
+impl AnalyzeDocumentSkill {
+    fn new(doc_service: Arc<DocumentService>) -> Self {
+        Self { doc_service }
+    }
+}
 
 #[async_trait]
 impl Skill for AnalyzeDocumentSkill {
@@ -305,19 +511,53 @@ impl Skill for AnalyzeDocumentSkill {
             "required": ["path"]
         })
     }
-    async fn execute(&self, _params: Value) -> SkillResult {
-        log::debug!("执行分析文档技能 (占位实现)");
-        SkillResult {
-            success: true,
-            output: Some(json!({"placeholder": true, "message": "文档分析功能待接入 Sidecar"})),
-            error: None,
-            duration_ms: 0,
+    async fn execute(&self, params: Value) -> SkillResult {
+        let start = Instant::now();
+        let file_path = params["path"].as_str().unwrap_or("");
+        let extension = std::path::Path::new(file_path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("docx");
+        let doc_type = match extension {
+            "docx" => "docx",
+            "xlsx" => "xlsx",
+            "pptx" => "pptx",
+            "pdf" => "pdf",
+            "md" | "markdown" => "md",
+            _ => "docx",
+        };
+
+        let sidecar_params = json!({
+            "input_path": file_path,
+        });
+
+        match self.doc_service.process("analyze", doc_type, sidecar_params).await {
+            Ok(data) => SkillResult {
+                success: true,
+                output: Some(data),
+                error: None,
+                duration_ms: start.elapsed().as_millis() as u64,
+            },
+            Err(e) => SkillResult {
+                success: false,
+                output: None,
+                error: Some(e.message),
+                duration_ms: start.elapsed().as_millis() as u64,
+            },
         }
     }
 }
 
 /// 列出工作区文件技能
-struct ListWorkspaceSkill;
+struct ListWorkspaceSkill {
+    doc_service: Arc<DocumentService>,
+}
+
+impl ListWorkspaceSkill {
+    fn new(doc_service: Arc<DocumentService>) -> Self {
+        Self { doc_service }
+    }
+}
 
 #[async_trait]
 impl Skill for ListWorkspaceSkill {
@@ -345,19 +585,42 @@ impl Skill for ListWorkspaceSkill {
             }
         })
     }
-    async fn execute(&self, _params: Value) -> SkillResult {
-        log::debug!("执行列出工作区技能 (占位实现)");
-        SkillResult {
-            success: true,
-            output: Some(json!({"placeholder": true, "message": "工作区列表功能待接入 Sidecar"})),
-            error: None,
-            duration_ms: 0,
+    async fn execute(&self, params: Value) -> SkillResult {
+        let start = Instant::now();
+
+        let sidecar_params = json!({
+            "path": params["path"].as_str().unwrap_or("."),
+            "depth": params["depth"].as_u64().unwrap_or(1),
+            "extensions": params["extensions"],
+        });
+
+        match self.doc_service.process("list", "docx", sidecar_params).await {
+            Ok(data) => SkillResult {
+                success: true,
+                output: Some(data),
+                error: None,
+                duration_ms: start.elapsed().as_millis() as u64,
+            },
+            Err(e) => SkillResult {
+                success: false,
+                output: None,
+                error: Some(e.message),
+                duration_ms: start.elapsed().as_millis() as u64,
+            },
         }
     }
 }
 
 /// 批量处理技能
-struct BatchProcessSkill;
+struct BatchProcessSkill {
+    doc_service: Arc<DocumentService>,
+}
+
+impl BatchProcessSkill {
+    fn new(doc_service: Arc<DocumentService>) -> Self {
+        Self { doc_service }
+    }
+}
 
 #[async_trait]
 impl Skill for BatchProcessSkill {
@@ -386,13 +649,83 @@ impl Skill for BatchProcessSkill {
             "required": ["operation", "paths"]
         })
     }
-    async fn execute(&self, _params: Value) -> SkillResult {
-        log::debug!("执行批量处理技能 (占位实现)");
+    async fn execute(&self, params: Value) -> SkillResult {
+        let start = Instant::now();
+        let operation = params["operation"].as_str().unwrap_or("analyze");
+        let paths = params["paths"].as_array().cloned().unwrap_or_default();
+        let op_params = params["params"].clone();
+
+        let mut results = Vec::new();
+        let mut all_success = true;
+
+        for path_val in paths {
+            let path_str = path_val.as_str().unwrap_or("");
+            if path_str.is_empty() {
+                continue;
+            }
+
+            let extension = std::path::Path::new(path_str)
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("docx");
+            let doc_type = match extension {
+                "docx" => "docx",
+                "xlsx" => "xlsx",
+                "pptx" => "pptx",
+                "pdf" => "pdf",
+                "md" | "markdown" => "md",
+                _ => "docx",
+            };
+
+            let sidecar_params = match operation {
+                "convert" => json!({
+                    "input_path": path_str,
+                    "output_path": op_params["output_path"],
+                    "source_type": extension,
+                    "options": {},
+                }),
+                "modify" => json!({
+                    "input_path": path_str,
+                    "output_path": path_str,
+                    "operations": op_params["operations"],
+                }),
+                _ => json!({
+                    "input_path": path_str,
+                }),
+            };
+
+            let action = match operation {
+                "convert" => "convert",
+                "modify" => "modify",
+                _ => "analyze",
+            };
+
+            match self.doc_service.process(action, doc_type, sidecar_params).await {
+                Ok(data) => results.push(json!({
+                    "path": path_str,
+                    "success": true,
+                    "data": data,
+                })),
+                Err(e) => {
+                    all_success = false;
+                    results.push(json!({
+                        "path": path_str,
+                        "success": false,
+                        "error": e.message,
+                    }));
+                }
+            }
+        }
+
         SkillResult {
-            success: true,
-            output: Some(json!({"placeholder": true, "message": "批量处理功能待接入 Sidecar"})),
-            error: None,
-            duration_ms: 0,
+            success: all_success,
+            output: Some(json!({
+                "operation": operation,
+                "total": results.len(),
+                "results": results,
+            })),
+            error: if all_success { None } else { Some("部分文件处理失败".to_string()) },
+            duration_ms: start.elapsed().as_millis() as u64,
         }
     }
 }

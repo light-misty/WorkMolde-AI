@@ -10,13 +10,13 @@ DocAgent 是一款 AI 文档处理桌面应用，通过自然语言驱动 Agent 
 
 当前各模块完成度：
 
-| 模块 | 完成度 | 代码量 | 说明 |
-|------|--------|--------|------|
-| 前端 UI 组件 | 95% | 3,571 行 | 组件、Store、事件封装全部完成，待与后端联调 |
-| Rust 后端 | 80% | 5,572 行 | 数据库、配置、LLM、Agent、Skill 全部实现，待与 Sidecar 集成 |
-| Python Sidecar | 95% | 1,337 行 | 所有文档处理器已实现，待与后端集成 |
-| 共享类型 | 10% | 9 行 | 仅定义了 NodeType 和 ExecutionStatus |
-| 设计文档 | 100% | 9,594 行 | PRD、技术架构、组件设计、数据库设计等齐全 |
+| 模块 | 完成度 | 说明 |
+|------|--------|------|
+| 前端 UI 组件 | 95% | 组件、Store、事件封装全部完成，待与后端联调 |
+| Rust 后端 | 80% | 数据库、配置、LLM、Agent、Skill 全部实现，待与 Sidecar 集成 |
+| Python Sidecar | 95% | 所有文档处理器已实现，待与后端集成 |
+| 共享类型 | 10% | 仅定义了 NodeType 和 ExecutionStatus |
+| 设计文档 | 100% | PRD、技术架构、组件设计、数据库设计等齐全 |
 
 ### 各模块详细状态
 
@@ -30,8 +30,8 @@ DocAgent 是一款 AI 文档处理桌面应用，通过自然语言驱动 Agent 
 | 设置对话框 | 完成 | SettingsDialog + 5 个标签页（LLM、工作区、Skills、模板、通用） |
 | 预览面板 | 完成 | PreviewOverlay 支持文档预览和差异对比 |
 | 状态管理 | 完成 | 6 个 Zustand Store 全部实现 |
-| 事件监听 | 完成 | 完整的 Agent 事件监听封装（event.ts，250 行） |
-| Tauri 命令封装 | 完成 | 所有命令的 TypeScript 封装（tauri.ts，621 行） |
+| 事件监听 | 完成 | 完整的 Agent 事件监听封装（event.ts） |
+| Tauri 命令封装 | 完成 | 所有命令的 TypeScript 封装（tauri.ts） |
 
 #### Rust 后端（80% 完成）
 
@@ -41,21 +41,21 @@ DocAgent 是一款 AI 文档处理桌面应用，通过自然语言驱动 Agent 
 | 配置管理 | 完成 | LLM 配置、应用设置、工作区配置全部实现 |
 | 模型定义 | 完成 | 所有数据模型已定义 |
 | 事件系统 | 完成 | AgentEmitter 和事件类型全部实现 |
-| LLM 服务 | 完成 | OpenAI 适配器完整实现（388 行），支持流式和非流式响应 |
-| Agent 执行器 | 完成 | Tool Calling 循环核心逻辑已实现（228 行） |
-| Skill 注册表 | 完成 | 注册表框架 + 9 个内置 Skills 已实现（521 行） |
+| LLM 服务 | 完成 | OpenAI 适配器完整实现，支持流式和非流式响应 |
+| Agent 执行器 | 完成 | Tool Calling 循环核心逻辑已实现 |
+| Skill 注册表 | 完成 | 注册表框架 + 9 个内置 Skills 已实现 |
 | Tauri 命令 | 完成 | 所有核心命令已实现（session、settings、workspace、llm、agent） |
 
 #### Python Sidecar（95% 完成）
 
 | 处理器 | 状态 | 功能 |
 |--------|------|------|
-| Word 处理器 | 完成 | generate、read、modify、convert、analyze（385 行） |
-| Excel 处理器 | 完成 | generate、read、modify、analyze（229 行） |
-| PDF 处理器 | 完成 | generate、read、analyze（205 行） |
-| PPT 处理器 | 完成 | generate、read、modify、analyze（180 行） |
-| Markdown 处理器 | 完成 | generate、read、modify、analyze（200 行） |
-| main.py | 完成 | stdin/stdout JSON 协议通信（166 行） |
+| Word 处理器 | 完成 | generate、read、modify、convert、analyze |
+| Excel 处理器 | 完成 | generate、read、modify、analyze |
+| PDF 处理器 | 完成 | generate、read、analyze |
+| PPT 处理器 | 完成 | generate、read、modify、analyze |
+| Markdown 处理器 | 完成 | generate、read、modify、analyze |
+| main.py | 完成 | stdin/stdout JSON 协议通信 |
 
 ### 下一步开发重点
 
@@ -98,7 +98,7 @@ npm run tauri:build
 ## 目录结构
 
 ```
-src/                      # React 前端（3,571 行，完成度 95%）
+src/                      # React 前端
 ├── components/
 │   ├── layout/           # TopBar, MainLayout, MainArea, Sidebar, InputArea
 │   ├── workflow/         # WorkflowTimeline + 7 种节点组件
@@ -114,9 +114,9 @@ src/                      # React 前端（3,571 行，完成度 95%）
 ├── hooks/                # useAgent Hook
 └── styles/globals.css    # Tailwind + 自定义设计令牌
 
-src-tauri/                # Tauri Rust 后端（5,572 行，完成度 80%）
+src-tauri/                # Tauri Rust 后端
 ├── src/
-│   ├── commands/         # Tauri 命令（已实现）
+│   ├── commands/         # Tauri 命令
 │   │   ├── agent.rs      # start_agent, stop_agent, confirm_operation
 │   │   ├── session.rs    # 会话 CRUD
 │   │   ├── settings.rs   # 应用设置
@@ -129,24 +129,24 @@ src-tauri/                # Tauri Rust 后端（5,572 行，完成度 80%）
 │   │   ├── llm/          # LLM 服务（openai_adapter.rs, router.rs）
 │   │   ├── skill/        # Skill 系统（registry.rs, builtin.rs）
 │   │   └── document/     # 文档服务
-│   ├── db/               # SQLite 数据库层（完整实现）
-│   ├── config/           # 配置管理（完整实现）
+│   ├── db/               # SQLite 数据库层
+│   ├── config/           # 配置管理
 │   ├── models/           # 数据模型定义
-│   ├── events/           # 事件系统（完整实现）
+│   ├── events/           # 事件系统
 │   └── utils/            # 工具函数
 └── resources/            # 资源文件
 
-sidecar/                  # Python Sidecar（1,337 行，完成度 95%）
+sidecar/                  # Python Sidecar
 ├── main.py               # 入口，stdin/stdout JSON 协议通信
 └── handlers/             # 文档处理器
-    ├── word_handler.py   # Word 文档处理（385 行）
-    ├── excel_handler.py  # Excel 文档处理（229 行）
-    ├── pdf_handler.py    # PDF 文档处理（205 行）
-    ├── ppt_handler.py    # PPT 文档处理（180 行）
-    └── markdown_handler.py # Markdown 文档处理（200 行）
+    ├── word_handler.py   # Word 文档处理
+    ├── excel_handler.py  # Excel 文档处理
+    ├── pdf_handler.py    # PDF 文档处理
+    ├── ppt_handler.py    # PPT 文档处理
+    └── markdown_handler.py # Markdown 文档处理
 
-shared/types.ts           # 前后端共享类型（9 行）
-docs/                     # 设计文档（9,594 行）
+shared/types.ts           # 前后端共享类型
+docs/                     # 设计文档
 ├── PRD_DocAgent.md       # 产品需求文档
 ├── tech_architecture.md  # 技术架构文档
 ├── component_design.md   # 前端组件设计文档

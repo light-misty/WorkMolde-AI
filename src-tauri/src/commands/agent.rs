@@ -1,10 +1,11 @@
-use tauri::{AppHandle, Manager, State};
+use std::sync::Arc;
+
+use tauri::{AppHandle, State};
 
 use crate::errors::{CommandError, AGENT_ALREADY_RUNNING, AGENT_NOT_RUNNING, AGENT_SESSION_NOT_FOUND};
 use crate::events::AgentEmitter;
-use crate::events::types::{
-    ContentPayload, DonePayload, ThinkingPayload, TodoItem, TodoUpdatePayload,
-};
+use crate::services::agent::context::AgentContext;
+use crate::services::agent::executor::AgentExecutor;
 use crate::AppState;
 
 /// 启动 Agent 执行，在后台 spawn 一个 tokio task
@@ -39,22 +40,67 @@ pub async fn start_agent(
 
     let emitter = AgentEmitter::new(app_handle.clone());
     let sid = session_id.clone();
+    let prompt_clone = prompt.clone();
 
-    // 在后台 spawn Agent 执行循环
-    log::info!("start_agent: 会话 '{}' 开始 spawn 后台任务", session_id);
+    let llm_router = Arc::clone(&state.llm_router);
+    let skill_registry = Arc::clone(&state.skill_registry);
+    let active_agents = Arc::clone(&state.active_agents);
+
+    let max_iterations = options
+        .as_ref()
+        .and_then(|o| o.get("maxIterations"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or(20) as u32;
+
+    let workspace_path = options
+        .as_ref()
+        .and_then(|o| o.get("workingDirectory"))
+        .and_then(|v| v.as_str())
+        .unwrap_or(".")
+        .to_string();
+
     tokio::spawn(async move {
-        let _ = run_agent_loop(&sid, &prompt, &emitter).await;
+        let active_agents_for_check = Arc::clone(&active_agents);
 
-        // 无论成功或失败，都从活跃列表中移除
-        let app_state = app_handle.state::<AppState>();
+        let should_stop: Arc<dyn Fn(&str) -> bool + Send + Sync> = Arc::new(move |session_id: &str| {
+            match active_agents_for_check.try_lock() {
+                Ok(guard) => !guard.get(session_id).copied().unwrap_or(false),
+                Err(_) => false,
+            }
+        });
+
+        // 读取当前 LlmRouter 快照
+        let router_snapshot = {
+            let guard = llm_router.read().await;
+            Arc::clone(&guard)
+        };
+
+        let result = run_agent(
+            &sid,
+            &prompt_clone,
+            &router_snapshot,
+            &skill_registry,
+            &emitter,
+            max_iterations,
+            &workspace_path,
+            should_stop,
+        ).await;
+
+        if let Err(e) = &result {
+            log::error!("Agent 执行失败: session_id={}, 错误: {}", sid, e.message);
+        }
+
         {
-            let mut active = app_state.active_agents.lock().await;
-            active.remove(&sid);
-            log::info!("start_agent: 会话 '{}' 已从活跃列表移除", sid);
+            let mut active = active_agents.lock().await;
+            let was_running = active.remove(&sid);
+            if was_running.is_none() {
+                log::warn!("Agent 已从活跃列表移除: session_id={}", sid);
+            } else {
+                log::info!("Agent 已从活跃列表移除: session_id={}", sid);
+            }
         }
     });
 
-    let _ = options;
     log::info!("start_agent 成功: session_id={}", session_id);
     Ok(())
 }
@@ -100,7 +146,6 @@ pub async fn confirm_operation(
         ));
     }
 
-    // 后续实现：将确认结果写入 channel，通知 Agent 循环继续
     log::info!(
         "操作确认: session={}, operation={}, approved={}, feedback={:?}",
         session_id,
@@ -112,64 +157,53 @@ pub async fn confirm_operation(
     Ok(())
 }
 
-/// Agent 执行循环（当前为占位实现，后续接入 LLM 适配器）
-async fn run_agent_loop(
+/// 真正的 Agent 执行逻辑
+/// 使用 AgentExecutor 执行 Tool Calling 循环
+async fn run_agent(
     session_id: &str,
     prompt: &str,
+    llm_router: &Arc<crate::services::llm::router::LlmRouter>,
+    skill_registry: &Arc<crate::services::skill::registry::SkillRegistry>,
     emitter: &AgentEmitter<tauri::Wry>,
+    max_iterations: u32,
+    workspace_path: &str,
+    should_stop: Arc<dyn Fn(&str) -> bool + Send + Sync>,
 ) -> Result<(), CommandError> {
-    log::info!("run_agent_loop 开始: session_id={}", session_id);
+    log::info!("run_agent 开始: session_id={}, workspace={}", session_id, workspace_path);
 
-    // 发送思考链开始事件
-    emitter.emit_thinking(ThinkingPayload {
-        session_id: session_id.to_string(),
-        step: 1,
-        thought: format!("正在分析用户需求: {}", prompt),
-    })?;
-    log::debug!("run_agent_loop: 思考链事件已发送, session_id={}", session_id);
+    if llm_router.is_empty() {
+        let error_msg = "未配置 LLM Provider，请在设置中添加至少一个 Provider";
+        log::error!("run_agent 失败: {}", error_msg);
+        emitter.emit_error(crate::events::types::ErrorPayload {
+            session_id: session_id.to_string(),
+            code: 1002,
+            message: error_msg.to_string(),
+            recoverable: true,
+        }).ok();
+        return Err(CommandError::llm(1002, error_msg.to_string()));
+    }
 
-    // 发送 Todo 列表更新事件
-    emitter.emit_todo_update(TodoUpdatePayload {
-        session_id: session_id.to_string(),
-        todos: vec![
-            TodoItem {
-                id: "1".to_string(),
-                content: "分析用户需求".to_string(),
-                status: "completed".to_string(),
-            },
-            TodoItem {
-                id: "2".to_string(),
-                content: "生成文档内容".to_string(),
-                status: "in_progress".to_string(),
-            },
-            TodoItem {
-                id: "3".to_string(),
-                content: "输出结果".to_string(),
-                status: "pending".to_string(),
-            },
-        ],
-    })?;
-    log::debug!("run_agent_loop: Todo更新事件已发送, session_id={}", session_id);
+    let system_prompt = crate::services::agent::context::AgentContext::build_system_prompt(workspace_path);
+    let mut ctx = AgentContext::new(session_id.to_string(), system_prompt);
+    ctx.max_iterations = max_iterations;
+    ctx.add_user_message(prompt);
 
-    // 发送内容增量事件
-    emitter.emit_content(ContentPayload {
-        session_id: session_id.to_string(),
-        message_id: uuid::Uuid::new_v4().to_string(),
-        content: format!("收到您的请求: {}\n\nAgent 引擎正在开发中，此为占位响应。", prompt),
-        is_streaming: false,
-    })?;
-    log::debug!("run_agent_loop: 内容增量事件已发送, session_id={}", session_id);
+    let executor = AgentExecutor::new(
+        Arc::clone(llm_router),
+        Arc::clone(skill_registry),
+        emitter.clone(),
+    )
+    .with_stop_check(should_stop)
+    .with_max_iterations(max_iterations);
 
-    // 发送完成事件
-    emitter.emit_done(DonePayload {
-        session_id: session_id.to_string(),
-        summary: "Agent 占位执行完成".to_string(),
-        total_steps: 1,
-        total_tokens: 0,
-        duration_ms: 100,
-    })?;
-    log::debug!("run_agent_loop: 完成事件已发送, session_id={}", session_id);
-
-    log::info!("run_agent_loop 成功完成: session_id={}", session_id);
-    Ok(())
+    match executor.execute(&mut ctx).await {
+        Ok(summary) => {
+            log::info!("Agent 执行成功: session_id={}, 摘要长度={}", session_id, summary.len());
+            Ok(())
+        }
+        Err(e) => {
+            log::error!("Agent 执行失败: session_id={}, 错误: {}", session_id, e.message);
+            Err(e)
+        }
+    }
 }

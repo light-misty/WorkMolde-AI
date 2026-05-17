@@ -8,6 +8,14 @@ pub struct AgentEmitter<R: Runtime> {
     app_handle: AppHandle<R>,
 }
 
+impl<R: Runtime> Clone for AgentEmitter<R> {
+    fn clone(&self) -> Self {
+        Self {
+            app_handle: self.app_handle.clone(),
+        }
+    }
+}
+
 impl<R: Runtime> AgentEmitter<R> {
     /// 创建事件发射器实例
     pub fn new(app_handle: AppHandle<R>) -> Self {

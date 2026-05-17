@@ -131,6 +131,7 @@ impl DocumentService {
     }
 
     /// 处理文档操作
+    /// 如果 Sidecar 未启动，会自动启动
     pub async fn process(
         &self,
         action: &str,
@@ -138,6 +139,17 @@ impl DocumentService {
         params: Value,
     ) -> Result<Value, CommandError> {
         log::info!("处理文档操作: action={}, doc_type={}", action, doc_type);
+
+        // 自动启动 Sidecar（如果未运行）
+        {
+            let guard = self.sidecar.process.lock().await;
+            if guard.is_none() {
+                drop(guard);
+                log::info!("Sidecar 未启动，正在自动启动...");
+                self.sidecar.start().await?;
+            }
+        }
+
         let request = json!({
             "id": uuid::Uuid::new_v4().to_string(),
             "action": action,

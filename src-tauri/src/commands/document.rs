@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use serde_json::json;
 use tauri::State;
 
 use crate::db::snapshot_repo;
@@ -8,6 +9,7 @@ use crate::models::document::{PreviewContent, VersionInfo};
 use crate::AppState;
 
 /// 预览文档内容
+/// 对于文本类文件直接读取，对于二进制格式文件通过 Sidecar 解析
 #[tauri::command]
 pub async fn preview_document(
     workspace_id: String,
@@ -62,14 +64,26 @@ pub async fn preview_document(
 
     log::debug!("preview_document: 文件类型={}", file_type);
 
-    // 对于文本类文件直接读取内容
+    // 释放配置锁后再调用 Sidecar（避免长时间持锁）
+    drop(config);
+
     let content = match file_type {
         "md" | "txt" => std::fs::read_to_string(&file_path)?,
-        // 二进制格式文件返回占位提示，实际解析由 Python Sidecar 完成
-        _ => format!(
-            "[预览] {} 格式文件需要通过文档处理引擎解析",
-            extension.to_uppercase()
-        ),
+        _ => {
+            let sidecar_params = json!({
+                "input_path": file_path.to_string_lossy().to_string(),
+                "options": {
+                    "include_formatting": false,
+                },
+            });
+            match state.doc_service.process("read", file_type, sidecar_params).await {
+                Ok(data) => serde_json::to_string_pretty(&data).unwrap_or_else(|_| "[预览] 文档内容解析失败".to_string()),
+                Err(e) => {
+                    log::warn!("preview_document: Sidecar 解析失败, 降级为占位提示: {}", e.message);
+                    format!("[预览] {} 格式文件解析失败: {}", extension.to_uppercase(), e.message)
+                }
+            }
+        }
     };
 
     log::info!("preview_document: 预览完成, file_type={}", file_type);

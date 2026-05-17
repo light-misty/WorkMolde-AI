@@ -140,6 +140,8 @@ def main():
 
     for line in sys.stdin:
         line = line.strip()
+        # 移除 UTF-8 BOM（Windows 管道常见问题）
+        line = line.lstrip('\ufeff')
         if not line:
             continue
         logger.debug("收到输入: %s", line[:200])
