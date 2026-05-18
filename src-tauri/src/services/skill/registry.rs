@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
@@ -38,13 +38,22 @@ pub trait Skill: Send + Sync {
 /// Skill 注册表
 pub struct SkillRegistry {
     skills: HashMap<String, Box<dyn Skill>>,
+    /// 已禁用的 Skill ID 集合
+    disabled_skills: HashSet<String>,
 }
 
 impl SkillRegistry {
     pub fn new() -> Self {
         Self {
             skills: HashMap::new(),
+            disabled_skills: HashSet::new(),
         }
+    }
+
+    /// 使用已禁用列表初始化
+    pub fn with_disabled_skills(mut self, disabled: Vec<String>) -> Self {
+        self.disabled_skills = disabled.into_iter().collect();
+        self
     }
 
     /// 注册技能
@@ -60,9 +69,18 @@ impl SkillRegistry {
         self.skills.get(name).map(|s| s.as_ref())
     }
 
-    /// 执行技能
+    /// 执行技能（仅执行已启用的技能）
     pub async fn execute(&self, name: &str, params: Value) -> SkillResult {
         log::info!("执行技能: {}", name);
+        if self.disabled_skills.contains(name) {
+            log::warn!("技能已禁用: {}", name);
+            return SkillResult {
+                success: false,
+                output: None,
+                error: Some(format!("技能 '{}' 已禁用", name)),
+                duration_ms: 0,
+            };
+        }
         match self.skills.get(name) {
             Some(skill) => {
                 log::debug!("找到技能: {}, 开始执行", name);
@@ -86,38 +104,53 @@ impl SkillRegistry {
         }
     }
 
-    /// 生成 OpenAI function calling 格式的工具定义
+    /// 生成 OpenAI function calling 格式的工具定义（仅包含已启用的技能）
     pub fn tool_definitions(&self) -> Vec<Value> {
         let count = self.skills.len();
         log::debug!("生成工具定义, 技能数量: {}", count);
-        let definitions = self.skills.values().map(|skill| {
-            json!({
-                "type": "function",
-                "function": {
-                    "name": skill.skill_name(),
-                    "description": skill.description(),
-                    "parameters": skill.parameters(),
-                }
-            })
-        }).collect();
+        let definitions = self.skills.values()
+            .filter(|skill| !self.disabled_skills.contains(skill.skill_name()))
+            .map(|skill| {
+                json!({
+                    "type": "function",
+                    "function": {
+                        "name": skill.skill_name(),
+                        "description": skill.description(),
+                        "parameters": skill.parameters(),
+                    }
+                })
+            }).collect();
         log::debug!("工具定义生成完成, 数量: {}", count);
         definitions
     }
 
-    /// 列出所有技能信息
+    /// 列出所有技能信息（包含启用/禁用状态）
     pub fn list_skills(&self) -> Vec<SkillInfo> {
         self.skills.values().map(|skill| {
+            let skill_id = skill.skill_name();
             SkillInfo {
-                id: skill.skill_name().to_string(),
-                name: skill.skill_name().to_string(),
+                id: skill_id.to_string(),
+                name: skill_id.to_string(),
                 description: skill.description().to_string(),
                 category: skill.category().to_string(),
                 is_builtin: skill.is_builtin(),
-                enabled: true,
+                enabled: !self.disabled_skills.contains(skill_id),
                 version: "1.0.0".to_string(),
                 params_schema: Some(skill.parameters()),
                 supported_types: skill.supported_types(),
             }
         }).collect()
+    }
+
+    /// 切换技能启用/禁用状态，返回更新后的禁用列表
+    pub fn toggle_skill(&mut self, skill_id: &str, enabled: bool) -> Vec<String> {
+        if enabled {
+            self.disabled_skills.remove(skill_id);
+            log::info!("技能已启用: {}", skill_id);
+        } else {
+            self.disabled_skills.insert(skill_id.to_string());
+            log::info!("技能已禁用: {}", skill_id);
+        }
+        self.disabled_skills.iter().cloned().collect()
     }
 }

@@ -9,8 +9,13 @@ interface TopBarProps {
 
 export function TopBar({ onToggleHistory, onNewSession }: TopBarProps) {
   const { currentWorkspaceId, workspaces } = useWorkspaceStore();
-  const { openSettings } = useSettingsStore();
+  const { openSettings, llmProviders, activeProviderId } = useSettingsStore();
   const currentWs = workspaces.find((w) => w.id === currentWorkspaceId);
+  const activeProvider = llmProviders.find((p) => p.id === activeProviderId);
+
+  const hasProvider = !!activeProvider;
+  const statusText = hasProvider ? activeProvider.model : "未连接";
+  const statusColor = hasProvider ? "bg-success" : "bg-text-tertiary";
 
   return (
     <div data-tauri-drag-region className="flex items-center h-[52px] px-4 border-b border-border bg-bg flex-shrink-0 gap-3 z-[100]">
@@ -26,10 +31,10 @@ export function TopBar({ onToggleHistory, onNewSession }: TopBarProps) {
 
       <div className="flex-1" />
 
-      {/* 状态指示器 */}
+      {/* 状态指示器 - 对接实际 LLM Provider 状态 */}
       <div className="flex items-center gap-[6px] text-[11px] text-text-tertiary">
-        <span className="w-[6px] h-[6px] rounded-full bg-text-tertiary" />
-        <span>未连接</span>
+        <span className={`w-[6px] h-[6px] rounded-full ${statusColor}`} />
+        <span>{statusText}</span>
       </div>
 
       {/* 操作按钮 */}

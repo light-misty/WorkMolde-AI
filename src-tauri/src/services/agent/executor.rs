@@ -27,7 +27,7 @@ pub struct ExecutionResult {
 
 pub struct AgentExecutor<R: Runtime> {
     router: Arc<LlmRouter>,
-    registry: Arc<SkillRegistry>,
+    registry: Arc<tokio::sync::Mutex<SkillRegistry>>,
     emitter: AgentEmitter<R>,
     confirm_channels: Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<ConfirmDecision>>>>,
     max_iterations: u32,
@@ -37,7 +37,7 @@ pub struct AgentExecutor<R: Runtime> {
 impl<R: Runtime> AgentExecutor<R> {
     pub fn new(
         router: Arc<LlmRouter>,
-        registry: Arc<SkillRegistry>,
+        registry: Arc<tokio::sync::Mutex<SkillRegistry>>,
         emitter: AgentEmitter<R>,
         confirm_channels: Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<ConfirmDecision>>>>,
     ) -> Self {
@@ -189,7 +189,10 @@ impl<R: Runtime> AgentExecutor<R> {
 
         log::info!("Agent 开始执行, session_id={}", ctx.session_id);
 
-        let tool_defs_json = self.registry.tool_definitions();
+        let tool_defs_json = {
+            let reg = self.registry.lock().await;
+            reg.tool_definitions()
+        };
         let tools: Vec<crate::models::llm::ToolDefinition> = tool_defs_json
             .iter()
             .filter_map(|v| {
@@ -401,7 +404,10 @@ impl<R: Runtime> AgentExecutor<R> {
 
                     let tool_start = std::time::Instant::now();
 
-                    let result = self.registry.execute(&tool_call.name, params).await;
+                    let result = {
+                        let reg = self.registry.lock().await;
+                        reg.execute(&tool_call.name, params).await
+                    };
 
                     let duration_ms = tool_start.elapsed().as_millis() as u64;
                     log::debug!("Tool 执行完成, session_id={}, tool={}, 成功={}, 耗时={}ms", ctx.session_id, tool_call.name, result.success, duration_ms);

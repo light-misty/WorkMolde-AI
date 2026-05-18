@@ -27,7 +27,7 @@ pub struct AppState {
     pub confirm_channels: Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<ConfirmDecision>>>>,
     pub doc_service: Arc<crate::services::document::DocumentService>,
     pub llm_router: Arc<tokio::sync::RwLock<Arc<crate::services::llm::router::LlmRouter>>>,
-    pub skill_registry: Arc<crate::services::skill::registry::SkillRegistry>,
+    pub skill_registry: Arc<tokio::sync::Mutex<crate::services::skill::registry::SkillRegistry>>,
 }
 
 pub fn run() {
@@ -81,6 +81,10 @@ pub fn run() {
                 Arc::clone(&doc_service_for_skills),
             );
 
+            // 从配置加载已禁用 Skill 列表
+            let app_settings = config_manager.load_app_settings().unwrap_or_default();
+            skill_registry = skill_registry.with_disabled_skills(app_settings.disabled_skills.clone());
+
             let log_dir = std::path::Path::new("log");
             crate::utils::logger::init(log_dir)
                 .expect("日志系统初始化失败");
@@ -94,7 +98,7 @@ pub fn run() {
                 confirm_channels: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
                 doc_service: doc_service_for_skills,
                 llm_router: Arc::new(tokio::sync::RwLock::new(Arc::new(llm_router))),
-                skill_registry: Arc::new(skill_registry),
+                skill_registry: Arc::new(tokio::sync::Mutex::new(skill_registry)),
             };
 
             app.manage(state);

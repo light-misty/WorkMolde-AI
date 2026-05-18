@@ -203,6 +203,9 @@ pub struct AppSettings {
     pub workspace: WorkspaceDefaults,
     #[serde(default)]
     pub shortcuts: Shortcuts,
+    /// 已禁用的 Skill ID 列表
+    #[serde(default)]
+    pub disabled_skills: Vec<String>,
 }
 
 /// 获取应用设置文件路径
@@ -316,5 +319,6 @@ pub fn merge_with_defaults(
                 user_settings.shortcuts.quick_prompt.clone()
             },
         },
+        disabled_skills: user_settings.disabled_skills.clone(),
     }
 }

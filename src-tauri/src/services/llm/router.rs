@@ -6,10 +6,20 @@ use crate::models::llm::*;
 use super::provider::LlmProvider;
 use super::openai_adapter::OpenAiAdapter;
 
+/// Provider 元数据，用于 list_providers 返回完整信息
+struct ProviderMeta {
+    name: String,
+    provider_type: String,
+    api_base: String,
+    model: String,
+    created_at: String,
+}
+
 /// LLM Provider 路由器
 /// 管理多个 LLM Provider，支持默认选择和 Fallback 切换
 pub struct LlmRouter {
     providers: HashMap<String, Box<dyn LlmProvider>>,
+    meta: HashMap<String, ProviderMeta>,
     default_id: Option<String>,
     fallback_order: Vec<String>,
 }
@@ -18,10 +28,17 @@ impl LlmRouter {
     /// 从配置创建路由器
     pub fn from_config(config: &LlmConfig) -> Self {
         let mut providers: HashMap<String, Box<dyn LlmProvider>> = HashMap::new();
+        let mut meta: HashMap<String, ProviderMeta> = HashMap::new();
         let mut default_id = None;
 
         for provider in &config.providers {
             let advanced = provider.advanced.clone();
+            let provider_type_str = match provider.provider_type {
+                ProviderType::OpenAI => "openai",
+                ProviderType::Anthropic => "anthropic",
+                ProviderType::Ollama => "ollama",
+                ProviderType::Custom => "custom",
+            };
             let adapter: Box<dyn LlmProvider> = match provider.provider_type {
                 ProviderType::OpenAI | ProviderType::Custom => {
                     Box::new(OpenAiAdapter::new(
@@ -50,6 +67,15 @@ impl LlmRouter {
                     ))
                 }
             };
+
+            meta.insert(provider.id.clone(), ProviderMeta {
+                name: provider.name.clone(),
+                provider_type: provider_type_str.to_string(),
+                api_base: provider.api_base_url.clone(),
+                model: provider.model.clone(),
+                created_at: String::new(),
+            });
+
             if provider.is_default {
                 default_id = Some(provider.id.clone());
             }
@@ -60,6 +86,7 @@ impl LlmRouter {
 
         Self {
             providers,
+            meta,
             default_id,
             fallback_order: config.fallback_order.clone(),
         }
@@ -69,6 +96,7 @@ impl LlmRouter {
     pub fn empty() -> Self {
         Self {
             providers: HashMap::new(),
+            meta: HashMap::new(),
             default_id: None,
             fallback_order: Vec::new(),
         }
@@ -144,18 +172,19 @@ impl LlmRouter {
         }
     }
 
-    /// 列出所有 Provider 信息
+    /// 列出所有 Provider 信息，包含完整的元数据
     pub fn list_providers(&self) -> Vec<ProviderInfo> {
         self.providers.keys().map(|id| {
+            let m = self.meta.get(id);
             ProviderInfo {
                 id: id.clone(),
-                name: String::new(),
-                provider_type: String::new(),
-                api_base: String::new(),
-                model: String::new(),
+                name: m.map(|m| m.name.clone()).unwrap_or_default(),
+                provider_type: m.map(|m| m.provider_type.clone()).unwrap_or_default(),
+                api_base: m.map(|m| m.api_base.clone()).unwrap_or_default(),
+                model: m.map(|m| m.model.clone()).unwrap_or_default(),
                 is_default: self.default_id.as_ref() == Some(id),
                 is_available: true,
-                created_at: String::new(),
+                created_at: m.map(|m| m.created_at.clone()).unwrap_or_default(),
                 is_connected: None,
             }
         }).collect()

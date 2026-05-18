@@ -65,6 +65,7 @@ const defaultSettings: AppSettings = {
     toggleSidebar: "Ctrl+B",
     quickPrompt: "Ctrl+/",
   },
+  disabledSkills: [],
 };
 
 interface SettingsState {
@@ -95,11 +96,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   isSettingsOpen: false,
   activeSettingsTab: "llm",
 
-  // 更新设置（深层合并，支持部分更新嵌套对象）
+  // 更新设置（深层合并，支持部分更新嵌套对象），并持久化到后端
   updateSettings: (updates) => {
-    set((state) => ({
-      settings: deepMerge(state.settings, updates),
-    }));
+    set((state) => {
+      const merged = deepMerge(state.settings, updates);
+      // 异步持久化到后端，不阻塞 UI 更新
+      tauriCmd.updateSettings(merged as unknown as Record<string, unknown>).catch((err) => {
+        console.error("[SettingsStore] 持久化设置失败:", err);
+      });
+      return { settings: merged };
+    });
   },
 
   // 打开设置对话框

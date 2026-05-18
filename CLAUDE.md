@@ -12,8 +12,8 @@ DocAgent 是一款 AI 文档处理桌面应用，通过自然语言驱动 Agent 
 
 | 模块 | 完成度 | 说明 |
 |------|--------|------|
-| 前端 UI 组件 | 100% | 组件、Store、事件封装、后端调用全部完成 |
-| Rust 后端 | 100% | Agent 引擎含确认通道和 Todo 事件，LLM 适配、Skill 系统、Sidecar 集成全部完成，少量管理命令为 stub |
+| 前端 UI 组件 | 100% | 组件、Store、事件封装、后端调用全部完成，设置管理按钮已对接后端 |
+| Rust 后端 | 100% | Agent 引擎含确认通道和 Todo 事件，LLM 适配、Skill 系统（含禁用/启用持久化）、Sidecar 集成全部完成 |
 | Python Sidecar | 95% | 所有文档处理器已实现，部分格式的 convert/modify 受限 |
 | 共享类型 | 10% | 仅定义了 NodeType 和 ExecutionStatus |
 | 设计文档 | 100% | PRD、技术架构、组件设计、数据库设计等齐全 |
@@ -24,10 +24,10 @@ DocAgent 是一款 AI 文档处理桌面应用，通过自然语言驱动 Agent 
 
 | 子模块 | 状态 | 说明 |
 |--------|------|------|
-| 布局组件 | 完成 | TopBar（状态指示器硬编码）、MainLayout、Sidebar、MainArea、InputArea |
+| 布局组件 | 完成 | TopBar（状态指示器对接实际 LLM Provider）、MainLayout、Sidebar、MainArea、InputArea |
 | 工作流节点 | 完成 | WorkflowTimeline + 7 种节点组件，支持展开/折叠 |
 | 侧边栏区块 | 完成 | AgentInfo、FileTree、Todo、Token 四个区块 |
-| 设置对话框 | 完成 | SettingsDialog + 5 个标签页（添加/编辑/删除按钮为 stub，无实际后端操作） |
+| 设置对话框 | 完成 | SettingsDialog + 5 个标签页（Provider 添加/编辑/删除/测试/设默认、工作区添加/切换/移除均已对接后端） |
 | 预览面板 | 完成 | PreviewOverlay 支持文档预览和基础差异对比 |
 | 状态管理 | 完成 | 6 个 Zustand Store 全部实现，已连接后端 Tauri 命令 |
 | 事件监听 | 完成 | 完整的 Agent 事件监听封装（event.ts），9 种 Agent 事件 + 4 种系统事件 |
@@ -42,11 +42,11 @@ DocAgent 是一款 AI 文档处理桌面应用，通过自然语言驱动 Agent 
 | 配置管理 | 完成 | LLM 配置、应用设置、工作区配置全部实现，JSON 文件持久化，支持向前兼容合并 |
 | 模型定义 | 完成 | 全部 7 个模型模块（session, message, workspace, document, skill, llm, 含 ChatMessage/ToolDefinition 等） |
 | 事件系统 | 完成 | AgentEmitter 封装全部 10 种事件类型，含发射方法和 payload 类型定义 |
-| LLM 服务 | 完成 | OpenAI 兼容 API 适配器完整实现，支持流式(SSE)和非流式调用，指数退避重试，Default/Fallback 路由 |
+| LLM 服务 | 完成 | OpenAI 兼容 API 适配器完整实现，支持流式(SSE)和非流式调用，指数退避重试，Default/Fallback 路由，list_providers 返回完整元数据 |
 | Agent 执行器 | 完成 | 完整实现：包含确认通道（高风险 Skill 前发射 agent:confirm 并通过 oneshot channel 等待用户决策）、Todo 进度更新（agent:todo_update）、Tool Calling 循环，支持停止检查和最大迭代限制 |
-| Skill 注册表 | 完成 | Skill trait + 注册表框架 + 9 个内置 Skills 全部实现（含参数 schema） |
+| Skill 注册表 | 完成 | Skill trait + 注册表框架 + 9 个内置 Skills（含参数 schema）+ 禁用/启用能力（运行时修改+配置持久化），线程安全（Mutex 保护） |
 | Sidecar 集成 | 完成 | SidecarManager（进程管理/超时/自动重启）+ DocumentService（请求/响应路由）与 Python stdin/stdout 通信 |
-| Tauri 命令 | 完成 | 全部 29 个核心命令已注册（session、settings、workspace、llm、agent、skill、document），confirm_operation 基于 oneshot channel 实现 |
+| Tauri 命令 | 完成 | 全部 29 个核心命令已注册（session、settings、workspace、llm、agent、skill、document），confirm_operation 基于 oneshot channel 实现，toggle_skill 已完成持久化 |
 
 #### Python Sidecar（95% 完成）
 
@@ -65,9 +65,8 @@ DocAgent 是一款 AI 文档处理桌面应用，通过自然语言驱动 Agent 
 
 | 功能 | 状态 | 说明 |
 |------|------|------|
-| Skill 管理命令持久化 | stub | `toggle_skill`、`add_custom_skill`、`delete_custom_skill` 仅记录日志，无实际配置持久化 |
-| 设置对话框管理按钮 | stub | Provider 添加/编辑、工作区添加、自定义 Skill 添加、模板创建等按钮无实际后端调用 |
-| TopBar 状态指示灯 | 硬编码 | 当前显示"未连接"，未对接后端连接状态 |
+| 自定义 Skill 添加/删除 | stub | `add_custom_skill`、`delete_custom_skill` 仅记录日志，无实际配置持久化 |
+| 设置对话框扩展 | stub | 自定义 Skill 添加/删除、模板创建等按钮无实际后端调用 |
 | PDF modify/convert | 未实现 | Sidecar PDF 处理器中 modify 和 convert 返回错误 |
 | 其余格式 convert | 未实现 | Excel/PPT/Markdown 处理器的 convert 均返回未实现错误 |
 | LLM 适配器扩展 | 未实现 | 当前仅实现 OpenAI 兼容 API 适配器；Claude 适配器（Anthropic API）和 Gemini 适配器待开发 |
@@ -83,7 +82,7 @@ DocAgent 是一款 AI 文档处理桌面应用，通过自然语言驱动 Agent 
 
 2. **优先级中：Skill 系统完善**
    - 实现自定义 Skill 的动态加载与持久化
-   - 完善设置对话框的管理按钮（Provider/工作区/Skill/模板 CRUD）
+   - 完善设置对话框的 Skill 管理/模板管理标签页
 
 3. **优先级低：LLM 适配器扩展**
    - 实现 Claude 适配器（Anthropic API）
@@ -140,11 +139,11 @@ src-tauri/                # Tauri Rust 后端
 │   │   ├── settings.rs   # 应用设置
 │   │   ├── workspace.rs  # 工作区管理、文件树、搜索
 │   │   ├── llm.rs        # LLM Provider 管理
-│   │   ├── skill.rs      # Skill 管理（list_skills 实现，其余仅记录日志）
+│   │   ├── skill.rs      # Skill 管理（list_skills + toggle_skill 完整实现含持久化）
 │   │   └── document.rs   # 文档操作
 │   ├── services/         # 服务层
 │   │   ├── agent/        # Agent 执行器（executor.rs 含确认通道+Todo 事件、context.rs）
-│   │   ├── llm/          # LLM 服务（openai_adapter.rs, provider.rs, router.rs）
+│   │   ├── llm/          # LLM 服务（router.rs 完整 Provider 元数据，list_providers 返回真实信息）
 │   │   ├── skill/        # Skill 系统（registry.rs, builtin.rs）
 │   │   └── document/     # 文档服务（mod.rs - SidecarManager, DocumentService）
 │   ├── db/               # SQLite 数据库层（init.rs, session_repo.rs, message_repo.rs 等）
@@ -254,7 +253,7 @@ Rust 后端通过统一的 `CommandError` 类型返回错误：
 - `confirm_channels: Arc<Mutex<HashMap<String, oneshot::Sender<ConfirmDecision>>>>` — 确认通道表（operation_id → sender）
 - `doc_service: Arc<DocumentService>` — 文档服务（Sidecar 路由）
 - `llm_router: Arc<RwLock<Arc<LlmRouter>>>` — LLM 路由表（读写锁，支持运行时热切换）
-- `skill_registry: Arc<SkillRegistry>` — Skill 注册表（内置 9 个 Skill）
+- `skill_registry: Arc<Mutex<SkillRegistry>>` — Skill 注册表（Mutex 保护，支持运行时修改禁用状态）
 
 ### 数据库设计
 SQLite 数据库包含 5 张表：

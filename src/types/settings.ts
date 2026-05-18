@@ -44,6 +44,7 @@ export interface AppSettings {
   versionSnapshot: VersionSnapshotSettings;
   workspace: WorkspaceDefaults;
   shortcuts: Shortcuts;
+  disabledSkills: string[];
 }
 
 // ----- LLM 相关类型 -----

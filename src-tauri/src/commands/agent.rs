@@ -179,7 +179,7 @@ async fn run_agent(
     session_id: &str,
     prompt: &str,
     llm_router: &Arc<crate::services::llm::router::LlmRouter>,
-    skill_registry: &Arc<crate::services::skill::registry::SkillRegistry>,
+    skill_registry: &Arc<tokio::sync::Mutex<crate::services::skill::registry::SkillRegistry>>,
     emitter: &AgentEmitter<tauri::Wry>,
     max_iterations: u32,
     workspace_path: &str,
