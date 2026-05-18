@@ -11,6 +11,8 @@ pub struct AgentContext {
     pub system_prompt: String,
     /// 最大迭代次数
     pub max_iterations: u32,
+    /// 已持久化的消息数量，用于增量持久化
+    persisted_count: usize,
 }
 
 impl AgentContext {
@@ -20,6 +22,7 @@ impl AgentContext {
             messages: Vec::new(),
             system_prompt,
             max_iterations: 20,
+            persisted_count: 0,
         }
     }
 
@@ -63,6 +66,17 @@ impl AgentContext {
         }];
         all.extend(self.messages.clone());
         all
+    }
+
+    /// 获取尚未持久化的消息列表（增量持久化用）
+    /// 返回从 persisted_count 开始的新消息切片
+    pub fn get_unpersisted_messages(&self) -> &[ChatMessage] {
+        &self.messages[self.persisted_count..]
+    }
+
+    /// 标记当前所有消息为已持久化
+    pub fn mark_persisted(&mut self) {
+        self.persisted_count = self.messages.len();
     }
 
     /// 构建系统提示词

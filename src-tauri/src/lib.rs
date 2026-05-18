@@ -41,6 +41,11 @@ pub fn run() {
                 .expect("无法获取应用数据目录");
             std::fs::create_dir_all(&app_data_dir).expect("无法创建应用数据目录");
 
+            // 初始化日志系统（必须在数据库和配置初始化之前，确保关键操作的错误能被记录）
+            let log_dir = std::path::Path::new("log");
+            crate::utils::logger::init(log_dir)
+                .expect("日志系统初始化失败");
+
             // 初始化数据库
             let db_path = app_data_dir.join("docagent.db");
             let database = crate::db::Database::new(&db_path)
@@ -84,10 +89,6 @@ pub fn run() {
             // 从配置加载已禁用 Skill 列表
             let app_settings = config_manager.load_app_settings().unwrap_or_default();
             skill_registry = skill_registry.with_disabled_skills(app_settings.disabled_skills.clone());
-
-            let log_dir = std::path::Path::new("log");
-            crate::utils::logger::init(log_dir)
-                .expect("日志系统初始化失败");
 
             log::info!("DocAgent 应用初始化完成");
 

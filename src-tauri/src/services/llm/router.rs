@@ -140,7 +140,7 @@ impl LlmRouter {
         }
     }
 
-    /// 流式对话，自动选择 Provider
+    /// 流式对话，自动选择 Provider，支持 Fallback
     pub async fn chat_stream(
         &self,
         messages: &[ChatMessage],
@@ -149,7 +149,24 @@ impl LlmRouter {
         let provider = self.get_default_provider()
             .ok_or_else(|| CommandError::llm(1002, "未配置 LLM Provider".to_string()))?;
         log::info!("流式对话, 使用默认 Provider: {}", self.default_id.as_deref().unwrap_or("首个可用"));
-        provider.chat_stream(messages, tools).await
+
+        match provider.chat_stream(messages, tools).await {
+            Ok(rx) => Ok(rx),
+            Err(e) => {
+                log::warn!("默认 Provider 流式请求失败, 尝试 Fallback, 错误: {}", e.message);
+                for fallback_id in &self.fallback_order {
+                    if let Some(fb_provider) = self.providers.get(fallback_id) {
+                        log::info!("尝试 Fallback Provider (流式): {}", fallback_id);
+                        if let Ok(rx) = fb_provider.chat_stream(messages, tools).await {
+                            log::info!("Fallback (流式) 成功, Provider: {}", fallback_id);
+                            return Ok(rx);
+                        }
+                    }
+                }
+                log::error!("所有 Provider 流式请求均失败, 无可用 Fallback");
+                Err(e)
+            }
+        }
     }
 
     /// 测试指定 Provider 的连接

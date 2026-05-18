@@ -81,11 +81,18 @@ impl Skill for GenerateDocumentSkill {
         let title = params["title"].as_str().unwrap_or("");
         let content = params["content"].as_str().unwrap_or("");
 
-        let sidecar_params = json!({
+        let mut sidecar_params = json!({
             "path": output_path,
             "title": title,
             "content": content,
         });
+
+        // 如果提供了模板参数，传递给 Sidecar
+        if let Some(template) = params["template"].as_str() {
+            if !template.is_empty() {
+                sidecar_params["template"] = json!(template);
+            }
+        }
 
         match self.doc_service.process("generate", doc_type, sidecar_params).await {
             Ok(data) => SkillResult {
@@ -282,18 +289,23 @@ impl Skill for DeleteDocumentSkill {
                     "type": "string",
                     "description": "要删除的文件路径"
                 },
+                "workspace_root": {
+                    "type": "string",
+                    "description": "工作区根目录路径，用于安全校验，文件路径必须在该目录下"
+                },
                 "create_backup": {
                     "type": "boolean",
                     "description": "删除前是否创建备份文件",
                     "default": true
                 }
             },
-            "required": ["path"]
+            "required": ["path", "workspace_root"]
         })
     }
     async fn execute(&self, params: Value) -> SkillResult {
         let start = Instant::now();
         let file_path = params["path"].as_str().unwrap_or("");
+        let workspace_root = params["workspace_root"].as_str().unwrap_or("");
 
         if file_path.is_empty() {
             return SkillResult {
@@ -304,17 +316,51 @@ impl Skill for DeleteDocumentSkill {
             };
         }
 
-        let path = std::path::Path::new(file_path);
-        if !path.exists() {
+        // 安全校验：必须提供工作区根目录路径
+        if workspace_root.is_empty() {
             return SkillResult {
                 success: false,
                 output: None,
-                error: Some(format!("文件不存在: {}", file_path)),
+                error: Some("缺少工作区根目录路径，无法进行安全校验".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
             };
         }
 
-        if !path.is_file() {
+        // 规范化路径并校验文件是否在工作区内，防止路径遍历攻击（如 ../）
+        let canonical_file = match std::path::Path::new(file_path).canonicalize() {
+            Ok(p) => p,
+            Err(_) => {
+                return SkillResult {
+                    success: false,
+                    output: None,
+                    error: Some(format!("文件不存在或路径无效: {}", file_path)),
+                    duration_ms: start.elapsed().as_millis() as u64,
+                };
+            }
+        };
+
+        let canonical_root = match std::path::Path::new(workspace_root).canonicalize() {
+            Ok(p) => p,
+            Err(_) => {
+                return SkillResult {
+                    success: false,
+                    output: None,
+                    error: Some(format!("工作区根目录不存在或路径无效: {}", workspace_root)),
+                    duration_ms: start.elapsed().as_millis() as u64,
+                };
+            }
+        };
+
+        if !canonical_file.starts_with(&canonical_root) {
+            return SkillResult {
+                success: false,
+                output: None,
+                error: Some("文件路径不在工作区内，拒绝删除操作".to_string()),
+                duration_ms: start.elapsed().as_millis() as u64,
+            };
+        }
+
+        if !canonical_file.is_file() {
             return SkillResult {
                 success: false,
                 output: None,
@@ -323,12 +369,15 @@ impl Skill for DeleteDocumentSkill {
             };
         }
 
+        // 使用规范化后的安全路径继续操作
+        let safe_path = canonical_file.to_string_lossy().to_string();
+
         let create_backup = params["create_backup"].as_bool().unwrap_or(true);
         let mut backup_path_str = String::new();
 
         if create_backup {
-            let backup_path = format!("{}.bak", file_path);
-            match tokio::fs::copy(file_path, &backup_path).await {
+            let backup_path = format!("{}.bak", safe_path);
+            match tokio::fs::copy(&safe_path, &backup_path).await {
                 Ok(_) => {
                     log::info!("删除前已创建备份: {}", backup_path);
                     backup_path_str = backup_path;
@@ -339,9 +388,9 @@ impl Skill for DeleteDocumentSkill {
             }
         }
 
-        match tokio::fs::remove_file(file_path).await {
+        match tokio::fs::remove_file(&safe_path).await {
             Ok(_) => {
-                log::info!("文件已删除: {}", file_path);
+                log::info!("文件已删除: {}", safe_path);
                 let mut result = json!({
                     "path": file_path,
                     "message": format!("文件已删除: {}", file_path),
@@ -357,7 +406,7 @@ impl Skill for DeleteDocumentSkill {
                 }
             }
             Err(e) => {
-                log::error!("删除文件失败: {}, 错误: {}", file_path, e);
+                log::error!("删除文件失败: {}, 错误: {}", safe_path, e);
                 SkillResult {
                     success: false,
                     output: None,
@@ -425,13 +474,28 @@ impl Skill for ConvertFormatSkill {
             output_path.to_string()
         };
 
+        // 根据源文件扩展名确定 doc_type，确保调用正确的处理器
+        // 例如：.docx 转 .pdf 时，应调用 Word 处理器的 convert 方法（它知道如何读取 .docx）
+        let source_extension = std::path::Path::new(source_path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("docx");
+        let source_doc_type = match source_extension {
+            "docx" => "docx",
+            "xlsx" => "xlsx",
+            "pptx" => "pptx",
+            "pdf" => "pdf",
+            "md" | "markdown" => "md",
+            _ => "docx",
+        };
+
         let sidecar_params = json!({
             "path": source_path,
             "output_path": output_path,
             "format": target_format,
         });
 
-        match self.doc_service.process("convert", target_format, sidecar_params).await {
+        match self.doc_service.process("convert", source_doc_type, sidecar_params).await {
             Ok(data) => SkillResult {
                 success: true,
                 output: Some(data),
@@ -525,9 +589,16 @@ impl Skill for SearchDocumentsSkill {
         }
 
         let query_lower = query.to_lowercase();
-        let mut results = Vec::new();
+        let directory_owned = directory.to_string();
+        let extensions_clone = extensions.clone();
 
-        skill_search_files(dir_path, dir_path, &query_lower, &extensions, include_content, max_results, &mut results);
+        // 使用 spawn_blocking 避免同步文件IO阻塞异步运行时
+        let results = tokio::task::spawn_blocking(move || {
+            let dir_path = std::path::Path::new(&directory_owned);
+            let mut results = Vec::new();
+            skill_search_files(dir_path, dir_path, &query_lower, &extensions_clone, include_content, max_results, &mut results);
+            results
+        }).await.unwrap_or_default();
 
         SkillResult {
             success: true,
@@ -771,7 +842,14 @@ impl Skill for ListWorkspaceSkill {
             };
         }
 
-        let results = skill_list_dir(dir, dir, max_depth, 0, &extensions);
+        let dir_path_owned = dir_path.to_string();
+        let extensions_clone = extensions.clone();
+
+        // 使用 spawn_blocking 避免同步文件IO阻塞异步运行时
+        let results = tokio::task::spawn_blocking(move || {
+            let dir = std::path::Path::new(&dir_path_owned);
+            skill_list_dir(dir, dir, max_depth, 0, &extensions_clone)
+        }).await.unwrap_or_default();
 
         SkillResult {
             success: true,

@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
@@ -36,8 +37,9 @@ pub trait Skill: Send + Sync {
 }
 
 /// Skill 注册表
+/// 使用 Arc<dyn Skill> 存储技能，允许在锁外执行技能，避免长时间持锁阻塞其他操作
 pub struct SkillRegistry {
-    skills: HashMap<String, Box<dyn Skill>>,
+    skills: HashMap<String, Arc<dyn Skill>>,
     /// 已禁用的 Skill ID 集合
     disabled_skills: HashSet<String>,
 }
@@ -60,8 +62,14 @@ impl SkillRegistry {
     pub fn register(&mut self, skill: Box<dyn Skill>) {
         let name = skill.skill_name().to_string();
         log::info!("注册技能: {}", name);
-        self.skills.insert(name.clone(), skill);
+        // 将 Box<dyn Skill> 转为 Arc<dyn Skill>，支持在锁外克隆引用执行
+        self.skills.insert(name.clone(), Arc::from(skill));
         log::debug!("技能注册完成: {}, 当前注册总数: {}", name, self.skills.len());
+    }
+
+    /// 获取技能的 Arc 引用（可在锁外使用）
+    pub fn get_arc(&self, name: &str) -> Option<Arc<dyn Skill>> {
+        self.skills.get(name).cloned()
     }
 
     /// 获取技能
@@ -106,9 +114,8 @@ impl SkillRegistry {
 
     /// 生成 OpenAI function calling 格式的工具定义（仅包含已启用的技能）
     pub fn tool_definitions(&self) -> Vec<Value> {
-        let count = self.skills.len();
-        log::debug!("生成工具定义, 技能数量: {}", count);
-        let definitions = self.skills.values()
+        log::debug!("生成工具定义, 技能总数: {}", self.skills.len());
+        let definitions: Vec<Value> = self.skills.values()
             .filter(|skill| !self.disabled_skills.contains(skill.skill_name()))
             .map(|skill| {
                 json!({
@@ -120,7 +127,7 @@ impl SkillRegistry {
                     }
                 })
             }).collect();
-        log::debug!("工具定义生成完成, 数量: {}", count);
+        log::debug!("工具定义生成完成, 启用数量: {}", definitions.len());
         definitions
     }
 

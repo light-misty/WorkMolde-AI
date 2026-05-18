@@ -77,14 +77,16 @@ impl SidecarManager {
         log::info!("停止 Sidecar 进程");
         let mut guard = self.process.lock().await;
         if let Some(ref mut child) = *guard {
-            child.kill().await.map_err(|e| {
-                log::error!("停止 Sidecar 失败: {}", e);
-                CommandError::doc(3002, format!("停止 Sidecar 失败: {}", e))
-            })?;
-            log::info!("Sidecar 进程已停止");
+            // 尝试终止进程，即使失败也要清理进程对象，避免残留导致 start() 跳过启动
+            if let Err(e) = child.kill().await {
+                log::warn!("终止 Sidecar 进程失败（可能已退出）: {}", e);
+            } else {
+                log::info!("Sidecar 进程已停止");
+            }
         } else {
             log::debug!("Sidecar 进程未运行, 无需停止");
         }
+        // 始终清理进程对象，确保后续 start() 能正常启动新进程
         *guard = None;
         Ok(())
     }
@@ -117,6 +119,8 @@ impl SidecarManager {
             return Ok(());
         }
         log::info!("Sidecar 未运行，正在重启...");
+        // 先清理可能残留的旧进程对象，避免 start() 检测到 is_some() 而跳过启动
+        let _ = self.stop().await;
         self.start().await
     }
 
@@ -136,8 +140,9 @@ impl SidecarManager {
         match result {
             Ok(Ok(response)) => Ok(response),
             Ok(Err(e)) => {
-                // 请求失败，可能是进程崩溃，尝试重启一次
+                // 请求失败，可能是进程崩溃，先清理旧进程再重启
                 log::warn!("Sidecar 请求失败，尝试重启: {}", e.message);
+                let _ = self.stop().await;
                 if self.start().await.is_ok() {
                     // 重启成功后重试一次
                     self.send_request_inner(request).await

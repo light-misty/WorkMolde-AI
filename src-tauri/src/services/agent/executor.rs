@@ -8,7 +8,7 @@ use tauri::Runtime;
 use crate::errors::CommandError;
 use crate::events::emitter::AgentEmitter;
 use crate::events::types::*;
-use crate::models::llm::LlmToolCall;
+use crate::models::llm::{ChatMessage, LlmToolCall};
 use crate::services::llm::router::LlmRouter;
 use crate::services::skill::registry::SkillRegistry;
 use crate::ConfirmDecision;
@@ -25,6 +25,10 @@ pub struct ExecutionResult {
     pub duration_ms: u64,
 }
 
+/// 增量持久化回调类型
+/// 接收 session_id 和新增消息列表，返回持久化结果
+type PersistFn = Arc<dyn Fn(&str, &[ChatMessage]) -> Result<(), CommandError> + Send + Sync>;
+
 pub struct AgentExecutor<R: Runtime> {
     router: Arc<LlmRouter>,
     registry: Arc<tokio::sync::Mutex<SkillRegistry>>,
@@ -32,6 +36,8 @@ pub struct AgentExecutor<R: Runtime> {
     confirm_channels: Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<ConfirmDecision>>>>,
     max_iterations: u32,
     should_stop: Arc<dyn Fn(&str) -> bool + Send + Sync>,
+    /// 增量持久化回调，每轮迭代后调用，防止崩溃丢失消息
+    persist_fn: Option<PersistFn>,
 }
 
 impl<R: Runtime> AgentExecutor<R> {
@@ -48,6 +54,7 @@ impl<R: Runtime> AgentExecutor<R> {
             confirm_channels,
             max_iterations: 20,
             should_stop: Arc::new(|_| false),
+            persist_fn: None,
         }
     }
 
@@ -66,6 +73,12 @@ impl<R: Runtime> AgentExecutor<R> {
         self
     }
 
+    /// 设置增量持久化回调
+    pub fn with_persist_fn(mut self, f: PersistFn) -> Self {
+        self.persist_fn = Some(f);
+        self
+    }
+
     /// 检查是否应该停止
     fn check_stopped(&self, session_id: &str) -> bool {
         (self.should_stop)(session_id)
@@ -73,6 +86,18 @@ impl<R: Runtime> AgentExecutor<R> {
 
     fn is_high_risk_skill(name: &str) -> bool {
         HIGH_RISK_SKILLS.contains(&name)
+    }
+
+    /// 调用增量持久化回调，将新增消息写入数据库
+    fn persist_new_messages(&self, ctx: &AgentContext) {
+        if let Some(ref persist_fn) = self.persist_fn {
+            let unpersisted = ctx.get_unpersisted_messages();
+            if !unpersisted.is_empty() {
+                if let Err(e) = persist_fn(&ctx.session_id, unpersisted) {
+                    log::warn!("增量持久化失败: session_id={}, 错误: {}", ctx.session_id, e.message);
+                }
+            }
+        }
     }
 
     async fn request_confirmation(
@@ -218,6 +243,9 @@ impl<R: Runtime> AgentExecutor<R> {
             // 检查是否被用户停止
             if self.check_stopped(&ctx.session_id) {
                 log::info!("Agent 被用户停止, session_id={}, iteration={}", ctx.session_id, iteration);
+                // 停止前先持久化已有消息
+                self.persist_new_messages(ctx);
+                ctx.mark_persisted();
                 self.emitter.emit_stopped(StoppedPayload {
                     session_id: ctx.session_id.clone(),
                     reason: "用户手动停止".to_string(),
@@ -232,12 +260,11 @@ impl<R: Runtime> AgentExecutor<R> {
                 });
             }
 
-            total_steps += 1;
             log::debug!("Agent 迭代 #{}, session_id={}", iteration + 1, ctx.session_id);
 
             self.emitter.emit_thinking(ThinkingPayload {
                 session_id: ctx.session_id.clone(),
-                step: total_steps,
+                step: total_steps + 1,
                 thought: format!("正在分析用户请求并规划操作步骤... (第{}轮)", iteration + 1),
             }).ok();
 
@@ -256,6 +283,9 @@ impl<R: Runtime> AgentExecutor<R> {
                     return Err(e);
                 }
             };
+
+            // LLM 调用成功后才递增步骤计数
+            total_steps += 1;
 
             // 收集流式响应
             let mut assistant_content = String::new();
@@ -294,17 +324,13 @@ impl<R: Runtime> AgentExecutor<R> {
                         }
                     }
                     Err(e) => {
-                        if e.code == 9999 && e.message == "stream_done" {
-                            log::debug!("流式响应正常结束, session_id={}", ctx.session_id);
-                            break;
-                        }
                         log::warn!("流式响应错误: {}", e.message);
                         break;
                     }
                 }
             }
 
-            // 发送内容结束事件
+            // 发送内容结束事件（无论是否有 tool_calls，只要有内容就应发送）
             if !assistant_content.is_empty() {
                 self.emitter.emit_content(ContentPayload {
                     session_id: ctx.session_id.clone(),
@@ -314,10 +340,17 @@ impl<R: Runtime> AgentExecutor<R> {
                 }).ok();
             }
 
-            let input_chars: usize = messages.iter().map(|m| m.content.len()).sum();
-            let output_chars = assistant_content.len();
-            let estimated_input = (input_chars as u64) / 3;
-            let estimated_output = (output_chars as u64) / 3;
+            // Token 估算：使用更合理的启发式算法
+            // 英文约 4 字符 = 1 token，中文约 1.5 字符 = 1 token
+            // 混合文本取折中值：约 2 字符 = 1 token
+            // 同时计算 tool_calls 的 arguments 占用的 token
+            let input_chars: usize = messages.iter()
+                .map(|m| m.content.len() + m.tool_calls.as_ref().map(|tc| tc.iter().map(|t| t.arguments.len()).sum::<usize>()).unwrap_or(0))
+                .sum();
+            let output_chars = assistant_content.len()
+                + collected_tool_calls.iter().map(|tc| tc.arguments.len()).sum::<usize>();
+            let estimated_input = (input_chars as u64) / 2;
+            let estimated_output = (output_chars as u64) / 2;
             total_input_tokens += estimated_input;
             total_output_tokens += estimated_output;
 
@@ -327,16 +360,14 @@ impl<R: Runtime> AgentExecutor<R> {
 
             if has_tool_calls {
                 // 将助手消息（含 tool_calls）添加到上下文
-                let tool_calls_for_message = if collected_tool_calls.is_empty() {
-                    None
-                } else {
-                    Some(collected_tool_calls.clone())
-                };
-                ctx.add_assistant_message(&assistant_content, tool_calls_for_message);
+                ctx.add_assistant_message(&assistant_content, Some(collected_tool_calls.clone()));
 
-                for (tc_index, tool_call) in collected_tool_calls.iter().enumerate() {
+                for tool_call in collected_tool_calls.iter() {
                     if self.check_stopped(&ctx.session_id) {
                         log::info!("Agent 在 Tool 执行前被停止, session_id={}", ctx.session_id);
+                        // 停止前先持久化已有消息
+                        self.persist_new_messages(ctx);
+                        ctx.mark_persisted();
                         self.emitter.emit_stopped(StoppedPayload {
                             session_id: ctx.session_id.clone(),
                             reason: "用户手动停止".to_string(),
@@ -404,9 +435,21 @@ impl<R: Runtime> AgentExecutor<R> {
 
                     let tool_start = std::time::Instant::now();
 
-                    let result = {
+                    // 短暂持锁获取技能 Arc 引用，然后释放锁再执行
+                    // 避免在 Sidecar 通信等耗时操作期间阻塞注册表
+                    let skill_arc = {
                         let reg = self.registry.lock().await;
-                        reg.execute(&tool_call.name, params).await
+                        reg.get_arc(&tool_call.name)
+                    };
+
+                    let result = match skill_arc {
+                        Some(skill) => skill.execute(params).await,
+                        None => crate::models::skill::SkillResult {
+                            success: false,
+                            output: None,
+                            error: Some(format!("技能不存在: {}", tool_call.name)),
+                            duration_ms: 0,
+                        },
                     };
 
                     let duration_ms = tool_start.elapsed().as_millis() as u64;
@@ -428,9 +471,11 @@ impl<R: Runtime> AgentExecutor<R> {
                         format!("错误: {}", result.error.unwrap_or_default())
                     };
                     ctx.add_tool_result(&tool_call.id, &result_content);
-
-                    let _ = tc_index;
                 }
+
+                // 每轮迭代后增量持久化，防止崩溃丢失消息
+                self.persist_new_messages(ctx);
+                ctx.mark_persisted();
 
                 // 继续循环，让 LLM 处理工具结果
                 continue;
@@ -439,6 +484,10 @@ impl<R: Runtime> AgentExecutor<R> {
             if !assistant_content.is_empty() {
                 ctx.add_assistant_message(&assistant_content, None);
             }
+
+            // 最终回复后增量持久化
+            self.persist_new_messages(ctx);
+            ctx.mark_persisted();
 
             self.emitter.emit_todo_update(TodoUpdatePayload {
                 session_id: ctx.session_id.clone(),

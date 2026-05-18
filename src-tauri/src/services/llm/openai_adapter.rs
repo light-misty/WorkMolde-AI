@@ -279,7 +279,8 @@ impl LlmProvider for OpenAiAdapter {
                                 if let Some(data) = line.strip_prefix("data: ") {
                                     let data = data.trim();
                                     if data == "[DONE]" {
-                                        let _ = tx.send(Err(CommandError::llm(9999, "stream_done".to_string()))).await;
+                                        // 流式响应正常结束，直接关闭 channel（drop sender）
+                                        // executor 侧通过 recv() 返回 None 检测流结束
                                         return;
                                     }
 

@@ -4,6 +4,7 @@ use tauri::{AppHandle, State};
 
 use crate::errors::{CommandError, AGENT_ALREADY_RUNNING, AGENT_NOT_RUNNING, AGENT_SESSION_NOT_FOUND};
 use crate::events::AgentEmitter;
+use crate::models::llm::ChatMessage;
 use crate::services::agent::context::AgentContext;
 use crate::services::agent::executor::AgentExecutor;
 use crate::AppState;
@@ -173,6 +174,63 @@ pub async fn confirm_operation(
     }
 }
 
+/// 将消息列表持久化到数据库
+/// 支持多 tool_calls：将所有 tool_calls 序列化为 JSON 数组存储
+fn persist_messages_to_db(
+    db: &Arc<crate::db::Database>,
+    session_id: &str,
+    messages: &[ChatMessage],
+) -> Result<(), CommandError> {
+    let conn = db.conn()?;
+    for msg in messages {
+        let msg_id = format!("msg_{}", uuid::Uuid::new_v4());
+
+        // 对于包含 tool_calls 的消息，将所有 tool_calls 序列化为 JSON 存储
+        // 修复原来只持久化第一个 tool_call 的问题
+        let (tool_name, tool_args, tool_result) = if let Some(tool_calls) = &msg.tool_calls {
+            if tool_calls.is_empty() {
+                (None, None, None as Option<String>)
+            } else if tool_calls.len() == 1 {
+                // 单个 tool_call：保持原有格式
+                let tc = &tool_calls[0];
+                (Some(tc.name.clone()), Some(tc.arguments.clone()), None)
+            } else {
+                // 多个 tool_calls：将所有调用信息序列化为 JSON 数组
+                let names: Vec<&str> = tool_calls.iter().map(|tc| tc.name.as_str()).collect();
+                let args: Vec<&str> = tool_calls.iter().map(|tc| tc.arguments.as_str()).collect();
+                (
+                    Some(serde_json::to_string(&names).unwrap_or_default()),
+                    Some(serde_json::to_string(&args).unwrap_or_default()),
+                    None,
+                )
+            }
+        } else if msg.role == "tool" {
+            (None, None, Some(msg.content.clone()))
+        } else {
+            (None, None, None)
+        };
+
+        let tool_name_ref = tool_name.as_deref();
+        let tool_args_ref = tool_args.as_deref();
+        let tool_result_ref = tool_result.as_deref();
+
+        crate::db::message_repo::create_message(
+            &conn,
+            &msg_id,
+            session_id,
+            &msg.role,
+            &msg.content,
+            tool_name_ref,
+            tool_args_ref,
+            tool_result_ref,
+            None,
+            0,
+            0,
+        )?;
+    }
+    Ok(())
+}
+
 /// 真正的 Agent 执行逻辑
 /// 使用 AgentExecutor 执行 Tool Calling 循环
 async fn run_agent(
@@ -206,6 +264,13 @@ async fn run_agent(
     ctx.max_iterations = max_iterations;
     ctx.add_user_message(prompt);
 
+    // 创建增量持久化回调，每轮迭代后自动持久化新增消息
+    let db_for_persist = Arc::clone(db);
+    let persist_fn: Arc<dyn Fn(&str, &[ChatMessage]) -> Result<(), CommandError> + Send + Sync> =
+        Arc::new(move |sid: &str, messages: &[ChatMessage]| {
+            persist_messages_to_db(&db_for_persist, sid, messages)
+        });
+
     let executor = AgentExecutor::new(
         Arc::clone(llm_router),
         Arc::clone(skill_registry),
@@ -213,45 +278,21 @@ async fn run_agent(
         Arc::clone(confirm_channels),
     )
     .with_stop_check(should_stop)
-    .with_max_iterations(max_iterations);
+    .with_max_iterations(max_iterations)
+    .with_persist_fn(persist_fn);
 
     match executor.execute(&mut ctx).await {
         Ok(result) => {
             log::info!("Agent 执行成功: session_id={}, 摘要长度={}", session_id, result.summary.len());
 
-            // 持久化消息到数据库
-            if let Ok(conn) = db.conn() {
-                for msg in &ctx.messages {
-                    let msg_id = format!("msg_{}", uuid::Uuid::new_v4());
-                    let (tool_name, tool_args, tool_result) = if let Some(tool_calls) = &msg.tool_calls {
-                        if let Some(tc) = tool_calls.first() {
-                            (Some(tc.name.as_str()), Some(tc.arguments.as_str()), None as Option<&str>)
-                        } else {
-                            (None, None, None)
-                        }
-                    } else if msg.role == "tool" {
-                        (None, None, Some(msg.content.as_str()))
-                    } else {
-                        (None, None, None)
-                    };
-
-                    if let Err(e) = crate::db::message_repo::create_message(
-                        &conn,
-                        &msg_id,
-                        session_id,
-                        &msg.role,
-                        &msg.content,
-                        tool_name,
-                        tool_args,
-                        tool_result,
-                        None,
-                        0,
-                        0,
-                    ) {
-                        log::warn!("消息持久化失败: session_id={}, 错误: {}", session_id, e.message);
-                    }
+            // 持久化可能残留的未持久化消息（兜底保护）
+            let unpersisted = ctx.get_unpersisted_messages();
+            if !unpersisted.is_empty() {
+                log::info!("持久化残留消息: session_id={}, 数量={}", session_id, unpersisted.len());
+                if let Err(e) = persist_messages_to_db(db, session_id, unpersisted) {
+                    log::warn!("残留消息持久化失败: session_id={}, 错误: {}", session_id, e.message);
                 }
-                log::info!("消息持久化完成: session_id={}, 消息数={}", session_id, ctx.messages.len());
+                ctx.mark_persisted();
             }
 
             // 发射 Token 用量更新事件
@@ -267,6 +308,16 @@ async fn run_agent(
         }
         Err(e) => {
             log::error!("Agent 执行失败: session_id={}, 错误: {}", session_id, e.message);
+
+            // 执行失败时也尝试持久化已有消息
+            let unpersisted = ctx.get_unpersisted_messages();
+            if !unpersisted.is_empty() {
+                log::info!("执行失败后持久化已有消息: session_id={}, 数量={}", session_id, unpersisted.len());
+                if let Err(persist_err) = persist_messages_to_db(db, session_id, unpersisted) {
+                    log::warn!("失败后消息持久化失败: session_id={}, 错误: {}", session_id, persist_err.message);
+                }
+            }
+
             Err(e)
         }
     }
