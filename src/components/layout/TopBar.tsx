@@ -1,6 +1,7 @@
 import { Icon } from "../common/Icon";
 import { useWorkspaceStore } from "../../stores/useWorkspaceStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { WindowControls } from "./WindowControls";
 
 interface TopBarProps {
   onToggleHistory: () => void;
@@ -61,6 +62,9 @@ export function TopBar({ onToggleHistory, onNewSession }: TopBarProps) {
           <Icon name="settings" />
         </button>
       </div>
+
+      {/* 窗口控制按钮 */}
+      <WindowControls />
     </div>
   );
 }

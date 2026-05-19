@@ -6,7 +6,7 @@ type IconName =
   | "history" | "plus" | "settings" | "send" | "attach" | "template"
   | "file" | "doc" | "xlsx" | "ppt" | "pdf" | "folder"
   | "search" | "close" | "warning" | "check" | "dot"
-  | "code" | "menu";
+  | "code" | "menu" | "minimize" | "maximize" | "unmaximize";
 
 interface IconProps extends SVGProps<SVGSVGElement> {
   name: IconName;
@@ -209,6 +209,25 @@ const paths: Record<IconName, React.JSX.Element> = {
       <line x1="4" y1="6" x2="20" y2="6" />
       <line x1="4" y1="12" x2="20" y2="12" />
       <line x1="4" y1="18" x2="20" y2="18" />
+    </g>
+  ),
+  // 最小化
+  minimize: (
+    <g key="minimize">
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </g>
+  ),
+  // 最大化
+  maximize: (
+    <g key="maximize">
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+    </g>
+  ),
+  // 还原（取消最大化）
+  unmaximize: (
+    <g key="unmaximize">
+      <rect x="3" y="7" width="12" height="12" rx="1" />
+      <path d="M7 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2" />
     </g>
   ),
 };
