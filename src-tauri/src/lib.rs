@@ -59,19 +59,63 @@ pub fn run() {
 
             let python_path = std::env::var("DOCAGENT_PYTHON")
                 .unwrap_or_else(|_| "python".to_string());
-            let sidecar_script = app_data_dir.join("sidecar").join("main.py");
-            let sidecar_script_str = if sidecar_script.exists() {
-                sidecar_script.to_string_lossy().to_string()
-            } else {
-                let project_sidecar = std::path::Path::new("sidecar/main.py");
-                if project_sidecar.exists() {
-                    project_sidecar.to_string_lossy().to_string()
-                } else {
-                    log::error!("Sidecar 脚本未找到，请确保 sidecar/main.py 存在");
-                    "sidecar/main.py".to_string()
+
+            // 解析 Sidecar 脚本路径：按优先级尝试多个候选位置
+            let sidecar_script_str = {
+                // CARGO_MANIFEST_DIR 在编译期指向 src-tauri/ 目录，其上一级即为项目根目录
+                let project_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .parent()
+                    .map(|p| p.join("sidecar").join("main.py"))
+                    .unwrap_or_else(|| std::path::PathBuf::from("sidecar/main.py"));
+
+                let candidates = [
+                    // 1. 应用数据目录下的 sidecar（生产环境可能将脚本复制到此）
+                    app_data_dir.join("sidecar").join("main.py"),
+                    // 2. 可执行文件同级目录下的 sidecar（生产环境打包后）
+                    {
+                        let exe_path = std::env::current_exe().unwrap_or_default();
+                        exe_path.parent()
+                            .map(|p| p.join("sidecar").join("main.py"))
+                            .unwrap_or_else(|| std::path::PathBuf::from("sidecar/main.py"))
+                    },
+                    // 3. 项目根目录下的 sidecar（开发模式，基于 CARGO_MANIFEST_DIR 推导）
+                    project_root,
+                ];
+
+                let mut found = None;
+                for candidate in &candidates {
+                    if candidate.exists() {
+                        // 转换为绝对路径，避免依赖工作目录
+                        let abs_path = if candidate.is_absolute() {
+                            candidate.clone()
+                        } else {
+                            std::fs::canonicalize(candidate)
+                                .unwrap_or_else(|_| candidate.clone())
+                        };
+                        found = Some(abs_path.to_string_lossy().to_string());
+                        break;
+                    }
+                }
+
+                match found {
+                    Some(path) => {
+                        log::info!("Sidecar 脚本已定位: {}", path);
+                        path
+                    }
+                    None => {
+                        log::error!(
+                            "Sidecar 脚本未找到，已尝试以下路径: {:?}",
+                            candidates.iter()
+                                .map(|p| p.to_string_lossy().to_string())
+                                .collect::<Vec<_>>()
+                        );
+                        // 兜底：使用绝对路径形式的最后候选，避免依赖 CWD
+                        candidates.last()
+                            .map(|p| p.to_string_lossy().to_string())
+                            .unwrap_or_else(|| "sidecar/main.py".to_string())
+                    }
                 }
             };
-            log::info!("Sidecar 脚本路径: {}", sidecar_script_str);
 
             let sidecar_manager = crate::services::document::SidecarManager::new(
                 python_path,
