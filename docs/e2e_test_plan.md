@@ -20,6 +20,8 @@
 3. **LLM API Key**: 至少配置一个可用的 OpenAI 兼容 API（用于 Agent 交互测试）
 4. **启动命令**: `npm run tauri:dev`
 
+> **数据目录说明**: 应用数据存储在 `%APPDATA%\docagent` 目录下（即 `C:\Users\<用户名>\AppData\Roaming\docagent`），包含数据库文件 `docagent.db` 和配置目录 `config/`。
+
 ---
 
 ## 测试用例
