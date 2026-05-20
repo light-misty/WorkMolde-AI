@@ -26,7 +26,7 @@ export default function App() {
   const [templateLabel, setTemplateLabel] = useState<string | undefined>(undefined);
 
   const { addNode, updateNode, setExecutionStatus, clearNodes, setConfirmHandler, loadFromMessages } = useWorkflowStore();
-  const { switchSession, loadSessions } = useSessionStore();
+  const { switchSession, loadSessions, clearCurrentSession } = useSessionStore();
   const { loadSettings } = useSettingsStore();
   const { loadWorkspaces, currentWorkspaceId, workspaces } = useWorkspaceStore();
   const { loadTree, initFileChangeListener, destroyFileChangeListener } = useFileTreeStore();
@@ -45,16 +45,28 @@ export default function App() {
     confirmOperation,
     reset: resetAgent,
     setSessionId: setAgentSessionId,
+    sessionId: agentSessionId,
   } = useAgent();
 
   const streamingNodeIdRef = useRef<string | null>(null);
   const confirmNodeIdRef = useRef<string | null>(null);
+  // 追踪 Agent 上一次的 sessionId，用于检测新会话创建
+  const prevAgentSessionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     loadSettings();
     loadWorkspaces();
     loadSessions();
   }, []);
+
+  // 当 Agent 创建新会话时，同步刷新 session store 并选中新会话
+  useEffect(() => {
+    if (agentSessionId && !prevAgentSessionIdRef.current) {
+      loadSessions();
+      switchSession(agentSessionId);
+    }
+    prevAgentSessionIdRef.current = agentSessionId;
+  }, [agentSessionId, loadSessions, switchSession]);
 
   // 工作区切换时自动加载文件树
   useEffect(() => {
@@ -213,9 +225,10 @@ export default function App() {
   const handleNewSession = useCallback(() => {
     clearNodes();
     resetAgent();
+    clearCurrentSession();
     streamingNodeIdRef.current = null;
     confirmNodeIdRef.current = null;
-  }, [clearNodes, resetAgent]);
+  }, [clearNodes, resetAgent, clearCurrentSession]);
 
   // 切换到历史会话：清空当前节点，从后端加载消息并转换为工作流节点
   const handleSwitchSession = useCallback(async (sessionId: string) => {

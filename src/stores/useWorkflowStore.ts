@@ -95,13 +95,16 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
     const nodes: WorkflowNode[] = [];
 
     for (const msg of messages) {
+      // 使用消息的实际创建时间，而非当前时间
+      const msgTimestamp = new Date(msg.createdAt).getTime();
+
       if (msg.role === "user") {
         // 用户消息 -> user 节点
         nodes.push({
           id: `node_${++nodeCounter}`,
           type: "user",
           status: "completed",
-          timestamp: Date.now(),
+          timestamp: msgTimestamp,
           data: { content: msg.content, attachments: [] },
           isExpanded: true,
         });
@@ -114,7 +117,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
               id: `node_${++nodeCounter}`,
               type: "tool",
               status: "completed",
-              timestamp: Date.now(),
+              timestamp: msgTimestamp,
               data: {
                 toolName: tc.name,
                 input: (tc.arguments ?? {}) as Record<string, unknown>,
@@ -129,7 +132,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
             id: `node_${++nodeCounter}`,
             type: "reply",
             status: "completed",
-            timestamp: Date.now(),
+            timestamp: msgTimestamp,
             data: { content: msg.content },
             isExpanded: true,
           });
@@ -141,7 +144,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
           id: `node_${++nodeCounter}`,
           type: "result",
           status: "completed",
-          timestamp: Date.now(),
+          timestamp: msgTimestamp,
           data: {
             content: msg.content,
             success: isSuccess,

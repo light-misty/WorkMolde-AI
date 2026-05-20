@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Icon } from "../common/Icon";
 import { useSessionStore } from "../../stores/useSessionStore";
 
@@ -8,7 +9,14 @@ interface HistoryPanelProps {
 }
 
 export function HistoryPanel({ open, onClose, onSwitchSession }: HistoryPanelProps) {
-  const { sessions, currentSessionId } = useSessionStore();
+  const { sessions, currentSessionId, loadSessions } = useSessionStore();
+
+  // 面板打开时刷新会话列表，确保显示最新数据（包括通过 Agent 新创建的会话）
+  useEffect(() => {
+    if (open) {
+      loadSessions();
+    }
+  }, [open, loadSessions]);
 
   return (
     <>

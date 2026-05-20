@@ -9,6 +9,7 @@ interface SessionState {
 
   createSession: (title?: string, workspaceId?: string) => Promise<string>;
   switchSession: (sessionId: string) => void;
+  clearCurrentSession: () => void;
   deleteSession: (sessionId: string) => Promise<void>;
   updateSessionTitle: (sessionId: string, title: string) => Promise<void>;
   loadSessions: (workspaceId?: string) => Promise<void>;
@@ -50,6 +51,11 @@ export const useSessionStore = create<SessionState>((set) => ({
   // 切换当前会话
   switchSession: (sessionId) => {
     set({ currentSessionId: sessionId });
+  },
+
+  // 清除当前选中会话（新建会话但未执行智能体时使用）
+  clearCurrentSession: () => {
+    set({ currentSessionId: null });
   },
 
   // 删除会话，调用后端 API
