@@ -3,6 +3,7 @@
 """
 
 import os
+import html
 import logging
 from typing import Any
 
@@ -273,12 +274,80 @@ class WordHandler:
             # 转换为纯文本
             content = "\n".join(para.text for para in doc.paragraphs)
 
+        elif target_format == "pdf":
+            # Word -> PDF: 使用 reportlab 将文档内容渲染为 PDF
+            from reportlab.lib.pagesizes import A4
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib.units import cm
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+
+            # 注册中文字体
+            from handlers.font_utils import register_chinese_font
+            font_name = register_chinese_font()
+
+            # PDF 必须写入文件
+            if not output_path:
+                output_path = os.path.splitext(path)[0] + ".pdf"
+
+            os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+
+            doc_pdf = SimpleDocTemplate(output_path, pagesize=A4)
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle("CustomTitle", parent=styles["Title"], fontName=font_name, fontSize=24, spaceAfter=30)
+            heading_style = ParagraphStyle("CustomHeading", parent=styles["Heading2"], fontName=font_name, fontSize=16, spaceAfter=12)
+            body_style = ParagraphStyle("CustomBody", parent=styles["Normal"], fontName=font_name, fontSize=12, leading=20, spaceAfter=10)
+
+            elements = []
+            for para in doc.paragraphs:
+                style = para.style.name if para.style else ""
+                text = para.text
+                if not text.strip():
+                    continue
+                if "Heading 1" in style:
+                    elements.append(Paragraph(html.escape(text), heading_style))
+                elif "Heading 2" in style:
+                    elements.append(Paragraph(html.escape(text), heading_style))
+                elif "Heading 3" in style:
+                    elements.append(Paragraph(html.escape(text), body_style))
+                elif "Title" in style:
+                    elements.append(Paragraph(html.escape(text), title_style))
+                else:
+                    elements.append(Paragraph(html.escape(text), body_style))
+                elements.append(Spacer(1, 0.3 * cm))
+
+            # 处理表格
+            for table in doc.tables:
+                table_data = []
+                for row in table.rows:
+                    row_data = [cell.text for cell in row.cells]
+                    table_data.append(row_data)
+                if table_data:
+                    t = Table(table_data)
+                    t.setStyle(TableStyle([
+                        ('GRID', (0, 0), (-1, -1), 0.5, '#999999'),
+                        ('FONTNAME', (0, 0), (-1, -1), font_name),
+                        ('FONTSIZE', (0, 0), (-1, -1), 10),
+                    ]))
+                    elements.append(t)
+                    elements.append(Spacer(1, 0.5 * cm))
+
+            doc_pdf.build(elements)
+            content = None  # PDF 已写入文件
+
         else:
             self.logger.error("convert: 不支持的目标格式: %s", target_format)
             return {"error": f"不支持的目标格式: {target_format}"}
 
         # 写入输出文件
-        if output_path:
+        if content is None:
+            # content 为 None 表示已在转换分支内直接写入文件（如 PDF）
+            self.logger.info("convert: 格式转换完成, output_path=%s, format=%s", output_path, target_format)
+            return {
+                "path": output_path,
+                "format": target_format,
+                "message": f"已转换为 {target_format} 格式",
+            }
+        elif output_path:
             os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
             with open(output_path, "w", encoding="utf-8") as f:
                 f.write(content)

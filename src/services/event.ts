@@ -125,6 +125,22 @@ export interface TokenUpdatePayload {
 }
 
 // ================================================================
+// LLM 事件 Payload 类型
+// ================================================================
+
+/** LLM Provider 切换通知 */
+export interface ProviderSwitchPayload {
+  /** 原始 Provider ID */
+  fromProviderId: string;
+  /** 切换到的 Provider ID */
+  toProviderId: string;
+  /** 切换原因 */
+  reason: string;
+  /** 是否为自动切换 */
+  isAutomatic: boolean;
+}
+
+// ================================================================
 // Agent 事件监听函数
 // ================================================================
 
@@ -245,6 +261,19 @@ export function onTokenUpdate(
   handler: (payload: TokenUpdatePayload) => void,
 ): Promise<UnlistenFn> {
   return listen<TokenUpdatePayload>("token:update", (event) => {
+    handler(event.payload);
+  });
+}
+
+// ================================================================
+// LLM 事件监听函数
+// ================================================================
+
+/** 监听 LLM Provider 切换通知事件 */
+export function onLlmProviderSwitch(
+  handler: (payload: ProviderSwitchPayload) => void,
+): Promise<UnlistenFn> {
+  return listen<ProviderSwitchPayload>("llm:provider_switch", (event) => {
     handler(event.payload);
   });
 }

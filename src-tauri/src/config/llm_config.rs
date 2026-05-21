@@ -16,6 +16,8 @@ pub enum ProviderType {
     Ollama,
     #[serde(rename = "custom")]
     Custom,
+    #[serde(rename = "gemini")]
+    Gemini,
 }
 
 /// Provider 高级配置

@@ -22,6 +22,7 @@ pub const SESSION_UPDATED: &str = "session:updated";
 pub const WORKSPACE_CHANGE: &str = "workspace:change";
 pub const FILE_CHANGE: &str = "file:change";
 pub const TOKEN_UPDATE: &str = "token:update";
+pub const LLM_PROVIDER_SWITCH: &str = "llm:provider_switch";
 
 // ================================================================
 // Agent 事件 Payload 类型
@@ -178,4 +179,22 @@ pub struct TokenUpdatePayload {
     pub prompt_tokens: u64,
     pub completion_tokens: u64,
     pub total_cost: f64,
+}
+
+// ================================================================
+// LLM 事件 Payload 类型
+// ================================================================
+
+/// LLM Provider 切换通知
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderSwitchPayload {
+    /// 原始 Provider ID
+    pub from_provider_id: String,
+    /// 切换到的 Provider ID
+    pub to_provider_id: String,
+    /// 切换原因
+    pub reason: String,
+    /// 是否为自动切换
+    pub is_automatic: bool,
 }

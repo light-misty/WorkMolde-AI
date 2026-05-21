@@ -508,8 +508,8 @@ impl Skill for ConvertFormatSkill {
                 },
                 "target_format": {
                     "type": "string",
-                    "enum": ["docx", "xlsx", "pptx", "pdf", "md", "txt"],
-                    "description": "目标格式"
+                    "enum": ["docx", "xlsx", "pptx", "pdf", "md", "txt", "csv", "html"],
+                    "description": "目标格式（docx/xlsx/pptx/pdf/md/txt/csv/html）"
                 },
                 "output_path": {
                     "type": "string",

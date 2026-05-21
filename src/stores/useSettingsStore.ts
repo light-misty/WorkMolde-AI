@@ -6,6 +6,8 @@ import type {
   PromptTemplate,
   SettingsTab,
 } from "../types";
+import type { ProviderSwitchPayload } from "../services/event";
+import { onLlmProviderSwitch } from "../services/event";
 import * as tauriCmd from "../services/tauri";
 
 // 深层部分类型
@@ -76,6 +78,8 @@ interface SettingsState {
   templates: PromptTemplate[];
   isSettingsOpen: boolean;
   activeSettingsTab: SettingsTab;
+  /** 最近一次 Provider 切换事件 */
+  lastProviderSwitch: ProviderSwitchPayload | null;
 
   updateSettings: (updates: DeepPartial<AppSettings>) => void;
   openSettings: (tab?: SettingsTab) => void;
@@ -85,6 +89,8 @@ interface SettingsState {
   loadSettings: () => Promise<void>;
   loadProviders: () => Promise<void>;
   loadSkills: () => Promise<void>;
+  /** 初始化 Provider 切换事件监听 */
+  initProviderSwitchListener: () => Promise<() => void>;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -95,6 +101,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   templates: [],
   isSettingsOpen: false,
   activeSettingsTab: "llm",
+  lastProviderSwitch: null,
 
   // 更新设置（深层合并，支持部分更新嵌套对象），并持久化到后端
   updateSettings: (updates) => {
@@ -181,5 +188,20 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     } catch (error) {
       console.error("[SettingsStore] 加载 Skill 列表失败:", error);
     }
+  },
+
+  // 初始化 Provider 切换事件监听，返回取消监听函数
+  initProviderSwitchListener: async () => {
+    const unlisten = await onLlmProviderSwitch((payload) => {
+      console.info(
+        "[SettingsStore] Provider 切换: %s -> %s, 原因: %s, 自动: %s",
+        payload.fromProviderId,
+        payload.toProviderId,
+        payload.reason,
+        payload.isAutomatic,
+      );
+      set({ lastProviderSwitch: payload });
+    });
+    return unlisten;
   },
 }));

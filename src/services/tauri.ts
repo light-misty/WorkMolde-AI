@@ -96,6 +96,17 @@ export async function setDefaultProvider(providerId: string): Promise<void> {
   }
 }
 
+/** 对所有 LLM Provider 执行健康检查 */
+export async function healthCheckProviders(): Promise<Record<string, ConnectionResult>> {
+  try {
+    const result = await invoke<Record<string, ConnectionResult>>("health_check_providers");
+    return result;
+  } catch (error) {
+    console.error("[tauri] healthCheckProviders 失败:", error);
+    throw error;
+  }
+}
+
 // ================================================================
 // 会话命令
 // ================================================================
@@ -270,6 +281,72 @@ export async function rollbackVersion(
     await invoke("rollback_version", { workspaceId, path, versionId });
   } catch (error) {
     console.error("[tauri] rollbackVersion 失败:", error);
+    throw error;
+  }
+}
+
+/** 创建空文件 */
+export async function createFile(
+  workspaceId: string,
+  path: string,
+): Promise<void> {
+  try {
+    await invoke("create_file", { workspaceId, path });
+  } catch (error) {
+    console.error("[tauri] createFile 失败:", error);
+    throw error;
+  }
+}
+
+/** 创建目录 */
+export async function createDirectory(
+  workspaceId: string,
+  path: string,
+): Promise<void> {
+  try {
+    await invoke("create_directory", { workspaceId, path });
+  } catch (error) {
+    console.error("[tauri] createDirectory 失败:", error);
+    throw error;
+  }
+}
+
+/** 重命名文件或目录 */
+export async function renameFile(
+  workspaceId: string,
+  oldPath: string,
+  newPath: string,
+): Promise<void> {
+  try {
+    await invoke("rename_file", { workspaceId, oldPath, newPath });
+  } catch (error) {
+    console.error("[tauri] renameFile 失败:", error);
+    throw error;
+  }
+}
+
+/** 删除文件或目录（永久删除） */
+export async function deleteFile(
+  workspaceId: string,
+  path: string,
+): Promise<void> {
+  try {
+    await invoke("delete_file", { workspaceId, path });
+  } catch (error) {
+    console.error("[tauri] deleteFile 失败:", error);
+    throw error;
+  }
+}
+
+/** 在系统文件管理器中显示 */
+export async function showInFileManager(
+  workspaceId: string,
+  path: string,
+): Promise<void> {
+  try {
+    await invoke("show_in_file_manager", { workspaceId, path });
+  } catch (error) {
+    console.error("[tauri] showInFileManager 失败:", error);
     throw error;
   }
 }

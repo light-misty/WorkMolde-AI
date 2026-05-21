@@ -153,4 +153,20 @@ impl<R: Runtime> AgentEmitter<R> {
                 CommandError::from(e)
             })
     }
+
+    /// 发射 LLM Provider 切换通知事件
+    pub fn emit_provider_switch(&self, payload: types::ProviderSwitchPayload) -> Result<(), CommandError> {
+        log::debug!(
+            "发射事件: {} (from={}, to={})",
+            types::LLM_PROVIDER_SWITCH,
+            payload.from_provider_id,
+            payload.to_provider_id
+        );
+        self.app_handle
+            .emit(types::LLM_PROVIDER_SWITCH, payload)
+            .map_err(|e| {
+                log::warn!("发射事件 {} 失败: {}", types::LLM_PROVIDER_SWITCH, e);
+                CommandError::from(e)
+            })
+    }
 }

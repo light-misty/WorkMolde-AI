@@ -274,12 +274,176 @@ class MarkdownHandler:
             # 移除图片标记
             result_content = re.sub(r"!\[[^\]]*\]\([^)]+\)", "", result_content)
 
+        elif target_format in ("docx", "doc"):
+            # Markdown -> Word: 使用 python-docx 生成 Word 文档
+            from docx import Document
+            from docx.shared import Pt
+
+            if not output_path:
+                output_path = os.path.splitext(path)[0] + ".docx"
+
+            os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+
+            doc = Document()
+            lines = content.split("\n")
+            i = 0
+            while i < len(lines):
+                line = lines[i]
+                stripped = line.strip()
+
+                # 标题
+                heading_match = re.match(r"^(#{1,6})\s+(.+)$", stripped)
+                if heading_match:
+                    level = len(heading_match.group(1))
+                    text = heading_match.group(2).strip()
+                    doc.add_heading(text, level=min(level, 9))
+                    i += 1
+                    continue
+
+                # 代码块
+                if stripped.startswith("```"):
+                    code_lines = []
+                    i += 1
+                    while i < len(lines) and not lines[i].strip().startswith("```"):
+                        code_lines.append(lines[i])
+                        i += 1
+                    i += 1  # 跳过结束的 ```
+                    code_text = "\n".join(code_lines)
+                    p = doc.add_paragraph(code_text)
+                    p.style = doc.styles["Normal"]
+                    for run in p.runs:
+                        run.font.name = "Courier New"
+                        run.font.size = Pt(9)
+                    continue
+
+                # 列表
+                list_match = re.match(r"^[-*+]\s+(.+)$", stripped)
+                if list_match:
+                    text = list_match.group(1)
+                    doc.add_paragraph(text, style="List Bullet")
+                    i += 1
+                    continue
+
+                # 有序列表
+                olist_match = re.match(r"^\d+\.\s+(.+)$", stripped)
+                if olist_match:
+                    text = olist_match.group(1)
+                    doc.add_paragraph(text, style="List Number")
+                    i += 1
+                    continue
+
+                # 空行
+                if not stripped:
+                    i += 1
+                    continue
+
+                # 普通段落
+                doc.add_paragraph(stripped)
+                i += 1
+
+            doc.save(output_path)
+            result_content = None  # docx 已写入文件
+
+        elif target_format == "pdf":
+            # Markdown -> PDF: 使用 reportlab 渲染
+            from reportlab.lib.pagesizes import A4
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib.units import cm
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+
+            # 注册中文字体
+            from handlers.font_utils import register_chinese_font
+            font_name = register_chinese_font()
+
+            if not output_path:
+                output_path = os.path.splitext(path)[0] + ".pdf"
+
+            os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+
+            doc_pdf = SimpleDocTemplate(output_path, pagesize=A4)
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle("CustomTitle", parent=styles["Title"], fontName=font_name, fontSize=24, spaceAfter=30)
+            h1_style = ParagraphStyle("H1", parent=styles["Heading1"], fontName=font_name, fontSize=20, spaceAfter=15)
+            h2_style = ParagraphStyle("H2", parent=styles["Heading2"], fontName=font_name, fontSize=16, spaceAfter=12)
+            h3_style = ParagraphStyle("H3", parent=styles["Heading3"], fontName=font_name, fontSize=14, spaceAfter=10)
+            body_style = ParagraphStyle("CustomBody", parent=styles["Normal"], fontName=font_name, fontSize=12, leading=20, spaceAfter=10)
+            code_style = ParagraphStyle("Code", parent=styles["Code"], fontName="Courier", fontSize=9, leading=14, spaceAfter=8, leftIndent=20)
+
+            elements = []
+            lines = content.split("\n")
+            in_code_block = False
+            code_lines = []
+
+            for line in lines:
+                if line.strip().startswith("```"):
+                    if in_code_block:
+                        code_text = html.escape("\n".join(code_lines))
+                        elements.append(Paragraph(code_text.replace("\n", "<br/>"), code_style))
+                        elements.append(Spacer(1, 0.3 * cm))
+                        in_code_block = False
+                        code_lines = []
+                    else:
+                        in_code_block = True
+                        code_lines = []
+                    continue
+
+                if in_code_block:
+                    code_lines.append(line)
+                    continue
+
+                heading_match = re.match(r"^(#{1,6})\s+(.+)$", line)
+                if heading_match:
+                    level = len(heading_match.group(1))
+                    text = html.escape(heading_match.group(2).strip())
+                    if level == 1:
+                        elements.append(Paragraph(text, title_style))
+                    elif level == 2:
+                        elements.append(Paragraph(text, h1_style))
+                    elif level == 3:
+                        elements.append(Paragraph(text, h2_style))
+                    else:
+                        elements.append(Paragraph(text, h3_style))
+                    elements.append(Spacer(1, 0.2 * cm))
+                    continue
+
+                if not line.strip():
+                    continue
+
+                # 列表
+                list_match = re.match(r"^[-*+]\s+(.+)$", line)
+                if list_match:
+                    text = html.escape(list_match.group(1))
+                    elements.append(Paragraph(f"• {text}", body_style))
+                    continue
+
+                # 普通段落
+                text = html.escape(line)
+                text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+                text = re.sub(r"\*(.+?)\*", r"<em>\1</em>", text)
+                text = re.sub(r"`(.+?)`", r"<font face='Courier' size=9>\1</font>", text)
+                elements.append(Paragraph(text, body_style))
+
+            if in_code_block:
+                code_text = html.escape("\n".join(code_lines))
+                elements.append(Paragraph(code_text.replace("\n", "<br/>"), code_style))
+
+            doc_pdf.build(elements)
+            result_content = None  # PDF 已写入文件
+
         else:
             self.logger.error("convert: 不支持的目标格式: %s", target_format)
             return {"error": f"不支持的目标格式: {target_format}"}
 
         # 写入输出文件
-        if output_path:
+        if result_content is None:
+            # result_content 为 None 表示已在转换分支内直接写入文件（如 docx、PDF）
+            self.logger.info("convert: 格式转换完成, output_path=%s, format=%s", output_path, target_format)
+            return {
+                "path": output_path,
+                "format": target_format,
+                "message": f"已转换为 {target_format} 格式",
+            }
+        elif output_path:
             os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
             with open(output_path, "w", encoding="utf-8") as f:
                 f.write(result_content)

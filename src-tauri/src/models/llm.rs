@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct ProviderConfig {
     pub name: String,
-    /// "openai" | "anthropic" | "ollama" | "custom"
+    /// "openai" | "anthropic" | "ollama" | "custom" | "gemini"
     pub provider_type: String,
     pub api_base: String,
     /// API 密钥（加密存储）
@@ -22,7 +22,7 @@ pub struct ProviderConfig {
 pub struct ProviderInfo {
     pub id: String,
     pub name: String,
-    /// "openai" | "anthropic" | "ollama" | "custom"
+    /// "openai" | "anthropic" | "ollama" | "custom" | "gemini"
     pub provider_type: String,
     pub api_base: String,
     pub model: String,

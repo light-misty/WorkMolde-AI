@@ -7,7 +7,8 @@ type IconName =
   | "file" | "doc" | "xlsx" | "ppt" | "pdf" | "folder"
   | "search" | "close" | "warning" | "check" | "check-circle" | "dot"
   | "code" | "menu" | "minimize" | "maximize" | "unmaximize"
-  | "refresh" | "edit" | "trash" | "stop";
+  | "refresh" | "edit" | "trash" | "stop"
+  | "copy" | "eye" | "folder-plus" | "file-plus" | "external-link";
 
 interface IconProps extends SVGProps<SVGSVGElement> {
   name: IconName;
@@ -263,6 +264,45 @@ const paths: Record<IconName, React.JSX.Element> = {
   stop: (
     <g key="stop">
       <rect x="6" y="6" width="12" height="12" rx="1" />
+    </g>
+  ),
+  // 复制
+  copy: (
+    <g key="copy">
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </g>
+  ),
+  // 预览/查看
+  eye: (
+    <g key="eye">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </g>
+  ),
+  // 新建文件夹
+  "folder-plus": (
+    <g key="folder-plus">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+      <line x1="12" y1="11" x2="12" y2="17" />
+      <line x1="9" y1="14" x2="15" y2="14" />
+    </g>
+  ),
+  // 新建文件
+  "file-plus": (
+    <g key="file-plus">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="12" y1="18" x2="12" y2="12" />
+      <line x1="9" y1="15" x2="15" y2="15" />
+    </g>
+  ),
+  // 外部链接/在资源管理器中显示
+  "external-link": (
+    <g key="external-link">
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <polyline points="15 3 21 3 21 9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
     </g>
   ),
 };

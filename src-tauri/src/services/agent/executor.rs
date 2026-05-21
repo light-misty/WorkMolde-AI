@@ -84,6 +84,36 @@ impl<R: Runtime> AgentExecutor<R> {
         (self.should_stop)(session_id)
     }
 
+    /// 检查并处理停止逻辑，如果需要停止则返回 Some(ExecutionResult)
+    fn handle_stop_if_needed(
+        &self,
+        ctx: &mut AgentContext,
+        total_steps: u32,
+        total_input_tokens: u64,
+        total_output_tokens: u64,
+        start_time: std::time::Instant,
+    ) -> Option<ExecutionResult> {
+        if self.check_stopped(&ctx.session_id) {
+            log::info!("Agent 被用户停止, session_id={}", ctx.session_id);
+            self.persist_new_messages(ctx);
+            ctx.mark_persisted();
+            self.emitter.emit_stopped(StoppedPayload {
+                session_id: ctx.session_id.clone(),
+                reason: "用户手动停止".to_string(),
+                completed_steps: total_steps,
+            }).ok();
+            Some(ExecutionResult {
+                summary: "Agent 已被用户停止".to_string(),
+                total_steps,
+                total_input_tokens,
+                total_output_tokens,
+                duration_ms: start_time.elapsed().as_millis() as u64,
+            })
+        } else {
+            None
+        }
+    }
+
     fn is_high_risk_skill(name: &str) -> bool {
         HIGH_RISK_SKILLS.contains(&name)
     }
@@ -242,23 +272,14 @@ impl<R: Runtime> AgentExecutor<R> {
 
         for iteration in 0..self.max_iterations {
             // 检查是否被用户停止
-            if self.check_stopped(&ctx.session_id) {
-                log::info!("Agent 被用户停止, session_id={}, iteration={}", ctx.session_id, iteration);
-                // 停止前先持久化已有消息
-                self.persist_new_messages(ctx);
-                ctx.mark_persisted();
-                self.emitter.emit_stopped(StoppedPayload {
-                    session_id: ctx.session_id.clone(),
-                    reason: "用户手动停止".to_string(),
-                    completed_steps: total_steps,
-                }).ok();
-                return Ok(ExecutionResult {
-                    summary: "Agent 已被用户停止".to_string(),
-                    total_steps,
-                    total_input_tokens,
-                    total_output_tokens,
-                    duration_ms: start_time.elapsed().as_millis() as u64,
-                });
+            if let Some(result) = self.handle_stop_if_needed(
+                ctx,
+                total_steps,
+                total_input_tokens,
+                total_output_tokens,
+                start_time,
+            ) {
+                return Ok(result);
             }
 
             log::debug!("Agent 迭代 #{}, session_id={}", iteration + 1, ctx.session_id);
@@ -383,23 +404,14 @@ impl<R: Runtime> AgentExecutor<R> {
                 ctx.add_assistant_message(&assistant_content, Some(collected_tool_calls.clone()));
 
                 for tool_call in collected_tool_calls.iter() {
-                    if self.check_stopped(&ctx.session_id) {
-                        log::info!("Agent 在 Tool 执行前被停止, session_id={}", ctx.session_id);
-                        // 停止前先持久化已有消息
-                        self.persist_new_messages(ctx);
-                        ctx.mark_persisted();
-                        self.emitter.emit_stopped(StoppedPayload {
-                            session_id: ctx.session_id.clone(),
-                            reason: "用户手动停止".to_string(),
-                            completed_steps: total_steps,
-                        }).ok();
-                        return Ok(ExecutionResult {
-                            summary: "Agent 已被用户停止".to_string(),
-                            total_steps,
-                            total_input_tokens,
-                            total_output_tokens,
-                            duration_ms: start_time.elapsed().as_millis() as u64,
-                        });
+                    if let Some(result) = self.handle_stop_if_needed(
+                        ctx,
+                        total_steps,
+                        total_input_tokens,
+                        total_output_tokens,
+                        start_time,
+                    ) {
+                        return Ok(result);
                     }
 
                     log::info!("执行 Tool, session_id={}, tool={}, call_id={}", ctx.session_id, tool_call.name, tool_call.id);

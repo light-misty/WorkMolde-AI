@@ -61,7 +61,8 @@ pub fn run() {
             let config_manager = crate::config::ConfigManager::new(app_data_dir.clone());
 
             let llm_config = config_manager.load_llm_config().unwrap_or_default();
-            let llm_router = crate::services::llm::router::LlmRouter::from_config(&llm_config);
+            let llm_router = crate::services::llm::router::LlmRouter::from_config(&llm_config)
+                .with_app_handle(Some(app.handle().clone()));
 
             let python_path = std::env::var("DOCAGENT_PYTHON")
                 .unwrap_or_else(|_| "python".to_string());
@@ -175,6 +176,30 @@ pub fn run() {
                 }
             });
 
+            // 启动定期 Provider 健康检查（每 5 分钟执行一次）
+            let llm_router_for_health = Arc::clone(&app.state::<AppState>().llm_router);
+            tauri::async_runtime::spawn(async move {
+                let mut interval = tokio::time::interval(std::time::Duration::from_secs(300));
+                // 跳过首次立即触发，等待第一个间隔
+                interval.tick().await;
+                loop {
+                    interval.tick().await;
+                    // 获取路由器快照后释放锁，避免长时间持锁
+                    let router_snapshot = {
+                        let guard = llm_router_for_health.read().await;
+                        Arc::clone(&guard)
+                    };
+                    if router_snapshot.is_empty() {
+                        continue;
+                    }
+                    let results = router_snapshot.health_check_all().await;
+                    let summary: Vec<(&String, bool)> = results.iter()
+                        .map(|(k, v)| (k, v.success))
+                        .collect();
+                    log::info!("定期健康检查完成: {:?}", summary);
+                }
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -185,6 +210,7 @@ pub fn run() {
             commands::llm::update_provider,
             commands::llm::delete_provider,
             commands::llm::set_default_provider,
+            commands::llm::health_check_providers,
             // 会话命令
             commands::session::create_session,
             commands::session::list_sessions,
@@ -202,6 +228,11 @@ pub fn run() {
             commands::document::preview_document,
             commands::document::get_document_versions,
             commands::document::rollback_version,
+            commands::document::create_file,
+            commands::document::create_directory,
+            commands::document::rename_file,
+            commands::document::delete_file,
+            commands::document::show_in_file_manager,
             // Skill 命令
             commands::skill::list_skills,
             commands::skill::toggle_skill,

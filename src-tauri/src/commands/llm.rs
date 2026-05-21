@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use tauri::State;
@@ -203,8 +204,26 @@ pub async fn set_default_provider(
 
 /// 根据 LLM 配置重建 LlmRouter
 async fn rebuild_router(state: &State<'_, AppState>, llm_config: &crate::config::llm_config::LlmConfig) {
-    let new_router = crate::services::llm::router::LlmRouter::from_config(llm_config);
+    // 保留旧路由器的 AppHandle，避免重建后丢失事件通知能力
+    let app_handle = {
+        let guard = state.llm_router.read().await;
+        guard.app_handle()
+    };
+    let new_router = crate::services::llm::router::LlmRouter::from_config(llm_config)
+        .with_app_handle(app_handle);
     let mut guard = state.llm_router.write().await;
     *guard = Arc::new(new_router);
     log::info!("LlmRouter 已重建");
+}
+
+/// 对所有 LLM Provider 执行健康检查
+#[tauri::command]
+pub async fn health_check_providers(
+    state: State<'_, AppState>,
+) -> Result<HashMap<String, ConnectionResult>, CommandError> {
+    log::info!("手动触发 Provider 健康检查");
+    let router = state.llm_router.read().await;
+    let results = router.health_check_all().await;
+    log::info!("手动健康检查完成, 检查了 {} 个 Provider", results.len());
+    Ok(results)
 }
