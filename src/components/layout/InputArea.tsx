@@ -1,14 +1,18 @@
 import { useState, useRef, useCallback, type KeyboardEvent } from "react";
 import { Icon } from "../common/Icon";
+import type { ExecutionStatus } from "../../types/workflow";
 
 interface InputAreaProps {
   onSend: (text: string) => void;
   disabled?: boolean;
   templateLabel?: string;
   onToggleTemplate?: () => void;
+  // Agent 执行状态
+  executionStatus?: ExecutionStatus;
+  onStop?: () => void;
 }
 
-export function InputArea({ onSend, disabled = false, templateLabel, onToggleTemplate }: InputAreaProps) {
+export function InputArea({ onSend, disabled = false, templateLabel, onToggleTemplate, executionStatus = "idle", onStop }: InputAreaProps) {
   const [text, setText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -71,14 +75,35 @@ export function InputArea({ onSend, disabled = false, templateLabel, onToggleTem
               <Icon name="template" />
             </button>
           )}
-          <button
-            className={`send-btn ${hasContent && !disabled ? "send-btn-active" : ""}`}
-            title="发送"
-            onClick={handleSend}
-            disabled={disabled || !text.trim()}
-          >
-            <Icon name="send" />
-          </button>
+          {executionStatus === "running" && onStop ? (
+            // Agent 执行中显示停止按钮
+            <button
+              className="stop-btn"
+              title="停止执行"
+              onClick={onStop}
+            >
+              <Icon name="stop" />
+            </button>
+          ) : executionStatus === "stopping" ? (
+            // 正在停止中，显示加载状态
+            <button
+              className="stop-btn stop-btn-loading"
+              title="正在停止..."
+              disabled
+            >
+              <span className="loading-spinner"></span>
+            </button>
+          ) : (
+            // 正常发送按钮
+            <button
+              className={`send-btn ${hasContent && !disabled ? "send-btn-active" : ""}`}
+              title="发送"
+              onClick={handleSend}
+              disabled={disabled || !text.trim()}
+            >
+              <Icon name="send" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -195,6 +220,36 @@ export function InputArea({ onSend, disabled = false, templateLabel, onToggleTem
         .send-btn:disabled {
           opacity: 0.5;
           cursor: not-allowed;
+        }
+        .stop-btn {
+          width: 30px;
+          height: 30px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: var(--radius-sm);
+          color: white;
+          background: var(--color-error, #ef4444);
+          transition: all 0.2s;
+          flex-shrink: 0;
+        }
+        .stop-btn:hover {
+          background: var(--color-error-hover, #dc2626);
+        }
+        .stop-btn-loading {
+          background: var(--color-text-quaternary, #9ca3af);
+          cursor: wait;
+        }
+        .loading-spinner {
+          width: 14px;
+          height: 14px;
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          border-top-color: white;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
         .shortcut-hints {
           font-size: 10px;

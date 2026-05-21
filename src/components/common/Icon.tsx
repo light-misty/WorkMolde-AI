@@ -7,7 +7,7 @@ type IconName =
   | "file" | "doc" | "xlsx" | "ppt" | "pdf" | "folder"
   | "search" | "close" | "warning" | "check" | "check-circle" | "dot"
   | "code" | "menu" | "minimize" | "maximize" | "unmaximize"
-  | "refresh" | "edit" | "trash";
+  | "refresh" | "edit" | "trash" | "stop";
 
 interface IconProps extends SVGProps<SVGSVGElement> {
   name: IconName;
@@ -257,6 +257,12 @@ const paths: Record<IconName, React.JSX.Element> = {
     <g key="trash">
       <polyline points="3 6 5 6 21 6" />
       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </g>
+  ),
+  // 停止
+  stop: (
+    <g key="stop">
+      <rect x="6" y="6" width="12" height="12" rx="1" />
     </g>
   ),
 };

@@ -25,7 +25,7 @@ export default function App() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [templateLabel, setTemplateLabel] = useState<string | undefined>(undefined);
 
-  const { addNode, updateNode, setExecutionStatus, clearNodes, setConfirmHandler, loadFromMessages } = useWorkflowStore();
+  const { addNode, updateNode, setExecutionStatus, clearNodes, setConfirmHandler, loadFromMessages, executionStatus } = useWorkflowStore();
   const { switchSession, loadSessions, clearCurrentSession } = useSessionStore();
   const { loadSettings } = useSettingsStore();
   const { loadWorkspaces, currentWorkspaceId, workspaces } = useWorkspaceStore();
@@ -41,7 +41,9 @@ export default function App() {
     pendingConfirmation,
     todos,
     doneResult,
+    isStopped,
     sendMessage,
+    stopAgent,
     confirmOperation,
     reset: resetAgent,
     setSessionId: setAgentSessionId,
@@ -168,6 +170,19 @@ export default function App() {
     }
   }, [agentError, updateNode, setExecutionStatus]);
 
+  // 处理 Agent 被用户停止的情况
+  useEffect(() => {
+    if (isStopped) {
+      if (streamingNodeIdRef.current) {
+        updateNode(streamingNodeIdRef.current, {
+          status: "cancelled",
+        });
+        streamingNodeIdRef.current = null;
+      }
+      setExecutionStatus("cancelled");
+    }
+  }, [isStopped, updateNode, setExecutionStatus]);
+
   useEffect(() => {
     if (pendingConfirmation) {
       const nodeId = addNode("confirm", {
@@ -220,6 +235,21 @@ export default function App() {
       setExecutionStatus("failed");
     }
   }, [addNode, setExecutionStatus, sendMessage, workspaces, currentWorkspaceId]);
+
+  // 停止 Agent 执行，先显示加载状态，等待后端确认停止
+  const handleStop = useCallback(async () => {
+    // 设置为 stopping 状态，显示加载中
+    setExecutionStatus("stopping");
+
+    try {
+      await stopAgent();
+      // 停止成功后，状态会由 isStopped 的 useEffect 更新为 cancelled
+    } catch (err) {
+      console.error("[App] 停止 Agent 失败:", err);
+      // 停止失败，恢复为 running 状态
+      setExecutionStatus("running");
+    }
+  }, [setExecutionStatus, stopAgent]);
 
   // 新建会话
   const handleNewSession = useCallback(() => {
@@ -308,6 +338,8 @@ export default function App() {
                 onSend={handleSend}
                 templateLabel={templateLabel}
                 onToggleTemplate={() => setTemplateLabel(templateLabel ? undefined : "生成周报")}
+                executionStatus={executionStatus}
+                onStop={handleStop}
               />
             }
           />

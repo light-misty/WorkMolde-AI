@@ -2,7 +2,7 @@
 
 export type NodeStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 
-export type ExecutionStatus = "idle" | "running" | "paused" | "completed" | "failed" | "cancelled";
+export type ExecutionStatus = "idle" | "running" | "stopping" | "paused" | "completed" | "failed" | "cancelled";
 
 export type WorkflowNodeType = "user" | "thinking" | "tool" | "result" | "reply" | "confirm";
 
