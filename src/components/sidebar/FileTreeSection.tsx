@@ -12,14 +12,14 @@ function FileTreeItem({ node, depth = 0 }: { node: FileNode; depth?: number }) {
     return (
       <div>
         <div
-          className="ft-item group"
+          className="ft-item ft-dir group"
           onClick={() => toggleNode(node.path)}
         >
-          <span className="ft-icon text-text-tertiary group-hover:text-text-secondary">
-            <Icon name="folder" size={16} />
+          <span className={`ft-dir-icon ${isExpanded ? "ft-dir-open" : ""}`}>
+            <Icon name="folder" size={15} />
           </span>
           <span className="ft-name">{node.name}</span>
-          <span className="ft-chevron transition-transform duration-200" style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}>
+          <span className="ft-chevron" style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}>
             <Icon name="chevron-down" size={12} />
           </span>
         </div>
@@ -34,23 +34,28 @@ function FileTreeItem({ node, depth = 0 }: { node: FileNode; depth?: number }) {
     );
   }
 
+  /* 文件类型颜色映射 */
+  const extColorClass =
+    node.extension === "docx" ? "ft-ext-docx" :
+    node.extension === "xlsx" ? "ft-ext-xlsx" :
+    node.extension === "pptx" ? "ft-ext-pptx" :
+    node.extension === "pdf" ? "ft-ext-pdf" :
+    "ft-ext-default";
+
+  const extIcon =
+    node.extension === "docx" ? <Icon name="doc" size={15} /> :
+    node.extension === "xlsx" ? <Icon name="xlsx" size={15} /> :
+    node.extension === "pptx" ? <Icon name="ppt" size={15} /> :
+    node.extension === "pdf" ? <Icon name="pdf" size={15} /> :
+    <Icon name="file" size={15} />;
+
   return (
     <div
-      className={`ft-item file-item ${isSelected ? "active" : ""}`}
+      className={`ft-item ft-file ${isSelected ? "ft-selected" : ""}`}
       onClick={() => selectNode(node.path)}
     >
-      <span className={`ft-icon ${
-        node.extension === "docx" ? "text-[#2b579a]" :
-        node.extension === "xlsx" ? "text-[#217346]" :
-        node.extension === "pptx" ? "text-[#b7472a]" :
-        node.extension === "pdf" ? "text-[#ea4335]" :
-        "text-text-tertiary"
-      }`}>
-        {node.extension === "docx" ? <Icon name="doc" size={16} /> :
-         node.extension === "xlsx" ? <Icon name="xlsx" size={16} /> :
-         node.extension === "pptx" ? <Icon name="ppt" size={16} /> :
-         node.extension === "pdf" ? <Icon name="pdf" size={16} /> :
-         <Icon name="file" size={16} />}
+      <span className={`ft-file-icon ${extColorClass}`}>
+        {extIcon}
       </span>
       <span className="ft-name">{node.name}</span>
     </div>
@@ -69,32 +74,38 @@ export function FileTreeSection() {
 
   return (
     <SidebarSection title="工作区文件">
-      <div className="search-bar">
-        <Icon name="search" size={14} className="text-text-quaternary flex-shrink-0" />
+      {/* 搜索栏 */}
+      <div className="ft-search">
+        <Icon name="search" size={14} className="ft-search-icon" />
         <input
           type="text"
-          className="flex-1 text-[12px] placeholder:text-text-quaternary bg-transparent"
+          className="ft-search-input"
           placeholder="搜索文件..."
           value={searchKeyword}
           onChange={(e) => setSearchKeyword(e.target.value)}
         />
         <button
-          className={`refresh-btn ${isLoading ? "refreshing" : ""}`}
+          className={`ft-refresh ${isLoading ? "ft-refreshing" : ""}`}
           onClick={handleRefresh}
           title="刷新文件树"
           disabled={isLoading}
         >
-          <Icon name="refresh" size={14} />
+          <Icon name="refresh" size={13} />
         </button>
       </div>
 
+      {/* 文件树内容 */}
       {filteredTree.length === 0 ? (
-        <div className="empty-state">
-          <Icon name="file" size={24} className="opacity-40" />
-          <span>{searchKeyword ? "未找到匹配文件" : "暂无文件"}</span>
+        <div className="ft-empty">
+          <div className="ft-empty-icon">
+            <Icon name="file" size={20} />
+          </div>
+          <span className="ft-empty-text">
+            {searchKeyword ? "未找到匹配文件" : "暂无文件"}
+          </span>
         </div>
       ) : (
-        <div className="file-tree">
+        <div className="ft-tree">
           {filteredTree.map((node) => (
             <FileTreeItem key={node.path} node={node} />
           ))}
@@ -102,30 +113,96 @@ export function FileTreeSection() {
       )}
 
       <style>{`
-        .search-bar {
+        .ft-search {
           display: flex;
           align-items: center;
           gap: 6px;
-          padding: 6px 8px;
+          padding: 6px 10px;
           margin-bottom: 8px;
-          background: var(--color-bg-sub);
+          background: var(--color-bg);
           border: 1px solid var(--color-border-light);
-          border-radius: var(--radius-sm);
+          border-radius: var(--radius-md);
           transition: all 0.2s;
         }
-        .search-bar:focus-within {
+        .ft-search:focus-within {
           border-color: var(--color-accent);
-          background: var(--color-bg);
-          box-shadow: 0 0 0 2px var(--color-accent-lighter);
+          box-shadow: 0 0 0 3px var(--color-accent-lighter);
         }
-        .file-tree {
-          font-size: 13px;
+        .ft-search-icon {
+          color: var(--color-text-quaternary);
+          flex-shrink: 0;
+          transition: color 0.2s;
+        }
+        .ft-search:focus-within .ft-search-icon {
+          color: var(--color-accent);
+        }
+        .ft-search-input {
+          flex: 1;
+          font-size: 12px;
+          color: var(--color-text-primary);
+          background: transparent;
+          border: none;
+          outline: none;
+        }
+        .ft-search-input::placeholder {
+          color: var(--color-text-quaternary);
+        }
+        .ft-refresh {
+          width: 22px;
+          height: 22px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: var(--radius-xs);
+          color: var(--color-text-quaternary);
+          transition: all 0.2s;
+          flex-shrink: 0;
+          border: none;
+          background: none;
+          cursor: pointer;
+        }
+        .ft-refresh:hover {
+          color: var(--color-text-primary);
+          background: var(--color-bg-hover);
+        }
+        .ft-refresh:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+        .ft-refresh.ft-refreshing svg {
+          animation: spin 0.8s linear infinite;
+        }
+        .ft-empty {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 24px 16px;
+        }
+        .ft-empty-icon {
+          width: 44px;
+          height: 44px;
+          border-radius: 50%;
+          background: var(--color-bg);
+          border: 1px solid var(--color-border-light);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--color-text-quaternary);
+        }
+        .ft-empty-text {
+          font-size: 12px;
+          color: var(--color-text-quaternary);
+        }
+        .ft-tree {
+          font-size: 12px;
         }
         .ft-item {
           display: flex;
           align-items: center;
-          gap: 6px;
-          padding: 5px 8px;
+          gap: 7px;
+          padding: 4px 8px;
           border-radius: var(--radius-sm);
           cursor: pointer;
           transition: all 0.15s;
@@ -133,18 +210,33 @@ export function FileTreeSection() {
           position: relative;
         }
         .ft-item:hover {
-          background: var(--color-accent-bg);
+          background: rgba(51, 112, 255, 0.04);
+        }
+        .ft-dir:hover {
           color: var(--color-accent);
         }
-        .ft-item.active {
-          background: var(--color-accent-light);
+        .ft-dir:hover .ft-dir-icon {
+          color: var(--color-accent);
+        }
+        .ft-dir-icon {
+          color: var(--color-text-tertiary);
+          transition: color 0.15s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 16px;
+          height: 16px;
+          flex-shrink: 0;
+        }
+        .ft-file:hover {
+          background: rgba(51, 112, 255, 0.04);
+        }
+        .ft-selected {
+          background: var(--color-accent-light) !important;
           color: var(--color-accent);
           font-weight: 500;
         }
-        .file-item:hover {
-          background: var(--color-accent-bg);
-        }
-        .ft-icon {
+        .ft-file-icon {
           width: 16px;
           height: 16px;
           flex-shrink: 0;
@@ -153,11 +245,18 @@ export function FileTreeSection() {
           justify-content: center;
           transition: color 0.15s;
         }
+        .ft-ext-docx { color: #2b579a; }
+        .ft-ext-xlsx { color: #217346; }
+        .ft-ext-pptx { color: #b7472a; }
+        .ft-ext-pdf { color: #ea4335; }
+        .ft-ext-default { color: var(--color-text-tertiary); }
         .ft-name {
           flex: 1;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
+          font-size: 12px;
+          line-height: 1.5;
         }
         .ft-chevron {
           width: 16px;
@@ -167,47 +266,12 @@ export function FileTreeSection() {
           align-items: center;
           justify-content: center;
           color: var(--color-text-quaternary);
-          transition: all 0.2s;
+          transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .ft-indent {
-          padding-left: 20px;
-          border-left: 1px solid var(--color-border-light);
-          margin-left: 12px;
-        }
-        .refresh-btn {
-          width: 24px;
-          height: 24px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: var(--radius-xs);
-          color: var(--color-text-quaternary);
-          transition: all 0.15s;
-          flex-shrink: 0;
-          border: none;
-          background: none;
-          cursor: pointer;
-        }
-        .refresh-btn:hover {
-          color: var(--color-text-primary);
-          background: var(--color-bg-hover);
-        }
-        .refresh-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        .refresh-btn.refreshing svg {
-          animation: spin 0.8s linear infinite;
-        }
-        .empty-state {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          padding: 24px 16px;
-          color: var(--color-text-quaternary);
-          font-size: 12px;
+          padding-left: 16px;
+          margin-left: 8px;
+          border-left: 1.5px solid var(--color-border-light);
         }
       `}</style>
     </SidebarSection>

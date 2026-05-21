@@ -14,9 +14,33 @@ export function MainLayout({ mainArea, sidebar }: MainLayoutProps) {
       </div>
 
       {/* 右侧栏 */}
-      <div className="w-[300px] flex-shrink-0 flex flex-col bg-bg-sub overflow-hidden sidebar-narrow">
-        {sidebar}
+      <div className="sb-container">
+        <div className="sb-scroll">
+          {sidebar}
+        </div>
       </div>
+
+      <style>{`
+        .sb-container {
+          width: 300px;
+          flex-shrink: 0;
+          display: flex;
+          flex-direction: column;
+          background: var(--color-bg-sub);
+          overflow: hidden;
+          position: relative;
+        }
+        .sb-scroll {
+          flex: 1;
+          overflow-y: auto;
+          overflow-x: hidden;
+        }
+        @media (max-width: 900px) {
+          .sb-container {
+            width: 240px !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

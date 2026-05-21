@@ -5,145 +5,170 @@ import { formatTokens } from "../../utils/format";
 export function TokenSection() {
   const { sessionTokens, inputTokens, outputTokens, dailyTotal, monthlyTotal, dailyBudget, monthlyBudget } = useTokenStore();
 
-  const inputPercent = sessionTokens > 0 ? (inputTokens / sessionTokens) * 100 : 0;
   const dailyBudgetPercent = dailyBudget > 0 ? (dailyTotal / dailyBudget) * 100 : 0;
   const monthlyBudgetPercent = monthlyBudget > 0 ? (monthlyTotal / monthlyBudget) * 100 : 0;
 
   return (
     <SidebarSection title="Token 统计">
-      <div className="flex flex-col gap-2">
-        <div className="token-stat-row">
-          <span className="token-label">本次会话</span>
-          <span className="token-value">{formatTokens(sessionTokens)}</span>
+      <div className="tk-grid">
+        {/* 本次会话 */}
+        <div className="tk-field">
+          <span className="tk-field-label">本次会话</span>
+          <span className="tk-field-value tk-value-lg">{formatTokens(sessionTokens)}</span>
         </div>
-        <div className="token-bar-container">
-          <div className="token-bar" style={{ width: `${inputPercent}%` }} />
-        </div>
-        <div className="token-breakdown">
-          <div className="token-breakdown-item">
-            <span className="token-breakdown-label">输入</span>
-            <span className="token-breakdown-value text-accent">{formatTokens(inputTokens)}</span>
+        <div className="tk-breakdown">
+          <div className="tk-breakdown-item">
+            <span className="tk-breakdown-dot tk-dot-input" />
+            <span className="tk-breakdown-label">输入</span>
+            <span className="tk-breakdown-value tk-val-input">{formatTokens(inputTokens)}</span>
           </div>
-          <div className="token-breakdown-item">
-            <span className="token-breakdown-label">输出</span>
-            <span className="token-breakdown-value text-purple">{formatTokens(outputTokens)}</span>
+          <div className="tk-breakdown-item">
+            <span className="tk-breakdown-dot tk-dot-output" />
+            <span className="tk-breakdown-label">输出</span>
+            <span className="tk-breakdown-value tk-val-output">{formatTokens(outputTokens)}</span>
           </div>
         </div>
 
-        <div className="divider" />
+        {/* 分隔线 */}
+        <div className="tk-divider" />
 
-        <div className="token-stat-row">
-          <span className="token-label">今日累计</span>
-          <span className="token-value">{formatTokens(dailyTotal)}</span>
+        {/* 累计统计 */}
+        <div className="tk-field">
+          <span className="tk-field-label">今日累计</span>
+          <span className="tk-field-value">{formatTokens(dailyTotal)}</span>
         </div>
         {dailyBudget > 0 && (
-          <div className="budget-bar-container">
+          <div className="tk-mini-bar-track">
             <div
-              className={`budget-bar ${dailyBudgetPercent > 100 ? "budget-exceeded" : dailyBudgetPercent > 80 ? "budget-warning" : ""}`}
+              className={`tk-mini-bar-fill ${
+                dailyBudgetPercent > 100 ? "bar-exceeded" : dailyBudgetPercent > 80 ? "bar-warning" : ""
+              }`}
               style={{ width: `${Math.min(dailyBudgetPercent, 100)}%` }}
             />
           </div>
         )}
 
-        <div className="token-stat-row">
-          <span className="token-label">本月累计</span>
-          <span className="token-value">{formatTokens(monthlyTotal)}</span>
+        <div className="tk-field">
+          <span className="tk-field-label">本月累计</span>
+          <span className="tk-field-value">{formatTokens(monthlyTotal)}</span>
         </div>
         {monthlyBudget > 0 && (
-          <div className="budget-bar-container">
+          <div className="tk-mini-bar-track">
             <div
-              className={`budget-bar ${monthlyBudgetPercent > 100 ? "budget-exceeded" : monthlyBudgetPercent > 80 ? "budget-warning" : ""}`}
+              className={`tk-mini-bar-fill ${
+                monthlyBudgetPercent > 100 ? "bar-exceeded" : monthlyBudgetPercent > 80 ? "bar-warning" : ""
+              }`}
               style={{ width: `${Math.min(monthlyBudgetPercent, 100)}%` }}
             />
           </div>
         )}
 
-        <div className="divider" />
+        {/* 分隔线 */}
+        <div className="tk-divider" />
 
-        <div className="token-stat-row">
-          <span className="token-label">日预算</span>
-          <span className={`token-value ${dailyBudget > 0 ? "" : "text-quaternary"}`}>
-            {dailyBudget > 0 ? formatTokens(dailyBudget) : "未设置"}
+        {/* 预算设置 */}
+        <div className="tk-field">
+          <span className="tk-field-label">日预算</span>
+          <span className={`tk-field-value ${dailyBudget > 0 ? "" : "tk-value-unset"}`}>
+            {dailyBudget > 0 ? formatTokens(dailyBudget) : "--"}
           </span>
         </div>
-        <div className="token-stat-row">
-          <span className="token-label">月预算</span>
-          <span className={`token-value ${monthlyBudget > 0 ? "" : "text-quaternary"}`}>
-            {monthlyBudget > 0 ? formatTokens(monthlyBudget) : "未设置"}
+        <div className="tk-field">
+          <span className="tk-field-label">月预算</span>
+          <span className={`tk-field-value ${monthlyBudget > 0 ? "" : "tk-value-unset"}`}>
+            {monthlyBudget > 0 ? formatTokens(monthlyBudget) : "--"}
           </span>
         </div>
       </div>
 
       <style>{`
-        .token-stat-row {
+        .tk-grid {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .tk-field {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          font-size: 12px;
+          padding: 4px 0;
         }
-        .token-label {
+        .tk-field-label {
+          font-size: 12px;
           color: var(--color-text-quaternary);
         }
-        .token-value {
+        .tk-field-value {
           font-family: var(--font-mono);
+          font-size: 12px;
           font-weight: 500;
           color: var(--color-text-primary);
-          font-size: 12px;
         }
-        .token-bar-container {
-          height: 3px;
-          background: var(--color-border-light);
-          border-radius: 2px;
-          overflow: hidden;
-          margin: 2px 0;
+        .tk-value-lg {
+          font-size: 14px;
+          font-weight: 600;
+          letter-spacing: -0.2px;
         }
-        .token-bar {
-          height: 100%;
-          border-radius: 2px;
-          background: linear-gradient(90deg, var(--color-accent), var(--color-purple));
-          transition: width 0.5s ease;
-        }
-        .token-breakdown {
-          display: flex;
-          gap: 12px;
-        }
-        .token-breakdown-item {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          flex: 1;
-          font-size: 11px;
-        }
-        .token-breakdown-label {
+        .tk-value-unset {
           color: var(--color-text-quaternary);
         }
-        .token-breakdown-value {
-          font-family: var(--font-mono);
-          font-weight: 500;
-          font-size: 11px;
+        .tk-breakdown {
+          display: flex;
+          gap: 16px;
+          padding-left: 2px;
         }
-        .divider {
+        .tk-breakdown-item {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+        }
+        .tk-breakdown-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
+        .tk-dot-input {
+          background: var(--color-accent);
+        }
+        .tk-dot-output {
+          background: var(--color-purple);
+        }
+        .tk-breakdown-label {
+          font-size: 11px;
+          color: var(--color-text-quaternary);
+        }
+        .tk-breakdown-value {
+          font-family: var(--font-mono);
+          font-size: 11px;
+          font-weight: 500;
+        }
+        .tk-val-input {
+          color: var(--color-accent);
+        }
+        .tk-val-output {
+          color: var(--color-purple);
+        }
+        .tk-divider {
           height: 1px;
           background: var(--color-border-light);
-          margin: 4px 0;
+          margin: 2px 0;
         }
-        .budget-bar-container {
+        .tk-mini-bar-track {
           height: 2px;
           background: var(--color-border-light);
-          border-radius: 2px;
+          border-radius: 1px;
           overflow: hidden;
-          margin: 2px 0 4px;
         }
-        .budget-bar {
+        .tk-mini-bar-fill {
           height: 100%;
-          border-radius: 2px;
+          border-radius: 1px;
           background: var(--color-accent);
-          transition: width 0.5s ease, background 0.3s;
+          transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s;
         }
-        .budget-bar.budget-warning {
+        .tk-mini-bar-fill.bar-warning {
           background: var(--color-warning);
         }
-        .budget-bar.budget-exceeded {
+        .tk-mini-bar-fill.bar-exceeded {
           background: var(--color-error);
         }
       `}</style>

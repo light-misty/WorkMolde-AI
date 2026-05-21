@@ -225,13 +225,6 @@ textarea {
   }
 }
 
-/* ===== 响应式 ===== */
-@media (max-width: 900px) {
-  .sidebar-narrow {
-    width: 240px !important;
-  }
-}
-
 /* ===== 工作流时间线样式 ===== */
 .workflow-area {
   padding: 24px 32px;

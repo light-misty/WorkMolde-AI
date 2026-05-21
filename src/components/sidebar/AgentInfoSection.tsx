@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { SidebarSection } from "../layout/Sidebar";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { Icon } from "../common/Icon";
 
 const confirmationLevelLabels: Record<string, string> = {
   always: "全部需确认",
@@ -24,25 +25,24 @@ export function AgentInfoSection() {
 
   return (
     <SidebarSection title="Agent 信息">
-      <div className="flex flex-col gap-[10px]">
-        <div className="info-row">
-          <span className="info-label">当前模型</span>
-          <div className={`info-badge ${activeProvider ? "status-online" : "status-offline"}`}>
-            <span className={`status-dot ${activeProvider ? "bg-success" : "bg-text-quaternary"}`} />
-            {activeProvider?.model ?? "未配置"}
+      <div className="ai-grid">
+        {/* 当前模型 */}
+        <div className="ai-field">
+          <span className="ai-field-label">当前模型</span>
+          <div className={`ai-model-badge ${activeProvider ? "online" : "offline"}`}>
+            <span className="ai-status-dot" />
+            <span className="ai-model-name">
+              {activeProvider?.model ?? "未配置"}
+            </span>
           </div>
         </div>
 
-        <div className="info-row">
-          <span className="info-label">Provider</span>
-          <span className="info-value">{activeProvider?.providerType ?? "未配置"}</span>
-        </div>
-
-        <div className="info-row">
-          <span className="info-label">作者名</span>
+        {/* 作者名 */}
+        <div className="ai-field">
+          <span className="ai-field-label">作者名</span>
           {editing ? (
             <input
-              className="edit-input"
+              className="ai-field-edit"
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
               onBlur={handleSave}
@@ -50,36 +50,44 @@ export function AgentInfoSection() {
               autoFocus
             />
           ) : (
-            <span
-              className="info-value clickable"
+            <button
+              className="ai-field-value-btn"
               onClick={() => { setEditValue(settings.general.authorName); setEditing(true); }}
             >
-              {settings.general.authorName || "未设置"}
-            </span>
+              <span>{settings.general.authorName || "未设置"}</span>
+              <Icon name="code" size={12} />
+            </button>
           )}
         </div>
 
-        <div className="info-row">
-          <span className="info-label">确认级别</span>
-          <span className="info-value">
+        {/* 确认级别 */}
+        <div className="ai-field">
+          <span className="ai-field-label">确认级别</span>
+          <span className="ai-field-value">
             {confirmationLevelLabels[settings.general.confirmationLevel] ?? settings.general.confirmationLevel}
           </span>
         </div>
       </div>
 
       <style>{`
-        .info-row {
+        .ai-grid {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .ai-field {
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 8px;
+          padding: 6px 0;
         }
-        .info-label {
+        .ai-field-label {
           font-size: 12px;
           color: var(--color-text-quaternary);
           flex-shrink: 0;
         }
-        .info-badge {
+        .ai-model-badge {
           display: flex;
           align-items: center;
           gap: 6px;
@@ -88,44 +96,71 @@ export function AgentInfoSection() {
           border-radius: var(--radius-sm);
           font-size: 12px;
           font-weight: 500;
+          transition: background 0.2s;
         }
-        .info-badge.status-online {
+        .ai-model-badge.online {
           background: var(--color-success-bg);
         }
-        .status-dot {
+        .ai-status-dot {
           width: 6px;
           height: 6px;
           border-radius: 50%;
           flex-shrink: 0;
+          background: var(--color-text-quaternary);
+          transition: background 0.3s, box-shadow 0.3s;
         }
-        .info-value {
-          font-size: 13px;
+        .ai-model-badge.online .ai-status-dot {
+          background: var(--color-success);
+          box-shadow: 0 0 4px rgba(52, 199, 36, 0.4);
+        }
+        .ai-model-name {
           font-weight: 500;
           color: var(--color-text-primary);
         }
-        .info-value.clickable {
-          padding: 2px 6px;
-          border-radius: 4px;
-          cursor: pointer;
-          border: 1px solid transparent;
-          transition: all 0.15s;
-        }
-        .info-value.clickable:hover {
-          border-color: var(--color-border);
-          background: var(--color-bg-sub);
-        }
-        .edit-input {
-          font-size: 13px;
+        .ai-field-value {
+          font-size: 12px;
           font-weight: 500;
-          padding: 2px 6px;
-          border: 1px solid var(--color-border-strong);
-          border-radius: 4px;
-          width: 100px;
-          transition: all 0.2s;
+          color: var(--color-text-primary);
         }
-        .edit-input:focus {
-          border-color: var(--color-accent);
-          box-shadow: 0 0 0 2px var(--color-accent-lighter);
+        .ai-field-value-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 2px 8px;
+          border-radius: var(--radius-sm);
+          font-size: 12px;
+          font-weight: 500;
+          color: var(--color-text-primary);
+          border: 1px solid transparent;
+          transition: all 0.2s;
+          cursor: pointer;
+          background: none;
+        }
+        .ai-field-value-btn:hover {
+          border-color: var(--color-border);
+          background: var(--color-bg);
+          color: var(--color-accent);
+        }
+        .ai-field-value-btn:hover svg {
+          opacity: 1;
+        }
+        .ai-field-value-btn svg {
+          opacity: 0;
+          transition: opacity 0.2s;
+          color: var(--color-text-quaternary);
+        }
+        .ai-field-edit {
+          font-size: 12px;
+          font-weight: 500;
+          padding: 2px 8px;
+          border: 1.5px solid var(--color-accent);
+          border-radius: var(--radius-sm);
+          width: 120px;
+          background: var(--color-bg);
+          box-shadow: 0 0 0 3px var(--color-accent-lighter);
+          transition: all 0.2s;
+          outline: none;
+          color: var(--color-text-primary);
         }
       `}</style>
     </SidebarSection>
