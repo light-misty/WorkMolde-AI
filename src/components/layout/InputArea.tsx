@@ -43,13 +43,6 @@ export function InputArea({ onSend, disabled = false, templateLabel, onToggleTem
 
   return (
     <div className="input-area-wrapper">
-      {templateLabel && (
-        <div className="template-tag">
-          <Icon name="template" size={12} />
-          <span>{templateLabel}</span>
-        </div>
-      )}
-
       <div className={`input-container ${hasContent ? "has-content" : ""}`}>
         <button className="input-btn" title="附加文件">
           <Icon name="attach" />
@@ -66,18 +59,27 @@ export function InputArea({ onSend, disabled = false, templateLabel, onToggleTem
           disabled={disabled}
         />
 
-        <button className="input-btn" title="Prompt模板" onClick={onToggleTemplate}>
-          <Icon name="template" />
-        </button>
-
-        <button
-          className={`send-btn ${hasContent && !disabled ? "send-btn-active" : ""}`}
-          title="发送"
-          onClick={handleSend}
-          disabled={disabled || !text.trim()}
-        >
-          <Icon name="send" />
-        </button>
+        <div className="input-actions-right">
+          {templateLabel && (
+            <button className="template-badge" title={templateLabel}>
+              <Icon name="template" size={12} />
+              <span>{templateLabel}</span>
+            </button>
+          )}
+          {onToggleTemplate && (
+            <button className="input-btn" title="Prompt模板" onClick={onToggleTemplate}>
+              <Icon name="template" />
+            </button>
+          )}
+          <button
+            className={`send-btn ${hasContent && !disabled ? "send-btn-active" : ""}`}
+            title="发送"
+            onClick={handleSend}
+            disabled={disabled || !text.trim()}
+          >
+            <Icon name="send" />
+          </button>
+        </div>
       </div>
 
       <div className="shortcut-hints">
@@ -94,49 +96,36 @@ export function InputArea({ onSend, disabled = false, templateLabel, onToggleTem
 
       <style>{`
         .input-area-wrapper {
-          padding: 16px 32px;
-          border-top: 1px solid var(--color-border-light);
+          padding: 10px 24px 14px;
           background: var(--color-bg);
           flex-shrink: 0;
         }
         @media (max-width: 768px) {
           .input-area-wrapper {
-            padding: 16px 20px;
-            padding-bottom: 20px;
+            padding: 8px 16px 12px;
           }
-        }
-        .template-tag {
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          padding: 3px 8px;
-          background: var(--color-accent-light);
-          border-radius: var(--radius-xs);
-          font-size: 11px;
-          color: var(--color-accent);
-          font-weight: 500;
-          margin-bottom: 8px;
         }
         .input-container {
           display: flex;
-          align-items: flex-end;
-          gap: 8px;
-          border: 1.5px solid var(--color-border);
-          border-radius: var(--radius-md);
-          padding: 10px 12px;
+          align-items: center;
+          gap: 6px;
+          border: 1px solid var(--color-border-light);
+          border-radius: var(--radius-lg);
+          padding: 6px 10px 6px 12px;
           transition: all 0.2s;
           background: var(--color-bg);
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
         }
         .input-container:focus-within {
           border-color: var(--color-accent);
-          box-shadow: 0 0 0 3px var(--color-accent-lighter);
+          box-shadow: 0 0 0 3px var(--color-accent-lighter), 0 2px 8px rgba(0, 0, 0, 0.06);
         }
         .input-container.has-content {
-          border-color: var(--color-border-strong);
+          border-color: var(--color-accent);
         }
         .input-btn {
-          width: 32px;
-          height: 32px;
+          width: 28px;
+          height: 28px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -152,18 +141,37 @@ export function InputArea({ onSend, disabled = false, templateLabel, onToggleTem
         .input-textarea {
           flex: 1;
           resize: none;
-          min-height: 22px;
-          max-height: 120px;
+          min-height: 20px;
+          max-height: 100px;
           line-height: 1.5;
-          font-size: 14px;
-          padding: 4px 0;
+          font-size: 13px;
+          padding: 2px 4px;
         }
         .input-textarea::placeholder {
           color: var(--color-text-quaternary);
         }
+        .input-actions-right {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          flex-shrink: 0;
+        }
+        .template-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          padding: 2px 6px;
+          background: var(--color-accent-light);
+          border-radius: var(--radius-xs);
+          font-size: 10px;
+          color: var(--color-accent);
+          font-weight: 500;
+          border: none;
+          cursor: default;
+        }
         .send-btn {
-          width: 34px;
-          height: 34px;
+          width: 30px;
+          height: 30px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -189,20 +197,21 @@ export function InputArea({ onSend, disabled = false, templateLabel, onToggleTem
           cursor: not-allowed;
         }
         .shortcut-hints {
-          font-size: 11px;
+          font-size: 10px;
           color: var(--color-text-quaternary);
           margin-top: 6px;
+          padding-left: 4px;
           display: flex;
           align-items: center;
           gap: 12px;
         }
         .kbd {
           font-family: var(--font-mono);
-          font-size: 10px;
-          padding: 1px 5px;
+          font-size: 9px;
+          padding: 1px 4px;
           background: var(--color-bg-sub);
           border: 1px solid var(--color-border-light);
-          border-radius: 3px;
+          border-radius: 2px;
           color: var(--color-text-tertiary);
         }
       `}</style>
