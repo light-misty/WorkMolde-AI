@@ -17,7 +17,10 @@ pub struct OpenAiAdapter {
     api_key: String,
     model: String,
     advanced: AdvancedConfig,
+    /// 用于非流式请求的客户端（支持压缩）
     client: Client,
+    /// 用于流式请求的客户端（禁用压缩，避免 bytes_stream 解码错误）
+    streaming_client: Client,
 }
 
 impl OpenAiAdapter {
@@ -28,16 +31,31 @@ impl OpenAiAdapter {
         advanced: AdvancedConfig,
     ) -> Self {
         let timeout = Duration::from_secs(advanced.timeout_seconds as u64);
+        // 创建两个客户端：
+        // 1. 非流式请求客户端：默认启用 gzip 压缩，减少传输数据量
+        // 2. 流式请求客户端：禁用压缩，避免 bytes_stream() 解码错误
+        //    原因：reqwest 的 bytes_stream() 不会自动解压缩 gzip 响应，
+        //    导致 "error decoding response body" 错误
         let client = Client::builder()
             .timeout(timeout)
             .build()
             .unwrap_or_default();
+        
+        let streaming_client = Client::builder()
+            .timeout(Duration::from_secs(300))
+            .no_gzip()
+            .no_deflate()
+            .no_brotli()
+            .build()
+            .unwrap_or_default();
+        
         Self {
             api_base_url,
             api_key,
             model,
             advanced,
             client,
+            streaming_client,
         }
     }
 
@@ -95,11 +113,30 @@ impl OpenAiAdapter {
         body
     }
 
-    /// 发送请求，带重试逻辑
+    /// 发送请求，带重试逻辑（使用普通客户端，支持压缩）
     async fn send_with_retry(
         &self,
         url: &str,
         body: &Value,
+    ) -> Result<reqwest::Response, CommandError> {
+        self.send_with_retry_internal(url, body, &self.client).await
+    }
+
+    /// 发送流式请求，带重试逻辑（使用流式客户端，禁用压缩）
+    async fn send_streaming_with_retry(
+        &self,
+        url: &str,
+        body: &Value,
+    ) -> Result<reqwest::Response, CommandError> {
+        self.send_with_retry_internal(url, body, &self.streaming_client).await
+    }
+
+    /// 内部发送请求实现，带重试逻辑
+    async fn send_with_retry_internal(
+        &self,
+        url: &str,
+        body: &Value,
+        client: &Client,
     ) -> Result<reqwest::Response, CommandError> {
         let max_retries = self.advanced.max_retries;
         let mut last_error = None;
@@ -111,7 +148,7 @@ impl OpenAiAdapter {
                 tokio::time::sleep(delay).await;
             }
 
-            let mut request = self.client.post(url);
+            let mut request = client.post(url);
             request = request
                 .header("Authorization", format!("Bearer {}", self.api_key))
                 .header("Content-Type", "application/json");
@@ -256,7 +293,8 @@ impl LlmProvider for OpenAiAdapter {
         log::info!("发送流式请求, model={}", self.model);
         let url = format!("{}/chat/completions", self.api_base_url.trim_end_matches('/'));
         let body = self.build_request_body(messages, tools, true);
-        let response = self.send_with_retry(&url, &body).await?;
+        // 使用流式专用客户端（禁用压缩），避免 bytes_stream 解码错误
+        let response = self.send_streaming_with_retry(&url, &body).await?;
 
         let (tx, rx) = mpsc::channel(100);
         let model_name = self.model.clone();

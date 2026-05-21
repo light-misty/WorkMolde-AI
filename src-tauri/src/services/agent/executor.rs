@@ -333,6 +333,13 @@ impl<R: Runtime> AgentExecutor<R> {
                     }
                     Err(e) => {
                         log::warn!("流式响应错误: {}", e.message);
+                        // 向前端发送错误事件，让用户看到错误信息
+                        self.emitter.emit_error(ErrorPayload {
+                            session_id: ctx.session_id.clone(),
+                            code: e.code,
+                            message: format!("LLM 流式响应错误: {}", e.message),
+                            recoverable: true,
+                        }).ok();
                         break;
                     }
                 }
