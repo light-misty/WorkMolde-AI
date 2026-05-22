@@ -72,6 +72,7 @@ function FileTreeItem({
   onRenameConfirm,
   onRenameCancel,
   onContextMenu,
+  onDoubleClickFile,
 }: {
   node: FileNode;
   depth?: number;
@@ -79,6 +80,7 @@ function FileTreeItem({
   onRenameConfirm: (oldPath: string, newName: string) => void;
   onRenameCancel: () => void;
   onContextMenu: (e: React.MouseEvent, node: FileNode) => void;
+  onDoubleClickFile?: (filePath: string, fileName: string) => void;
 }) {
   const { expandedKeys, selectedKey, toggleNode, selectNode } = useFileTreeStore();
   const isExpanded = expandedKeys.has(node.path);
@@ -120,6 +122,7 @@ function FileTreeItem({
                 onRenameConfirm={onRenameConfirm}
                 onRenameCancel={onRenameCancel}
                 onContextMenu={onContextMenu}
+                onDoubleClickFile={onDoubleClickFile}
               />
             ))}
           </div>
@@ -147,6 +150,7 @@ function FileTreeItem({
     <div
       className={`ft-item ft-file ${isSelected ? "ft-selected" : ""}`}
       onClick={() => selectNode(node.path)}
+      onDoubleClick={() => onDoubleClickFile?.(node.path, node.name)}
       onContextMenu={(e) => onContextMenu(e, node)}
     >
       <span className={`ft-file-icon ${extColorClass}`}>
@@ -378,7 +382,7 @@ function NewItemInput({
 }
 
 /* ---- 主组件 ---- */
-export function FileTreeSection() {
+export function FileTreeSection({ onOpenPreview }: { onOpenPreview?: (filePath: string, fileName: string) => void }) {
   const { searchKeyword, setSearchKeyword, getFilteredTree, loadTree, isLoading, activeWorkspaceId } = useFileTreeStore();
   const { workspaces } = useWorkspaceStore();
   const filteredTree = getFilteredTree();
@@ -531,8 +535,12 @@ export function FileTreeSection() {
         label: "打开预览",
         icon: "eye",
         onClick: () => {
-          const { selectNode } = useFileTreeStore.getState();
-          selectNode(node.path);
+          if (onOpenPreview) {
+            onOpenPreview(node.path, node.name);
+          } else {
+            const { selectNode } = useFileTreeStore.getState();
+            selectNode(node.path);
+          }
         },
       },
       { label: "", separator: true, onClick: () => {} },
@@ -559,7 +567,7 @@ export function FileTreeSection() {
         onClick: () => tauriCmd.showInFileManager(activeWorkspaceId, node.path),
       },
     ];
-  }, [contextMenu, activeWorkspaceId, handleCopyPath]);
+  }, [contextMenu, activeWorkspaceId, handleCopyPath, onOpenPreview]);
 
   return (
     <SidebarSection title="工作区文件">
@@ -603,6 +611,7 @@ export function FileTreeSection() {
               onRenameConfirm={handleRenameConfirm}
               onRenameCancel={handleRenameCancel}
               onContextMenu={handleContextMenu}
+              onDoubleClickFile={onOpenPreview}
             />
           ))}
         </div>

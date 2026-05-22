@@ -25,6 +25,12 @@ export default function App() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [templateLabel, setTemplateLabel] = useState<string | undefined>(undefined);
 
+  // 文档预览状态
+  const [previewTitle, setPreviewTitle] = useState("");
+  const [previewContent, setPreviewContent] = useState("");
+  const [previewFileType, setPreviewFileType] = useState<string | undefined>(undefined);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
   const { addNode, updateNode, setExecutionStatus, clearNodes, setConfirmHandler, loadFromMessages, executionStatus } = useWorkflowStore();
   const { switchSession, loadSessions, clearCurrentSession } = useSessionStore();
   const { loadSettings } = useSettingsStore();
@@ -307,6 +313,37 @@ export default function App() {
     // 如果 nextSessionId 为 null，表示没有其他会话，工作流保持清空状态
   }, [clearNodes, resetAgent, switchSession, setAgentSessionId, loadFromMessages]);
 
+  // 打开文档预览：从后端获取文档内容并显示预览浮层
+  const handleOpenPreview = useCallback(async (filePath: string, fileName: string) => {
+    if (!currentWorkspaceId) return;
+
+    setPreviewLoading(true);
+    setPreviewOpen(true);
+    setPreviewTitle(fileName);
+    setPreviewContent("");
+    setPreviewFileType(undefined);
+
+    try {
+      const result = await tauriCmd.previewDocument(currentWorkspaceId, filePath);
+      setPreviewContent(result.content);
+      setPreviewFileType(result.fileType);
+    } catch (err) {
+      console.error("[App] 预览文档失败:", err);
+      setPreviewContent(`[预览失败] ${err instanceof Error ? err.message : String(err)}`);
+      setPreviewFileType(undefined);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [currentWorkspaceId]);
+
+  // 关闭文档预览
+  const handleClosePreview = useCallback(() => {
+    setPreviewOpen(false);
+    setPreviewContent("");
+    setPreviewTitle("");
+    setPreviewFileType(undefined);
+  }, []);
+
   // 监听键盘快捷键
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -346,7 +383,7 @@ export default function App() {
         }
         sidebar={
           <>
-            <FileTreeSection />
+            <FileTreeSection onOpenPreview={handleOpenPreview} />
             <AgentInfoSection />
             <TodoSection
               items={todos?.todos.map((t) => ({
@@ -362,7 +399,24 @@ export default function App() {
       />
 
       {/* 浮层面板 */}
-      <PreviewOverlay open={previewOpen} onClose={() => setPreviewOpen(false)} />
+      <PreviewOverlay
+        open={previewOpen}
+        onClose={handleClosePreview}
+        title={previewTitle}
+        content={previewContent}
+        fileType={previewFileType}
+      />
+      {previewLoading && (
+        <div className="fixed inset-0 bg-black/10 z-[199] flex items-center justify-center pointer-events-none">
+          <div className="bg-bg-elevated px-5 py-3 rounded-[var(--radius-md)] shadow-md text-[13px] text-text-secondary flex items-center gap-2">
+            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            加载预览中...
+          </div>
+        </div>
+      )}
       <SettingsDialog />
       <HistoryPanel open={historyOpen} onClose={() => setHistoryOpen(false)} onSwitchSession={handleSwitchSession} onDeleteCurrentSession={handleDeleteCurrentSession} />
 
