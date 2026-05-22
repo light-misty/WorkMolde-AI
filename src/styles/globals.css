@@ -311,6 +311,14 @@ textarea {
 
 /* ===== 工作流时间线样式 ===== */
 .workflow-area {
+  padding: 0;
+  overflow: hidden;
+}
+
+/* 虚拟滚动容器 */
+.workflow-scroll-container {
+  height: 100%;
+  overflow-y: auto;
   padding: 24px 32px;
 }
 

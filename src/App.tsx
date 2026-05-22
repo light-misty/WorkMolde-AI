@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
 import { TopBar } from "./components/layout/TopBar";
 import { MainLayout } from "./components/layout/MainLayout";
 import { MainArea } from "./components/layout/MainArea";
@@ -8,9 +8,6 @@ import { FileTreeSection } from "./components/sidebar/FileTreeSection";
 import { AgentInfoSection } from "./components/sidebar/AgentInfoSection";
 import { TodoSection } from "./components/sidebar/TodoSection";
 import { TokenSection } from "./components/sidebar/TokenSection";
-import { PreviewOverlay } from "./components/preview/PreviewOverlay";
-import { SettingsDialog } from "./components/settings/SettingsDialog";
-import { HistoryPanel } from "./components/session/HistoryPanel";
 import { useWorkflowStore } from "./stores/useWorkflowStore";
 import { useSessionStore } from "./stores/useSessionStore";
 import { useSettingsStore } from "./stores/useSettingsStore";
@@ -19,6 +16,22 @@ import { useFileTreeStore } from "./stores/useFileTreeStore";
 import { useTokenStore } from "./stores/useTokenStore";
 import { useAgent } from "./hooks/useAgent";
 import * as tauriCmd from "./services/tauri";
+
+// 懒加载浮层组件：这些组件体积较大且仅在用户打开时才需要，延迟加载可减少首屏 bundle 体积
+const PreviewOverlay = lazy(() =>
+  import("./components/preview/PreviewOverlay").then((m) => ({ default: m.PreviewOverlay }))
+);
+const SettingsDialog = lazy(() =>
+  import("./components/settings/SettingsDialog").then((m) => ({ default: m.SettingsDialog }))
+);
+const HistoryPanel = lazy(() =>
+  import("./components/session/HistoryPanel").then((m) => ({ default: m.HistoryPanel }))
+);
+
+/** 懒加载组件的通用加载占位符 */
+function LazyFallback() {
+  return null;
+}
 
 export default function App() {
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -399,14 +412,16 @@ export default function App() {
         }
       />
 
-      {/* 浮层面板 */}
-      <PreviewOverlay
-        open={previewOpen}
-        onClose={handleClosePreview}
-        title={previewTitle}
-        content={previewContent}
-        fileType={previewFileType}
-      />
+      {/* 浮层面板（懒加载） */}
+      <Suspense fallback={<LazyFallback />}>
+        <PreviewOverlay
+          open={previewOpen}
+          onClose={handleClosePreview}
+          title={previewTitle}
+          content={previewContent}
+          fileType={previewFileType}
+        />
+      </Suspense>
       {previewLoading && (
         <div className="fixed inset-0 bg-black/10 z-[199] flex items-center justify-center pointer-events-none">
           <div className="bg-bg-elevated px-5 py-3 rounded-[var(--radius-md)] shadow-md text-[13px] text-text-secondary flex items-center gap-2">
@@ -418,8 +433,12 @@ export default function App() {
           </div>
         </div>
       )}
-      <SettingsDialog />
-      <HistoryPanel open={historyOpen} onClose={() => setHistoryOpen(false)} onSwitchSession={handleSwitchSession} onDeleteCurrentSession={handleDeleteCurrentSession} />
+      <Suspense fallback={<LazyFallback />}>
+        <SettingsDialog />
+      </Suspense>
+      <Suspense fallback={<LazyFallback />}>
+        <HistoryPanel open={historyOpen} onClose={() => setHistoryOpen(false)} onSwitchSession={handleSwitchSession} onDeleteCurrentSession={handleDeleteCurrentSession} />
+      </Suspense>
 
       <style>{`
         .app { display: flex; flex-direction: column; height: 100vh; }

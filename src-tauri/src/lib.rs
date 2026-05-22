@@ -33,6 +33,22 @@ pub struct AppState {
 }
 
 pub fn run() {
+    // 安装自定义 panic hook：将 panic 信息记录到日志，而非直接崩溃
+    // 保留默认行为（打印到 stderr + 终止进程），但在终止前确保日志落盘
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        log::error!("========== 应用发生 panic ==========");
+        log::error!("panic 位置: {}", info.location().map(|l| l.to_string()).unwrap_or_default());
+        if let Some(s) = info.payload().downcast_ref::<&str>() {
+            log::error!("panic 消息: {}", s);
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            log::error!("panic 消息: {}", s);
+        }
+        log::error!("====================================");
+        // 调用默认 hook 完成标准 panic 流程（打印到 stderr + 终止）
+        default_hook(info);
+    }));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
@@ -41,22 +57,22 @@ pub fn run() {
             let app_data_dir = app
                 .path()
                 .app_data_dir()
-                .expect("无法获取应用数据目录");
-            std::fs::create_dir_all(&app_data_dir).expect("无法创建应用数据目录");
+                .map_err(|e| format!("无法获取应用数据目录: {}", e))?;
+            std::fs::create_dir_all(&app_data_dir)
+                .map_err(|e| format!("无法创建应用数据目录: {}", e))?;
 
             // 初始化日志系统（必须在数据库和配置初始化之前，确保关键操作的错误能被记录）
-            // CARGO_MANIFEST_DIR 指向 src-tauri/，其上一级即为项目根目录，日志输出到项目根目录的 log/ 下
             let log_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .parent()
                 .map(|p| p.join("log"))
                 .unwrap_or_else(|| std::path::PathBuf::from("log"));
             crate::utils::logger::init(&log_dir)
-                .expect("日志系统初始化失败");
+                .map_err(|e| format!("日志系统初始化失败: {}", e))?;
 
             // 初始化数据库
             let db_path = app_data_dir.join("docagent.db");
             let database = crate::db::Database::new(&db_path)
-                .expect("数据库初始化失败");
+                .map_err(|e| format!("数据库初始化失败: {}", e))?;
 
             // 初始化配置管理器
             let config_manager = crate::config::ConfigManager::new(app_data_dir.clone());
@@ -262,5 +278,7 @@ pub fn run() {
             commands::template::delete_template,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .unwrap_or_else(|e| {
+            log::error!("Tauri 应用运行失败: {}", e);
+        });
 }
