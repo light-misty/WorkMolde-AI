@@ -22,4 +22,21 @@ export default defineConfig({
       ignored: ["**/src-tauri/**"],
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // 手动 chunk 分割，将大型第三方库拆分为独立文件
+        manualChunks: {
+          // PDF 渲染引擎（体积大，独立加载）
+          "vendor-pdf": ["pdfjs-dist"],
+          // 图表库
+          "vendor-recharts": ["recharts"],
+          // Markdown 渲染链
+          "vendor-markdown": ["react-markdown", "remark-gfm", "rehype-highlight"],
+        },
+      },
+    },
+    // chunk 大小警告阈值调整为 800KB
+    chunkSizeWarningLimit: 800,
+  },
 });

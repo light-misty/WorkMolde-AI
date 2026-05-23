@@ -277,6 +277,12 @@ pub fn run() {
             commands::template::create_template,
             commands::template::update_template,
             commands::template::delete_template,
+            // Token 统计命令
+            commands::token::get_token_usage_trend,
+            commands::token::get_token_provider_usage,
+            commands::token::get_token_usage_overview,
+            // 日志命令
+            commands::log::get_error_log,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

@@ -8,12 +8,14 @@ import { TemplatesTab } from "./TemplatesTab";
 import { AppearanceTab } from "./AppearanceTab";
 import { ShortcutsTab } from "./ShortcutsTab";
 import { GeneralTab } from "./GeneralTab";
+import { TokenUsageTab } from "./TokenUsageTab";
 
 const tabs = [
   { id: "llm" as const, label: "LLM 配置", icon: "settings" },
   { id: "workspace" as const, label: "工作区管理", icon: "folder" },
   { id: "skill" as const, label: "Skills 管理", icon: "tool" },
   { id: "template" as const, label: "Prompt 模板", icon: "template" },
+  { id: "usage" as const, label: "Token 用量", icon: "chart" },
   { id: "appearance" as const, label: "外观设置", icon: "theme" },
   { id: "shortcuts" as const, label: "快捷键", icon: "keyboard" },
   { id: "general" as const, label: "通用设置", icon: "code" },
@@ -39,6 +41,7 @@ export function SettingsDialog() {
       case "workspace": return <WorkspaceTab />;
       case "skill": return <SkillsTab />;
       case "template": return <TemplatesTab />;
+      case "usage": return <TokenUsageTab />;
       case "appearance": return <AppearanceTab />;
       case "shortcuts": return <ShortcutsTab />;
       case "general": return <GeneralTab />;

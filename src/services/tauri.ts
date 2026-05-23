@@ -27,6 +27,9 @@ import type {
   PromptTemplate,
   CreateTemplateParams,
   UpdateTemplateParams,
+  DailyUsageItem,
+  ProviderUsageItem,
+  TokenUsageOverview,
 } from "../types";
 
 /** 命令错误 */
@@ -563,6 +566,70 @@ export async function deleteTemplate(templateId: string): Promise<void> {
     await invoke("delete_template", { templateId });
   } catch (error) {
     console.error("[tauri] deleteTemplate 失败:", error);
+    throw error;
+  }
+}
+
+// ================================================================
+// Token 统计命令
+// ================================================================
+
+/** 获取最近 N 天的 Token 用量趋势 */
+export async function getTokenUsageTrend(
+  workspaceId?: string,
+  days?: number,
+): Promise<DailyUsageItem[]> {
+  try {
+    return await invoke<DailyUsageItem[]>("get_token_usage_trend", {
+      workspaceId: workspaceId ?? null,
+      days: days ?? null,
+    });
+  } catch (error) {
+    console.error("[tauri] getTokenUsageTrend 失败:", error);
+    throw error;
+  }
+}
+
+/** 按 Provider/Model 分组获取 Token 用量 */
+export async function getTokenProviderUsage(
+  startDate?: string,
+  endDate?: string,
+): Promise<ProviderUsageItem[]> {
+  try {
+    return await invoke<ProviderUsageItem[]>("get_token_provider_usage", {
+      startDate: startDate ?? null,
+      endDate: endDate ?? null,
+    });
+  } catch (error) {
+    console.error("[tauri] getTokenProviderUsage 失败:", error);
+    throw error;
+  }
+}
+
+/** 获取 Token 用量概览 */
+export async function getTokenUsageOverview(
+  workspaceId?: string,
+): Promise<TokenUsageOverview> {
+  try {
+    return await invoke<TokenUsageOverview>("get_token_usage_overview", {
+      workspaceId: workspaceId ?? null,
+    });
+  } catch (error) {
+    console.error("[tauri] getTokenUsageOverview 失败:", error);
+    throw error;
+  }
+}
+
+// ================================================================
+// 日志命令
+// ================================================================
+
+/** 获取错误日志文件内容 */
+export async function getErrorLog(): Promise<string> {
+  try {
+    return await invoke<string>("get_error_log");
+  } catch (error) {
+    console.error("[tauri] getErrorLog 失败:", error);
     throw error;
   }
 }

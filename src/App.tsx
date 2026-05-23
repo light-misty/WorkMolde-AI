@@ -8,6 +8,7 @@ import { FileTreeSection } from "./components/sidebar/FileTreeSection";
 import { AgentInfoSection } from "./components/sidebar/AgentInfoSection";
 import { TodoSection } from "./components/sidebar/TodoSection";
 import { TokenSection } from "./components/sidebar/TokenSection";
+import { ToastContainer } from "./components/common/Toast";
 import { useWorkflowStore } from "./stores/useWorkflowStore";
 import { useSessionStore } from "./stores/useSessionStore";
 import { useSettingsStore } from "./stores/useSettingsStore";
@@ -456,6 +457,9 @@ export default function App() {
       <Suspense fallback={<LazyFallback />}>
         <HistoryPanel open={historyOpen} onClose={() => setHistoryOpen(false)} onSwitchSession={handleSwitchSession} onDeleteCurrentSession={handleDeleteCurrentSession} />
       </Suspense>
+
+      {/* 全局 Toast 提示容器 */}
+      <ToastContainer />
 
       <style>{`
         .app { display: flex; flex-direction: column; height: 100vh; }

@@ -1,12 +1,16 @@
 import { useState } from "react";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useSessionStore } from "../../stores/useSessionStore";
+import { useToastStore } from "../../stores/useToastStore";
 import type { AppSettings } from "../../types";
+import * as tauriCmd from "../../services/tauri";
 
 export function GeneralTab() {
   const { settings, updateSettings } = useSettingsStore();
   const { clearAllSessions } = useSessionStore();
+  const addToast = useToastStore((s) => s.addToast);
   const [clearConfirm, setClearConfirm] = useState(false);
+  const [exportingLog, setExportingLog] = useState(false);
 
   return (
     <div>
@@ -149,6 +153,38 @@ export function GeneralTab() {
             onClick={() => handleExportSettings(settings)}
           >
             导出
+          </button>
+        </div>
+
+        <div className="setting-row">
+          <div className="setting-info">
+            <div className="setting-label">导出错误日志</div>
+            <div className="setting-desc">将应用运行日志导出为文本文件，便于排查问题</div>
+          </div>
+          <button
+            className="dm-btn"
+            disabled={exportingLog}
+            onClick={async () => {
+              setExportingLog(true);
+              try {
+                const logContent = await tauriCmd.getErrorLog();
+                const blob = new Blob([logContent], { type: "text/plain" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `docagent-error-log-${new Date().toISOString().slice(0, 10)}.txt`;
+                a.click();
+                URL.revokeObjectURL(url);
+                addToast("success", "错误日志导出成功");
+              } catch (error) {
+                console.error("[GeneralTab] 导出错误日志失败:", error);
+                addToast("error", `导出失败: ${error instanceof Error ? error.message : String(error)}`);
+              } finally {
+                setExportingLog(false);
+              }
+            }}
+          >
+            {exportingLog ? "导出中..." : "导出"}
           </button>
         </div>
 
