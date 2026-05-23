@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useWorkflowStore } from "../../stores/useWorkflowStore";
 import { WorkflowNodeRenderer } from "./WorkflowNode";
-import { Icon } from "../common/Icon";
+import { Icon, type IconName } from "../common/Icon";
 
 interface WorkflowTimelineProps {
   /** 错误节点重试回调 */
@@ -66,17 +66,32 @@ export function WorkflowTimeline({ onRetryError }: WorkflowTimelineProps) {
     }
   }, [nodes.length, virtualizer]);
 
-  // 空状态
+  // 空状态：展示引导性的快速开始提示
   if (nodes.length === 0) {
+    const quickStarts: { icon: IconName; text: string }[] = [
+      { icon: "doc", text: "生成一份Word文档" },
+      { icon: "xlsx", text: "创建Excel表格" },
+      { icon: "ppt", text: "制作PPT演示" },
+      { icon: "pdf", text: "转换文档格式" },
+    ];
+
     return (
-      <div className="flex flex-col items-center justify-center h-full text-text-tertiary gap-4">
-        <div className="w-16 h-16 rounded-[16px] bg-bg-sub flex items-center justify-center">
+      <div className="wf-empty" role="status" aria-label="空会话">
+        <div className="wf-empty-icon">
           <Icon name="file" size={32} strokeWidth={1.5} />
         </div>
-        <h3 className="text-base font-semibold text-text-secondary">开始新会话</h3>
-        <p className="text-[13px] max-w-[320px] text-center leading-[1.6]">
-          在下方输入指令，Agent 将协助你处理文档。
+        <h3 className="wf-empty-title">开始新会话</h3>
+        <p className="wf-empty-desc">
+          在下方输入指令，Agent 将协助你处理文档
         </p>
+        <div className="wf-empty-quick">
+          {quickStarts.map((item) => (
+            <div key={item.text} className="wf-empty-quick-item">
+              <Icon name={item.icon} size={14} />
+              <span>{item.text}</span>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -86,6 +101,9 @@ export function WorkflowTimeline({ onRetryError }: WorkflowTimelineProps) {
       ref={scrollRef}
       className="workflow-scroll-container"
       onScroll={handleScroll}
+      role="log"
+      aria-label="工作流时间线"
+      aria-live="polite"
     >
       <div
         className="workflow-timeline"

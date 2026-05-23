@@ -71,10 +71,10 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
   const hasContent = text.trim().length > 0;
 
   return (
-    <div className="input-area-wrapper">
+    <div className="input-area-wrapper" role="form" aria-label="消息输入">
       <div className="input-container-wrapper" style={{ position: "relative" }}>
         <div className={`input-container ${hasContent ? "has-content" : ""}`}>
-          <button className="input-btn" title="附加文件">
+          <button className="input-btn" title="附加文件" aria-label="附加文件">
             <Icon name="attach" />
           </button>
 
@@ -83,6 +83,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
             className="input-textarea"
             rows={1}
             placeholder="输入指令，让Agent帮你处理文档..."
+            aria-label="消息输入框"
             value={text}
             onChange={(e) => { setText(e.target.value); handleInput(); }}
             onKeyDown={handleKeyDown}
@@ -93,6 +94,8 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
             <button
               className={`input-btn ${pickerOpen ? "input-btn-active" : ""}`}
               title="Prompt模板 (Ctrl+/)"
+              aria-label="Prompt模板"
+              aria-expanded={pickerOpen}
               onClick={() => setPickerOpen(!pickerOpen)}
             >
               <Icon name="template" />
@@ -101,6 +104,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
               <button
                 className="stop-btn"
                 title="停止执行"
+                aria-label="停止执行"
                 onClick={onStop}
               >
                 <Icon name="stop" />
@@ -117,6 +121,8 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
               <button
                 className={`send-btn ${hasContent && !disabled ? "send-btn-active" : ""}`}
                 title="发送"
+                aria-label="发送消息"
+                aria-disabled={disabled || !text.trim()}
                 onClick={handleSend}
                 disabled={disabled || !text.trim()}
               >
@@ -134,7 +140,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
         />
       </div>
 
-      <div className="shortcut-hints">
+      <div className="shortcut-hints" aria-hidden="true">
         <span>
           <kbd className="kbd">Enter</kbd> 发送
         </span>

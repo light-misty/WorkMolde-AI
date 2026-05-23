@@ -10,7 +10,7 @@ export function TokenSection() {
 
   return (
     <SidebarSection title="Token 统计">
-      <div className="tk-grid">
+      <div className="tk-grid" role="region" aria-label="Token统计">
         {/* 本次会话 */}
         <div className="tk-field">
           <span className="tk-field-label">本次会话</span>
@@ -38,7 +38,7 @@ export function TokenSection() {
           <span className="tk-field-value">{formatTokens(dailyTotal)}</span>
         </div>
         {dailyBudget > 0 && (
-          <div className="tk-mini-bar-track">
+          <div className="tk-mini-bar-track" role="progressbar" aria-valuenow={Math.round(dailyBudgetPercent)} aria-valuemin={0} aria-valuemax={100} aria-label="今日预算使用进度">
             <div
               className={`tk-mini-bar-fill ${
                 dailyBudgetPercent > 100 ? "bar-exceeded" : dailyBudgetPercent > 80 ? "bar-warning" : ""
@@ -53,7 +53,7 @@ export function TokenSection() {
           <span className="tk-field-value">{formatTokens(monthlyTotal)}</span>
         </div>
         {monthlyBudget > 0 && (
-          <div className="tk-mini-bar-track">
+          <div className="tk-mini-bar-track" role="progressbar" aria-valuenow={Math.round(monthlyBudgetPercent)} aria-valuemin={0} aria-valuemax={100} aria-label="本月预算使用进度">
             <div
               className={`tk-mini-bar-fill ${
                 monthlyBudgetPercent > 100 ? "bar-exceeded" : monthlyBudgetPercent > 80 ? "bar-warning" : ""

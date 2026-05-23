@@ -15,7 +15,17 @@ export function SidebarSection({ title, defaultOpen = true, children }: SidebarS
     <div className="sb-section">
       <div
         className="sb-section-header"
+        role="button"
+        aria-expanded={open}
+        aria-label={title}
+        tabIndex={0}
         onClick={() => setOpen(!open)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen(!open);
+          }
+        }}
       >
         <div className="sb-section-header-left">
           <span className="sb-section-accent" />
@@ -30,6 +40,8 @@ export function SidebarSection({ title, defaultOpen = true, children }: SidebarS
       </div>
       <div
         className="sb-section-body"
+        role="region"
+        aria-label={title}
         style={{
           maxHeight: open ? "2000px" : "0px",
           opacity: open ? 1 : 0,
@@ -54,7 +66,7 @@ export function SidebarSection({ title, defaultOpen = true, children }: SidebarS
           transition: background 0.2s;
         }
         .sb-section-header:hover {
-          background: rgba(51, 112, 255, 0.03);
+          background: var(--color-accent-bg);
         }
         .sb-section-header:hover .sb-section-accent {
           opacity: 1;

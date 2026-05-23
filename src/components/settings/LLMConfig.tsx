@@ -329,7 +329,8 @@ export function LLMConfigTab() {
           color: white;
         }
         .confirm-btn-danger:hover {
-          background: #d63d39;
+          background: var(--color-error);
+          filter: brightness(0.9);
         }
         .confirm-btn-ghost {
           background: var(--color-bg-sub);

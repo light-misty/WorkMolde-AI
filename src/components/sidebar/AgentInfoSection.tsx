@@ -10,7 +10,7 @@ const confirmationLevelLabels: Record<string, string> = {
 };
 
 export function AgentInfoSection() {
-  const { settings, llmProviders, activeProviderId, updateSettings } = useSettingsStore();
+  const { settings, llmProviders, activeProviderId, updateSettings, openSettings } = useSettingsStore();
   const activeProvider = llmProviders.find((p) => p.id === activeProviderId);
 
   const [editing, setEditing] = useState(false);
@@ -25,11 +25,11 @@ export function AgentInfoSection() {
 
   return (
     <SidebarSection title="Agent 信息">
-      <div className="ai-grid">
+      <div className="ai-grid" role="region" aria-label="Agent信息">
         {/* 当前模型 */}
         <div className="ai-field">
           <span className="ai-field-label">当前模型</span>
-          <div className={`ai-model-badge ${activeProvider ? "online" : "offline"}`}>
+          <div className={`ai-model-badge ${activeProvider ? "online" : "offline"}`} aria-label={activeProvider ? "模型已连接" : "模型未连接"}>
             <span className="ai-status-dot" />
             <span className="ai-model-name">
               {activeProvider?.model ?? "未配置"}
@@ -37,12 +37,21 @@ export function AgentInfoSection() {
           </div>
         </div>
 
+        {/* 未配置 Provider 时的引导提示 */}
+        {!activeProvider && (
+          <button className="ai-setup-hint" onClick={() => openSettings("llm")}>
+            <Icon name="settings" size={12} />
+            <span>点击配置 LLM 模型</span>
+          </button>
+        )}
+
         {/* 作者名 */}
         <div className="ai-field">
           <span className="ai-field-label">作者名</span>
           {editing ? (
             <input
               className="ai-field-edit"
+              aria-label="作者名"
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
               onBlur={handleSave}
@@ -52,6 +61,7 @@ export function AgentInfoSection() {
           ) : (
             <button
               className="ai-field-value-btn"
+              aria-label="编辑作者名"
               onClick={() => { setEditValue(settings.general.authorName); setEditing(true); }}
             >
               <span>{settings.general.authorName || "未设置"}</span>
@@ -161,6 +171,24 @@ export function AgentInfoSection() {
           transition: all 0.2s;
           outline: none;
           color: var(--color-text-primary);
+        }
+        .ai-setup-hint {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 10px;
+          border-radius: var(--radius-sm);
+          background: var(--color-accent-bg);
+          border: 1px solid var(--color-accent-light);
+          font-size: 12px;
+          color: var(--color-accent);
+          cursor: pointer;
+          transition: all 0.2s;
+          width: 100%;
+        }
+        .ai-setup-hint:hover {
+          background: var(--color-accent-light);
+          border-color: var(--color-accent);
         }
       `}</style>
     </SidebarSection>

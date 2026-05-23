@@ -555,15 +555,17 @@ export default function App() {
         .topbar-btn {
           width: 34px; height: 34px; border-radius: var(--radius-sm);
           display: flex; align-items: center; justify-content: center;
-          transition: all 0.15s; color: var(--color-text-secondary);
+          transition: all 0.15s ease; color: var(--color-text-secondary);
         }
         .topbar-btn:hover { background: var(--color-bg-sub); color: var(--color-text-primary); }
+        .topbar-btn:active:not(:disabled) { transform: scale(0.92); }
         .input-btn {
           width: 32px; height: 32px; border-radius: var(--radius-sm);
           display: flex; align-items: center; justify-content: center;
-          transition: background 0.15s; color: var(--color-text-tertiary);
+          transition: all 0.15s ease; color: var(--color-text-tertiary);
         }
         .input-btn:hover { background: var(--color-bg-sub); color: var(--color-text-secondary); }
+        .input-btn:active:not(:disabled) { transform: scale(0.92); }
       `}</style>
     </div>
   );

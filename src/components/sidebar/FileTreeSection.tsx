@@ -92,6 +92,8 @@ function FileTreeItem({
       <div>
         <div
           className="ft-item ft-dir group"
+          role="treeitem"
+          aria-expanded={isExpanded}
           onClick={() => toggleNode(node.path)}
           onContextMenu={(e) => onContextMenu(e, node)}
         >
@@ -149,6 +151,8 @@ function FileTreeItem({
   return (
     <div
       className={`ft-item ft-file ${isSelected ? "ft-selected" : ""}`}
+      role="treeitem"
+      aria-selected={isSelected}
       onClick={() => selectNode(node.path)}
       onDoubleClick={() => onDoubleClickFile?.(node.path, node.name)}
       onContextMenu={(e) => onContextMenu(e, node)}
@@ -583,6 +587,7 @@ export function FileTreeSection({ onOpenPreview, onOpenVersionHistory }: { onOpe
           type="text"
           className="ft-search-input"
           placeholder="搜索文件..."
+          aria-label="搜索文件"
           value={searchKeyword}
           onChange={(e) => setSearchKeyword(e.target.value)}
         />
@@ -590,6 +595,7 @@ export function FileTreeSection({ onOpenPreview, onOpenVersionHistory }: { onOpe
           className={`ft-refresh ${isLoading ? "ft-refreshing" : ""}`}
           onClick={handleRefresh}
           title="刷新文件树"
+          aria-label="刷新文件树"
           disabled={isLoading}
         >
           <Icon name="refresh" size={13} />
@@ -597,8 +603,17 @@ export function FileTreeSection({ onOpenPreview, onOpenVersionHistory }: { onOpe
       </div>
 
       {/* 文件树内容 */}
-      {filteredTree.length === 0 ? (
-        <div className="ft-empty">
+      {isLoading ? (
+        <div className="ft-skeleton" role="status" aria-label="加载中">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="ft-skeleton-item">
+              <div className="skeleton skeleton-circle" style={{ width: 16, height: 16, flexShrink: 0 }} />
+              <div className={`skeleton skeleton-text ${i === 3 ? "skeleton-text-short" : ""}`} />
+            </div>
+          ))}
+        </div>
+      ) : filteredTree.length === 0 ? (
+        <div className="ft-empty" role="status">
           <div className="ft-empty-icon">
             <Icon name="file" size={20} />
           </div>
@@ -607,7 +622,7 @@ export function FileTreeSection({ onOpenPreview, onOpenVersionHistory }: { onOpe
           </span>
         </div>
       ) : (
-        <div className="ft-tree">
+        <div className="ft-tree" role="tree" aria-label="工作区文件树">
           {filteredTree.map((node) => (
             <FileTreeItem
               key={node.path}
@@ -786,10 +801,10 @@ export function FileTreeSection({ onOpenPreview, onOpenVersionHistory }: { onOpe
           justify-content: center;
           transition: color 0.15s;
         }
-        .ft-ext-docx { color: #2b579a; }
-        .ft-ext-xlsx { color: #217346; }
-        .ft-ext-pptx { color: #b7472a; }
-        .ft-ext-pdf { color: #ea4335; }
+        .ft-ext-docx { color: var(--color-ext-docx, #2b579a); }
+        .ft-ext-xlsx { color: var(--color-ext-xlsx, #217346); }
+        .ft-ext-pptx { color: var(--color-ext-pptx, #b7472a); }
+        .ft-ext-pdf { color: var(--color-ext-pdf, #ea4335); }
         .ft-ext-default { color: var(--color-text-tertiary); }
         .ft-name {
           flex: 1;
@@ -826,6 +841,18 @@ export function FileTreeSection({ onOpenPreview, onOpenVersionHistory }: { onOpe
           outline: none;
           box-shadow: 0 0 0 2px var(--color-accent-lighter);
           min-width: 0;
+        }
+        .ft-skeleton {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          padding: 4px 0;
+        }
+        .ft-skeleton-item {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          padding: 4px 8px;
         }
       `}</style>
     </SidebarSection>

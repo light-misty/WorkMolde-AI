@@ -18,7 +18,7 @@ export function TodoSection({ items }: TodoSectionProps) {
   if (todoItems.length === 0) {
     return (
       <SidebarSection title="任务进度">
-        <div className="td-empty">
+        <div className="td-empty" role="status">
           <Icon name="check-circle" size={20} className="td-empty-icon" />
           <span className="td-empty-text">暂无任务</span>
         </div>
@@ -51,7 +51,7 @@ export function TodoSection({ items }: TodoSectionProps) {
     <SidebarSection title="任务进度">
       {/* 进度摘要 */}
       <div className="td-summary">
-        <div className="td-progress-track">
+        <div className="td-progress-track" role="progressbar" aria-valuenow={doneCount} aria-valuemin={0} aria-valuemax={totalCount} aria-label="任务进度">
           <div
             className="td-progress-fill"
             style={{ width: `${progress}%` }}
@@ -63,7 +63,7 @@ export function TodoSection({ items }: TodoSectionProps) {
       </div>
 
       {/* 任务列表 */}
-      <div className="td-list">
+      <div className="td-list" role="list">
         {todoItems.map((item, index) => (
           <div
             key={item.id}
@@ -72,6 +72,7 @@ export function TodoSection({ items }: TodoSectionProps) {
               item.active ? "active" :
               "pending"
             }`}
+            role="listitem"
           >
             {/* 连接线 */}
             {index > 0 && <div className="td-connector" />}
@@ -144,7 +145,7 @@ export function TodoSection({ items }: TodoSectionProps) {
           transition: background 0.15s;
         }
         .td-item:hover {
-          background: rgba(51, 112, 255, 0.03);
+          background: var(--color-accent-bg);
         }
         .td-item.done {
           color: var(--color-text-quaternary);

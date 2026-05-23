@@ -83,6 +83,20 @@ button {
   background: none;
   font-size: inherit;
   color: inherit;
+  transition: opacity 0.15s, transform 0.1s;
+}
+
+/* 按钮按下反馈 */
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* 焦点可见性（键盘导航时显示焦点环） */
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 input,
@@ -278,6 +292,68 @@ textarea {
   border-radius: 50%;
 }
 
+/* 工作流空状态 */
+.wf-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 12px;
+  padding: 32px 24px;
+  animation: fadeIn 0.4s ease;
+}
+.wf-empty-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: var(--color-accent-bg);
+  border: 1px solid var(--color-accent-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-accent);
+  margin-bottom: 4px;
+}
+.wf-empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.wf-empty-desc {
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+  max-width: 320px;
+  text-align: center;
+  line-height: 1.6;
+}
+.wf-empty-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  justify-content: center;
+  max-width: 360px;
+}
+.wf-empty-quick-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-sub);
+  border: 1px solid var(--color-border-light);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  transition: all 0.2s;
+  cursor: default;
+}
+.wf-empty-quick-item:hover {
+  border-color: var(--color-accent-light);
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
+}
+
 /* ===== 暗色模式 ===== */
 .dark {
   --color-bg: #1a1a2e;
@@ -311,6 +387,12 @@ textarea {
   --color-purple: #8b7cf7;
   --color-purple-light: #2a254a;
   --color-indigo: #6366f1;
+
+  /* 文件类型图标颜色（暗色模式使用更亮的变体以提高对比度） */
+  --color-ext-docx: #5b9bd5;
+  --color-ext-xlsx: #4caf7d;
+  --color-ext-pptx: #e07055;
+  --color-ext-pdf: #ff6f61;
 }
 
 /* ===== 暗色模式系统偏好回退 ===== */
@@ -347,6 +429,12 @@ textarea {
     --color-purple: #8b7cf7;
     --color-purple-light: #2a254a;
     --color-indigo: #6366f1;
+
+    /* 文件类型图标颜色（暗色模式使用更亮的变体以提高对比度） */
+    --color-ext-docx: #5b9bd5;
+    --color-ext-xlsx: #4caf7d;
+    --color-ext-pptx: #e07055;
+    --color-ext-pdf: #ff6f61;
   }
 }
 

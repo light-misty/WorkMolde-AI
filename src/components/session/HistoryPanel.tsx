@@ -109,7 +109,7 @@ export function HistoryPanel({ open, onClose, onSwitchSession, onDeleteCurrentSe
     <>
       {/* 删除确认弹窗 */}
       {deleteConfirmId && (
-        <div className="delete-confirm-overlay" onClick={handleCancelDelete}>
+        <div className="delete-confirm-overlay" onClick={handleCancelDelete} role="dialog" aria-label="确认删除" aria-modal="true">
           <div className="delete-confirm-dialog" onClick={(e) => e.stopPropagation()}>
             <div className="delete-confirm-icon">
               <Icon name="warning" size={24} />
@@ -135,20 +135,23 @@ export function HistoryPanel({ open, onClose, onSwitchSession, onDeleteCurrentSe
         className={`history-panel-container fixed top-[52px] right-0 w-[300px] bottom-0 border-l border-border z-[150] flex flex-col transition-transform duration-300 ease-out ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
+        role="complementary"
+        aria-label="历史会话"
       >
         <div className="history-header">
           <h3 className="history-title">历史会话</h3>
           <button
             className="history-close-btn"
             onClick={onClose}
+            aria-label="关闭历史面板"
           >
             <Icon name="close" size={16} />
           </button>
         </div>
 
-        <div className="history-list">
+        <div className="history-list" role="list" aria-label="会话列表">
           {sessions.length === 0 ? (
-            <div className="history-empty">
+            <div className="history-empty" role="status">
               <Icon name="history" size={32} className="opacity-30" />
               <p>暂无历史会话</p>
             </div>
@@ -157,6 +160,8 @@ export function HistoryPanel({ open, onClose, onSwitchSession, onDeleteCurrentSe
               <div
                 key={s.id}
                 className={`history-item ${s.id === currentSessionId ? "active" : ""}`}
+                role="listitem"
+                aria-selected={s.id === currentSessionId}
                 onClick={() => {
                   if (editingId === s.id) return;
                   onSwitchSession(s.id);
@@ -191,6 +196,7 @@ export function HistoryPanel({ open, onClose, onSwitchSession, onDeleteCurrentSe
                       <button
                         className="history-action-btn"
                         title="重命名"
+                        aria-label="重命名会话"
                         onClick={(e) => handleStartRename(s.id, s.title, e)}
                       >
                         <Icon name="edit" size={14} />
@@ -198,6 +204,7 @@ export function HistoryPanel({ open, onClose, onSwitchSession, onDeleteCurrentSe
                       <button
                         className="history-action-btn history-action-btn-danger"
                         title="删除会话"
+                        aria-label="删除会话"
                         onClick={(e) => handleDeleteClick(s.id, s.title, e)}
                       >
                         <Icon name="trash" size={14} />
@@ -360,7 +367,7 @@ export function HistoryPanel({ open, onClose, onSwitchSession, onDeleteCurrentSe
             display: flex;
             align-items: center;
             justify-content: center;
-            background: rgba(0, 0, 0, 0.4);
+            background: var(--color-overlay);
           }
           .delete-confirm-dialog {
             background: var(--color-bg);
