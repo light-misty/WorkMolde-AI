@@ -26,7 +26,7 @@ export interface ParsedError {
 }
 
 /** 错误模块分类 */
-export type ErrorModule = "llm" | "agent" | "document" | "database" | "config" | "filesystem" | "runtime" | "unknown";
+export type ErrorModule = "llm" | "agent" | "document" | "database" | "config" | "filesystem" | "runtime" | "update" | "unknown";
 
 /** 错误码到用户友好消息的映射 */
 const ERROR_MESSAGE_MAP: Record<number, string> = {
@@ -98,6 +98,13 @@ const ERROR_MESSAGE_MAP: Record<number, string> = {
 
   // 运行时 (7000-7999)
   7001: "内部通信错误",
+
+  // 更新相关 (8000-8999)
+  8001: "检查更新失败，请检查网络连接",
+  8002: "更新下载失败，请重试",
+  8003: "更新安装失败，请重新启动应用",
+  8004: "当前已是最新版本",
+  8005: "更新服务网络错误，请稍后重试",
 };
 
 /** 可恢复的错误码集合（网络超时、临时不可用等） */
@@ -107,6 +114,7 @@ const RECOVERABLE_CODES = new Set([
   3010,
   4001, 4002,
   7001,
+  8001, 8002, 8005,
 ]);
 
 /** 根据错误码判断所属模块 */
@@ -118,6 +126,7 @@ function getErrorModule(code: number): ErrorModule {
   if (code >= 5000 && code < 6000) return "config";
   if (code >= 6000 && code < 7000) return "filesystem";
   if (code >= 7000 && code < 8000) return "runtime";
+  if (code >= 8000 && code < 9000) return "update";
   return "unknown";
 }
 
