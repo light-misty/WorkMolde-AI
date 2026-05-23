@@ -614,9 +614,7 @@ export function FileTreeSection({ onOpenPreview, onOpenVersionHistory }: { onOpe
         </div>
       ) : filteredTree.length === 0 ? (
         <div className="ft-empty" role="status">
-          <div className="ft-empty-icon">
-            <Icon name="file" size={20} />
-          </div>
+          <Icon name="file" size={20} className="ft-empty-icon" />
           <span className="ft-empty-text">
             {searchKeyword ? "未找到匹配文件" : "暂无文件"}
           </span>
@@ -737,15 +735,7 @@ export function FileTreeSection({ onOpenPreview, onOpenVersionHistory }: { onOpe
           padding: 24px 16px;
         }
         .ft-empty-icon {
-          width: 44px;
-          height: 44px;
-          border-radius: 50%;
-          background: var(--color-bg);
-          border: 1px solid var(--color-border-light);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: var(--color-text-quaternary);
+          opacity: 0.4;
         }
         .ft-empty-text {
           font-size: 12px;
