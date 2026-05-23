@@ -4,6 +4,7 @@ use crate::errors::CommandError;
 use crate::models::{Message, MessageRole, ToolCall};
 
 /// 创建新消息
+#[allow(clippy::too_many_arguments)]
 pub fn create_message(
     conn: &Connection,
     id: &str,
@@ -114,15 +115,15 @@ pub fn list_messages(conn: &Connection, session_id: &str) -> Vec<Message> {
                         if let Ok(args_list) = serde_json::from_str::<Vec<String>>(args_str) {
                             let calls: Vec<ToolCall> = names.iter().zip(args_list.iter())
                                 .enumerate()
-                                .filter_map(|(i, (name, args))| {
+                                .map(|(i, (name, args))| {
                                     let arguments = serde_json::from_str(args)
                                         .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
-                                    Some(ToolCall {
+                                    ToolCall {
                                         id: format!("{}_{}", msg_id, i),
                                         name: name.clone(),
                                         arguments,
                                         result: None,
-                                    })
+                                    }
                                 })
                                 .collect();
                             if !calls.is_empty() {

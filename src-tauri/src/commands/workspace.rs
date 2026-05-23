@@ -302,9 +302,9 @@ fn build_file_tree(
         let modified = metadata
             .modified()
             .ok()
-            .and_then(|t| {
+            .map(|t| {
                 let dt: chrono::DateTime<chrono::Utc> = t.into();
-                Some(dt.to_rfc3339())
+                dt.to_rfc3339()
             });
         let extension = path
             .extension()

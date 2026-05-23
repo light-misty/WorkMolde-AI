@@ -239,6 +239,7 @@ fn persist_messages_to_db(
 
 /// 真正的 Agent 执行逻辑
 /// 使用 AgentExecutor 执行 Tool Calling 循环
+#[allow(clippy::too_many_arguments)]
 async fn run_agent(
     session_id: &str,
     prompt: &str,
@@ -276,6 +277,7 @@ async fn run_agent(
 
     // 创建增量持久化回调，每轮迭代后自动持久化新增消息
     let db_for_persist = Arc::clone(db);
+    #[allow(clippy::type_complexity)]
     let persist_fn: Arc<dyn Fn(&str, &[ChatMessage]) -> Result<(), CommandError> + Send + Sync> =
         Arc::new(move |sid: &str, messages: &[ChatMessage]| {
             persist_messages_to_db(&db_for_persist, sid, messages)
@@ -285,6 +287,7 @@ async fn run_agent(
     let db_for_snapshot = Arc::clone(db);
     let config_for_snapshot = Arc::clone(config);
     let workspace_path_for_snapshot = workspace_path.to_string();
+    #[allow(clippy::type_complexity)]
     let snapshot_fn: Arc<dyn Fn(&str, &str, &str, &str) -> Result<(), CommandError> + Send + Sync> =
         Arc::new(move |wid: &str, sid: &str, file_path: &str, operation: &str| {
             create_version_snapshot(

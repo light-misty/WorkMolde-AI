@@ -5,63 +5,43 @@ use serde::{Deserialize, Serialize};
 use crate::errors::CommandError;
 
 /// 确认级别
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum ConfirmationLevel {
     Always,
+    #[default]
     EditOnly,
     Never,
 }
 
-impl Default for ConfirmationLevel {
-    fn default() -> Self {
-        ConfirmationLevel::EditOnly
-    }
-}
-
 /// 超出预算时的动作
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum ExceedAction {
+    #[default]
     Warn,
     Block,
     Fallback,
 }
 
-impl Default for ExceedAction {
-    fn default() -> Self {
-        ExceedAction::Warn
-    }
-}
-
 /// 版本快照保留策略
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum RetentionPolicy {
+    #[default]
     ByCount,
     ByDays,
     Both,
 }
 
-impl Default for RetentionPolicy {
-    fn default() -> Self {
-        RetentionPolicy::ByCount
-    }
-}
-
 /// 主题模式
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum ThemeMode {
     Light,
     Dark,
+    #[default]
     System,
-}
-
-impl Default for ThemeMode {
-    fn default() -> Self {
-        ThemeMode::System
-    }
 }
 
 /// 外观设置
@@ -124,7 +104,7 @@ impl Default for GeneralSettings {
 }
 
 /// Token 预算设置
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenBudget {
     /// 每日限额，0 表示不限制
@@ -135,16 +115,6 @@ pub struct TokenBudget {
     pub monthly_limit: u64,
     #[serde(default)]
     pub exceed_action: ExceedAction,
-}
-
-impl Default for TokenBudget {
-    fn default() -> Self {
-        Self {
-            daily_limit: 0,
-            monthly_limit: 0,
-            exceed_action: ExceedAction::default(),
-        }
-    }
 }
 
 /// 版本快照设置
@@ -178,19 +148,11 @@ impl Default for VersionSnapshot {
 }
 
 /// 工作区默认设置
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceDefaults {
     #[serde(default)]
     pub default_workspace_id: String,
-}
-
-impl Default for WorkspaceDefaults {
-    fn default() -> Self {
-        Self {
-            default_workspace_id: String::new(),
-        }
-    }
 }
 
 /// 快捷键设置
@@ -238,17 +200,12 @@ impl Default for Shortcuts {
 }
 
 /// 更新通道
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum UpdateChannel {
+    #[default]
     Stable,
     Beta,
-}
-
-impl Default for UpdateChannel {
-    fn default() -> Self {
-        UpdateChannel::Stable
-    }
 }
 
 /// 更新设置

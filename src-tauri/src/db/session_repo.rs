@@ -111,10 +111,7 @@ pub fn list_sessions(
                 Err(_) => continue,
             },
             status: String::from("active"),
-            message_count: match row.get(4) {
-                Ok(v) => v,
-                Err(_) => 0,
-            },
+            message_count: row.get(4).unwrap_or_default(),
             last_message_preview: row.get(5).ok(),
             created_at: match row.get(3) {
                 Ok(v) => v,

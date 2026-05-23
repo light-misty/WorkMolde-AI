@@ -44,6 +44,12 @@ pub struct SkillRegistry {
     disabled_skills: HashSet<String>,
 }
 
+impl Default for SkillRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SkillRegistry {
     pub fn new() -> Self {
         Self {

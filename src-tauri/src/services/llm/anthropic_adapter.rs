@@ -278,7 +278,7 @@ impl AnthropicAdapter {
 
         for attempt in 0..=max_retries {
             if attempt > 0 {
-                let delay = Duration::from_millis(500 * 2u64.pow(attempt as u32 - 1));
+                let delay = Duration::from_millis(500 * 2u64.pow(attempt - 1));
                 log::warn!("请求重试, model={}, 第{}次重试, 延迟{}ms", self.model, attempt, delay.as_millis());
                 tokio::time::sleep(delay).await;
             }
@@ -334,12 +334,10 @@ impl AnthropicAdapter {
                         return Err(CommandError::llm(1003, format!("API 过载: {}", error_body)));
                     }
                     // 5xx 服务端错误，可重试
-                    if status.as_u16() >= 500 && status.as_u16() != 529 {
-                        if attempt < max_retries {
-                            log::warn!("服务端错误({}), model={}, 准备重试", status, self.model);
-                            last_error = Some(CommandError::llm(1001, format!("服务端错误 ({}), 正在重试", status)));
-                            continue;
-                        }
+                    if status.as_u16() >= 500 && status.as_u16() != 529 && attempt < max_retries {
+                        log::warn!("服务端错误({}), model={}, 准备重试", status, self.model);
+                        last_error = Some(CommandError::llm(1001, format!("服务端错误 ({}), 正在重试", status)));
+                        continue;
                     }
 
                     last_error = Some(CommandError::llm(1000, format!("API 请求失败 ({}): {}", status, error_body)));

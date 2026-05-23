@@ -143,7 +143,7 @@ impl OpenAiAdapter {
 
         for attempt in 0..=max_retries {
             if attempt > 0 {
-                let delay = Duration::from_millis(500 * 2u64.pow(attempt as u32 - 1));
+                let delay = Duration::from_millis(500 * 2u64.pow(attempt - 1));
                 log::warn!("请求重试, model={}, 第{}次重试, 延迟{}ms", self.model, attempt, delay.as_millis());
                 tokio::time::sleep(delay).await;
             }
@@ -212,7 +212,7 @@ impl OpenAiAdapter {
             .as_array()
             .map(|arr| {
                 arr.iter()
-                    .filter_map(|c| {
+                    .map(|c| {
                         let index = c["index"].as_u64().unwrap_or(0) as u32;
                         let message = &c["message"];
                         let role = message["role"].as_str().unwrap_or("assistant").to_string();
@@ -220,20 +220,20 @@ impl OpenAiAdapter {
 
                         let tool_calls = message["tool_calls"].as_array().map(|tc_arr| {
                             tc_arr.iter()
-                                .filter_map(|tc| {
+                                .map(|tc| {
                                     let index = tc["index"].as_u64().unwrap_or(0) as u32;
                                     let id = tc["id"].as_str().unwrap_or("").to_string();
                                     let func = &tc["function"];
                                     let name = func["name"].as_str().unwrap_or("").to_string();
                                     let arguments = func["arguments"].as_str().unwrap_or("{}").to_string();
-                                    Some(LlmToolCall { index, id, name, arguments })
+                                    LlmToolCall { index, id, name, arguments }
                                 })
                                 .collect::<Vec<_>>()
                         });
 
                         let finish_reason = c["finish_reason"].as_str().map(String::from);
 
-                        Some(ChatChoice {
+                        ChatChoice {
                             index,
                             message: ChatMessage {
                                 role,
@@ -242,7 +242,7 @@ impl OpenAiAdapter {
                                 tool_call_id: None,
                             },
                             finish_reason,
-                        })
+                        }
                     })
                     .collect::<Vec<_>>()
             })
@@ -331,24 +331,24 @@ impl LlmProvider for OpenAiAdapter {
                                             let choices = value["choices"]
                                                 .as_array()
                                                 .map(|arr| {
-                                                    arr.iter().filter_map(|c| {
+                                                    arr.iter().map(|c| {
                                                         let index = c["index"].as_u64().unwrap_or(0) as u32;
                                                         let delta = &c["delta"];
                                                         let role = delta["role"].as_str().map(String::from);
                                                         let content = delta["content"].as_str().map(String::from);
                                                         let tool_calls = delta["tool_calls"].as_array().map(|tc_arr| {
-                                                            tc_arr.iter().filter_map(|tc| {
+                                                            tc_arr.iter().map(|tc| {
                                                                 let index = tc["index"].as_u64().unwrap_or(0) as u32;
                                                                 let id = tc["id"].as_str().unwrap_or("").to_string();
                                                                 let func = &tc["function"];
                                                                 let name = func["name"].as_str().unwrap_or("").to_string();
                                                                 let arguments = func["arguments"].as_str().unwrap_or("").to_string();
-                                                                Some(LlmToolCall { index, id, name, arguments })
+                                                                LlmToolCall { index, id, name, arguments }
                                                             }).collect::<Vec<_>>()
                                                         });
                                                         let finish_reason = c["finish_reason"].as_str().map(String::from);
 
-                                                        Some(StreamChoice {
+                                                        StreamChoice {
                                                             index,
                                                             delta: StreamDelta {
                                                                 role,
@@ -356,7 +356,7 @@ impl LlmProvider for OpenAiAdapter {
                                                                 tool_calls,
                                                             },
                                                             finish_reason,
-                                                        })
+                                                        }
                                                     }).collect::<Vec<_>>()
                                                 }).unwrap_or_default();
 

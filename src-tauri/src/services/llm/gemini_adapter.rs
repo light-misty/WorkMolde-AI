@@ -241,7 +241,7 @@ impl GeminiAdapter {
 
         for attempt in 0..=max_retries {
             if attempt > 0 {
-                let delay = Duration::from_millis(500 * 2u64.pow(attempt as u32 - 1));
+                let delay = Duration::from_millis(500 * 2u64.pow(attempt - 1));
                 log::warn!(
                     "请求重试, model={}, 第{}次重试, 延迟{}ms",
                     self.model,
