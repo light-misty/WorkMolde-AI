@@ -132,7 +132,7 @@ export function HistoryPanel({ open, onClose, onSwitchSession, onDeleteCurrentSe
 
       {/* 从右侧滑入，完全覆盖右侧栏 */}
       <div
-        className={`history-panel-container fixed top-[52px] right-0 w-[300px] bottom-0 border-l border-border z-[150] flex flex-col transition-transform duration-300 ease-out ${
+        className={`history-panel-container fixed top-[52px] right-0 w-[300px] bottom-0 z-[150] flex flex-col transition-transform duration-300 ease-out ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
         role="complementary"
