@@ -45,6 +45,13 @@ export async function testConnection(providerId: string): Promise<ConnectionResu
   return result.data;
 }
 
+/** 使用临时配置测试 LLM Provider 连接（用于添加模式，不需要已保存的 provider） */
+export async function testConnectionWithConfig(config: ProviderConfig): Promise<ConnectionResult> {
+  const result = await safeInvoke(() => invoke<ConnectionResult>("test_connection_with_config", { config }), { context: "testConnectionWithConfig" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
 /** 列出所有 LLM Provider */
 export async function listProviders(): Promise<ProviderInfo[]> {
   const result = await safeInvoke(() => invoke<ProviderInfo[]>("list_providers"), { context: "listProviders" });

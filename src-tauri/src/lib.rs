@@ -288,6 +288,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             // LLM 命令
             commands::llm::test_connection,
+            commands::llm::test_connection_with_config,
             commands::llm::list_providers,
             commands::llm::add_provider,
             commands::llm::update_provider,

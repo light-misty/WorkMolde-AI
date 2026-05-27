@@ -3,8 +3,13 @@ use std::sync::Arc;
 
 use tauri::State;
 
+use crate::config::llm_config::{AdvancedConfig, ProviderType};
 use crate::errors::{CommandError, LLM_CONNECTION_FAILED};
 use crate::models::llm::{ConnectionResult, ProviderConfig, ProviderInfo};
+use crate::services::llm::provider::LlmProvider;
+use crate::services::llm::openai_adapter::OpenAiAdapter;
+use crate::services::llm::anthropic_adapter::AnthropicAdapter;
+use crate::services::llm::gemini_adapter::GeminiAdapter;
 use crate::AppState;
 
 /// 测试 LLM Provider 连接
@@ -16,6 +21,111 @@ pub async fn test_connection(
     log::info!("测试 LLM Provider 连接: provider_id={}", provider_id);
     let router = state.llm_router.read().await;
     router.test_connection(&provider_id).await
+}
+
+/// 使用临时配置测试 LLM Provider 连接（用于添加模式，不需要已保存的 provider）
+#[tauri::command]
+pub async fn test_connection_with_config(
+    config: ProviderConfig,
+) -> Result<ConnectionResult, CommandError> {
+    log::info!(
+        "使用临时配置测试连接: provider_type={}, api_base={}, model={}",
+        config.provider_type,
+        config.api_base,
+        config.model
+    );
+
+    // 验证必要参数（顺序与表单字段顺序一致）
+    if config.api_base.trim().is_empty() {
+        return Ok(ConnectionResult {
+            success: false,
+            provider_id: None,
+            latency_ms: 0,
+            model_info: None,
+            model: None,
+            error_message: Some("请输入 API Base URL".to_string()),
+            error: Some("请输入 API Base URL".to_string()),
+        });
+    }
+    if config.api_key.trim().is_empty() {
+        return Ok(ConnectionResult {
+            success: false,
+            provider_id: None,
+            latency_ms: 0,
+            model_info: None,
+            model: None,
+            error_message: Some("请输入 API Key".to_string()),
+            error: Some("请输入 API Key".to_string()),
+        });
+    }
+    if config.model.trim().is_empty() {
+        return Ok(ConnectionResult {
+            success: false,
+            provider_id: None,
+            latency_ms: 0,
+            model_info: None,
+            model: None,
+            error_message: Some("请输入模型名称".to_string()),
+            error: Some("请输入模型名称".to_string()),
+        });
+    }
+
+    // 创建临时 AdvancedConfig
+    let advanced = AdvancedConfig::default();
+
+    // 根据 Provider 类型创建临时 adapter
+    let provider_type_enum = match config.provider_type.as_str() {
+        "openai" => ProviderType::OpenAI,
+        "anthropic" => ProviderType::Anthropic,
+        "ollama" => ProviderType::Ollama,
+        "gemini" => ProviderType::Gemini,
+        _ => ProviderType::Custom,
+    };
+
+    // 根据 Provider 类型和 API base URL 自动检测 reasoning_in_content 配置
+    let mut advanced = advanced;
+    let is_deepseek = config.api_base.to_lowercase().contains("deepseek");
+    if is_deepseek {
+        advanced.reasoning_in_content = false;
+        log::info!("检测到 DeepSeek API, 设置 reasoning_in_content=false");
+    }
+
+    let adapter: Box<dyn LlmProvider> = match provider_type_enum {
+        ProviderType::OpenAI | ProviderType::Custom | ProviderType::Ollama => {
+            Box::new(OpenAiAdapter::new(
+                config.api_base.clone(),
+                config.api_key.clone(),
+                config.model.clone(),
+                advanced,
+            ))
+        }
+        ProviderType::Anthropic => {
+            Box::new(AnthropicAdapter::new(
+                config.api_base.clone(),
+                config.api_key.clone(),
+                config.model.clone(),
+                advanced,
+            ))
+        }
+        ProviderType::Gemini => {
+            Box::new(GeminiAdapter::new(
+                config.api_base.clone(),
+                config.api_key.clone(),
+                config.model.clone(),
+                advanced,
+            ))
+        }
+    };
+
+    // 执行测试连接
+    let start = std::time::Instant::now();
+    let result = adapter.test_connection().await?;
+    log::info!(
+        "临时配置测试连接完成: 成功={}, 延迟={}ms",
+        result.success,
+        start.elapsed().as_millis()
+    );
+    Ok(result)
 }
 
 /// 列出所有 LLM Provider
@@ -50,6 +160,7 @@ pub async fn add_provider(
         "openai" => crate::config::llm_config::ProviderType::OpenAI,
         "anthropic" => crate::config::llm_config::ProviderType::Anthropic,
         "ollama" => crate::config::llm_config::ProviderType::Ollama,
+        "gemini" => crate::config::llm_config::ProviderType::Gemini,
         _ => crate::config::llm_config::ProviderType::Custom,
     };
 
@@ -104,6 +215,7 @@ pub async fn update_provider(
         "openai" => crate::config::llm_config::ProviderType::OpenAI,
         "anthropic" => crate::config::llm_config::ProviderType::Anthropic,
         "ollama" => crate::config::llm_config::ProviderType::Ollama,
+        "gemini" => crate::config::llm_config::ProviderType::Gemini,
         _ => crate::config::llm_config::ProviderType::Custom,
     };
 
@@ -119,12 +231,20 @@ pub async fn update_provider(
             )
         })?;
 
+    // 如果传入的 api_key 为空，保留原有的 api_key_encrypted（编辑时"留空则保持不变"）
+    let api_key_to_save = if config.api_key.trim().is_empty() {
+        log::info!("API Key 为空，保留原有加密密钥: provider_id={}", provider_id);
+        existing.api_key_encrypted.clone()
+    } else {
+        config.api_key.clone()
+    };
+
     let provider = crate::config::llm_config::LlmProvider {
         id: provider_id.clone(),
         provider_type,
         name: config.name,
         api_base_url: config.api_base,
-        api_key_encrypted: config.api_key,
+        api_key_encrypted: api_key_to_save,
         model: config.model,
         is_default: existing.is_default,
         advanced: existing.advanced.clone(),

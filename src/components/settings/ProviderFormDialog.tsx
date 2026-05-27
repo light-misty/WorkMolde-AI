@@ -65,19 +65,44 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
   };
 
   const handleTest = async () => {
-    if (!provider && mode === "add") {
-      setError("请先保存 Provider 后再测试连接");
+    // 验证必要参数（添加和编辑模式通用）
+    if (!apiBase.trim()) {
+      setError("请输入 API Base URL");
       return;
     }
-    const targetId = provider?.id;
-    if (!targetId) return;
+    if (mode === "add" && !apiKey.trim()) {
+      setError("请输入 API Key");
+      return;
+    }
+    if (!model.trim()) {
+      setError("请输入模型名称");
+      return;
+    }
 
     setTesting(true);
     setTestResult(null);
     setError(null);
     try {
-      const result = await tauriCmd.testConnection(targetId);
-      setTestResult(result);
+      // 编辑模式下 API Key 留空时，使用占位符告知后端保留原值
+      // 后端 update_provider 已有空 key 保留逻辑，但 test_connection_with_config 需要实际 key
+      // 因此编辑模式下空 key 时回退到使用已保存 provider 的 testConnection
+      if (mode === "edit" && !apiKey.trim()) {
+        const targetId = provider?.id;
+        if (targetId) {
+          const result = await tauriCmd.testConnection(targetId);
+          setTestResult(result);
+        }
+      } else {
+        const config = {
+          name: name.trim(),
+          providerType,
+          apiBase: apiBase.trim(),
+          apiKey: apiKey.trim(),
+          model: model.trim(),
+        };
+        const result = await tauriCmd.testConnectionWithConfig(config);
+        setTestResult(result);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : typeof err === "string" ? err : "连接测试失败";
       setTestResult({ success: false, latencyMs: 0, errorMessage: msg, error: msg });
@@ -175,15 +200,18 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
         </div>
 
         <div className="dialog-footer">
-          {mode === "edit" && provider && (
-            <button
-              className="dialog-btn dialog-btn-ghost mr-auto"
-              onClick={handleTest}
-              disabled={testing}
-            >
-              {testing ? "测试中..." : "测试连接"}
-            </button>
-          )}
+          <button
+            className="dialog-btn dialog-btn-ghost mr-auto"
+            onClick={handleTest}
+            disabled={testing}
+          >
+            {testing ? (
+              <span className="test-loading">
+                <span className="test-spinner"></span>
+                测试中
+              </span>
+            ) : "测试连接"}
+          </button>
           <button className="dialog-btn dialog-btn-ghost" onClick={onClose}>取消</button>
           <button className="dialog-btn dialog-btn-primary" onClick={handleSave} disabled={saving}>
             {saving ? "保存中..." : "保存"}
@@ -330,6 +358,26 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
         }
         .dialog-btn-ghost:hover {
           background: var(--color-bg-hover);
+        }
+        .dialog-btn-ghost:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        .test-loading {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .test-spinner {
+          width: 10px;
+          height: 10px;
+          border: 2px solid var(--color-text-quaternary);
+          border-top-color: var(--color-text-secondary);
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
       `}</style>
     </div>

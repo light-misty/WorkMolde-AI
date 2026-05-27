@@ -10,6 +10,8 @@ export function LLMConfigTab() {
   const [editingProvider, setEditingProvider] = useState<ProviderInfo | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // 正在测试连接的 provider ID，用于显示加载动画
+  const [testingId, setTestingId] = useState<string | null>(null);
 
   const handleAdd = () => {
     setEditingProvider(null);
@@ -22,6 +24,7 @@ export function LLMConfigTab() {
   };
 
   const handleTest = async (providerId: string) => {
+    setTestingId(providerId);
     try {
       const result = await tauriCmd.testConnection(providerId);
       if (result.success) {
@@ -31,6 +34,8 @@ export function LLMConfigTab() {
       }
     } catch (err) {
       alert(`连接测试出错: ${err}`);
+    } finally {
+      setTestingId(null);
     }
   };
 
@@ -96,7 +101,18 @@ export function LLMConfigTab() {
                   <button className="action-btn" onClick={() => handleSetDefault(p.id)}>设为默认</button>
                 )}
                 <button className="action-btn" onClick={() => handleEdit(p)}>编辑</button>
-                <button className="action-btn" onClick={() => handleTest(p.id)}>测试</button>
+                <button 
+                  className="action-btn" 
+                  onClick={() => handleTest(p.id)}
+                  disabled={testingId === p.id}
+                >
+                  {testingId === p.id ? (
+                    <span className="test-loading">
+                      <span className="test-spinner"></span>
+                      测试中
+                    </span>
+                  ) : "测试"}
+                </button>
                 <button
                   className="action-btn action-btn-danger"
                   onClick={() => { setDeletingId(p.id); setDeleteError(null); }}
@@ -240,6 +256,26 @@ export function LLMConfigTab() {
         .action-btn-danger:hover {
           background: var(--color-error-light);
           color: var(--color-error);
+        }
+        .action-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        .test-loading {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .test-spinner {
+          width: 10px;
+          height: 10px;
+          border: 2px solid var(--color-text-quaternary);
+          border-top-color: var(--color-text-secondary);
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
         .provider-card-info {
           font-size: 11px;
