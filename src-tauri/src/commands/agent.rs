@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use tauri::{AppHandle, State};
@@ -11,6 +12,43 @@ use crate::services::agent::context::AgentContext;
 use crate::services::agent::executor::AgentExecutor;
 use crate::services::llm::router::LlmRouter;
 use crate::AppState;
+
+/// Agent 清理守卫：在 Drop 时自动从 active_agents 移除记录
+/// 防止因 panic 或意外退出导致会话残留的"僵尸"状态
+struct AgentCleanupGuard {
+    active_agents: Option<Arc<tokio::sync::Mutex<HashMap<String, bool>>>>,
+    session_id: Option<String>,
+}
+
+impl AgentCleanupGuard {
+    fn new(
+        active_agents: Arc<tokio::sync::Mutex<HashMap<String, bool>>>,
+        session_id: String,
+    ) -> Self {
+        Self {
+            active_agents: Some(active_agents),
+            session_id: Some(session_id),
+        }
+    }
+
+    /// 标记为主动完成，跳过 Drop 中的清理（避免重复移除）
+    fn disarm(&mut self) {
+        self.active_agents = None;
+        self.session_id = None;
+    }
+}
+
+impl Drop for AgentCleanupGuard {
+    fn drop(&mut self) {
+        if let (Some(agents), Some(sid)) = (self.active_agents.take(), self.session_id.take()) {
+            let mut guard = agents.blocking_lock();
+            let was_running = guard.remove(&sid);
+            if was_running.is_some() {
+                log::info!("Agent 清理守卫: 已从活跃列表移除 session_id={}", sid);
+            }
+        }
+    }
+}
 
 /// 启动 Agent 执行，在后台 spawn 一个 tokio task
 #[tauri::command]
@@ -71,6 +109,9 @@ pub async fn start_agent(
     let config = Arc::clone(&state.config);
 
     tokio::spawn(async move {
+        // 清理守卫：确保 active_agents 在 panic 时也被清理
+        let mut _guard = AgentCleanupGuard::new(Arc::clone(&active_agents), sid.clone());
+
         let active_agents_for_check = Arc::clone(&active_agents);
 
         let should_stop: Arc<dyn Fn(&str) -> bool + Send + Sync> = Arc::new(move |session_id: &str| {
@@ -106,6 +147,7 @@ pub async fn start_agent(
             log::error!("Agent 执行失败: session_id={}, 错误: {}", sid, e.message);
         }
 
+        // 从 active_agents 中移除（如果正常执行到这里，守卫不再需要代劳）
         {
             let mut active = active_agents.lock().await;
             let was_running = active.remove(&sid);
@@ -115,6 +157,7 @@ pub async fn start_agent(
                 log::info!("Agent 已从活跃列表移除: session_id={}", sid);
             }
         }
+        _guard.disarm();
     });
 
     // 自动生成会话标题（后台任务，不阻塞主流程）

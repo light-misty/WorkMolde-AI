@@ -359,8 +359,8 @@ impl AgentContext {
             .find(|m| m.role == "user")
             .map(|m| {
                 let content = &m.content;
-                if content.len() > 200 {
-                    format!("{}...", &content[..200])
+                if content.chars().count() > 200 {
+                    format!("{}...", content.chars().take(200).collect::<String>())
                 } else {
                     content.clone()
                 }
@@ -373,8 +373,8 @@ impl AgentContext {
             .find(|m| m.role == "assistant" && m.tool_calls.is_none())
             .map(|m| {
                 let content = &m.content;
-                if content.len() > 300 {
-                    format!("{}...", &content[..300])
+                if content.chars().count() > 300 {
+                    format!("{}...", content.chars().take(300).collect::<String>())
                 } else {
                     content.clone()
                 }

@@ -201,7 +201,16 @@ export function useAgent(): UseAgentReturn {
         await tauriCmd.startAgent(sid, prompt, options);
       } catch (err) {
         setIsLoading(false);
-        setError(err instanceof Error ? err.message : String(err));
+        // 从 Tauri invoke 错误对象中提取 message，避免 `[object Object]`
+        let errorMessage: string;
+        if (err instanceof Error) {
+          errorMessage = err.message;
+        } else if (err && typeof err === "object") {
+          errorMessage = (err as Record<string, unknown>)?.message as string ?? JSON.stringify(err);
+        } else {
+          errorMessage = String(err);
+        }
+        setError(errorMessage);
       }
     },
     [sessionId],

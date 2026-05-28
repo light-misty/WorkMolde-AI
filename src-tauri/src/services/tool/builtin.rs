@@ -131,11 +131,11 @@ impl Tool for ListDirectoryTool {
             }
         }
 
-        let dir_path_owned = dir_path.to_string();
+        let resolved_dir_owned = resolved_dir.clone();
         let extensions_clone = extensions.clone();
 
         let results = tokio::task::spawn_blocking(move || {
-            let dir = std::path::Path::new(&dir_path_owned);
+            let dir = std::path::Path::new(&resolved_dir_owned);
             tool_list_dir(dir, dir, max_depth, 0, &extensions_clone)
         }).await.unwrap_or_default();
 
@@ -339,11 +339,11 @@ impl Tool for SearchFilesTool {
         }
 
         let query_lower = query.to_lowercase();
-        let directory_owned = directory.to_string();
+        let resolved_directory_owned = resolved_directory.clone();
         let extensions_clone = extensions.clone();
 
         let results = tokio::task::spawn_blocking(move || {
-            let dir_path = std::path::Path::new(&directory_owned);
+            let dir_path = std::path::Path::new(&resolved_directory_owned);
             let mut results = Vec::new();
             tool_search_files(dir_path, dir_path, &query_lower, &extensions_clone, include_content, max_results, &mut results);
             results
