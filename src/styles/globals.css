@@ -362,14 +362,14 @@
 
 /* ===== 暗色模式 ===== */
 .dark {
-  --color-bg: #1a1a2e;
-  --color-bg-sub: #22223a;
-  --color-bg-hover: #2a2a4a;
-  --color-bg-elevated: #1e1e36;
-  --color-text-primary: #e8e8f0;
-  --color-text-secondary: #a0a0b8;
-  --color-text-tertiary: #787890;
-  --color-text-quaternary: #585870;
+  --color-bg: #191a1b;
+  --color-bg-sub: #212223;
+  --color-bg-hover: #28292a;
+  --color-bg-elevated: #1c1d1e;
+  --color-text-primary: #e4e5e6;
+  --color-text-secondary: #9b9c9e;
+  --color-text-tertiary: #737476;
+  --color-text-quaternary: #535455;
   --color-accent: #5b8aff;
   --color-accent-light: #1e2d4a;
   --color-accent-lighter: #1a2540;
@@ -384,9 +384,9 @@
   --color-error: #f87171;
   --color-error-light: #2e1a1a;
   --color-error-bg: rgba(248, 113, 113, 0.08);
-  --color-border: #33334a;
-  --color-border-light: #2a2a42;
-  --color-border-strong: #44445a;
+  --color-border: #353738;
+  --color-border-light: #2d2e2f;
+  --color-border-strong: #434547;
   --color-shadow: rgba(0, 0, 0, 0.3);
   --color-shadow-lg: rgba(0, 0, 0, 0.4);
   --color-overlay: rgba(0, 0, 0, 0.6);
@@ -404,14 +404,14 @@
 /* ===== 暗色模式系统偏好回退 ===== */
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
-    --color-bg: #1a1a2e;
-    --color-bg-sub: #22223a;
-    --color-bg-hover: #2a2a4a;
-    --color-bg-elevated: #1e1e36;
-    --color-text-primary: #e8e8f0;
-    --color-text-secondary: #a0a0b8;
-    --color-text-tertiary: #787890;
-    --color-text-quaternary: #585870;
+    --color-bg: #191a1b;
+    --color-bg-sub: #212223;
+    --color-bg-hover: #28292a;
+    --color-bg-elevated: #1c1d1e;
+    --color-text-primary: #e4e5e6;
+    --color-text-secondary: #9b9c9e;
+    --color-text-tertiary: #737476;
+    --color-text-quaternary: #535455;
     --color-accent: #5b8aff;
     --color-accent-light: #1e2d4a;
     --color-accent-lighter: #1a2540;
@@ -426,9 +426,9 @@
     --color-error: #f87171;
     --color-error-light: #2e1a1a;
     --color-error-bg: rgba(248, 113, 113, 0.08);
-    --color-border: #33334a;
-    --color-border-light: #2a2a42;
-    --color-border-strong: #44445a;
+    --color-border: #353738;
+    --color-border-light: #2d2e2f;
+    --color-border-strong: #434547;
     --color-shadow: rgba(0, 0, 0, 0.3);
     --color-shadow-lg: rgba(0, 0, 0, 0.4);
     --color-overlay: rgba(0, 0, 0, 0.6);
@@ -446,10 +446,10 @@
 
 /* ===== 暗色模式滚动条 ===== */
 .dark ::-webkit-scrollbar-thumb {
-  background: #4a4a5e;
+  background: #404142;
 }
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: #5a5a6e;
+  background: #505152;
 }
 
 /* ===== 暗色模式特殊覆盖 ===== */
@@ -457,10 +457,10 @@
   border-color: var(--color-border-strong);
 }
 .dark .md-code-content {
-  background: #1a1a2e !important;
+  background: #191a1b !important;
 }
 .dark .md-code-header {
-  background: #22223a;
+  background: #212223;
 }
 
 /* ===== 工作流时间线样式 ===== */
