@@ -34,60 +34,6 @@ export function AppearanceTab() {
         </div>
       </div>
 
-      <div className="settings-section">
-        <div className="section-header">
-          <span className="section-title">字体</span>
-        </div>
-
-        <div className="setting-row">
-          <div className="setting-info">
-            <div className="setting-label">字体大小</div>
-            <div className="setting-desc">
-              当前: {Math.round(settings.appearance.fontScale * 100)}%
-            </div>
-          </div>
-          <div className="font-scale-control">
-            <button
-              className="scale-btn"
-              onClick={() => {
-                const next = Math.max(0.8, +(settings.appearance.fontScale - 0.1).toFixed(1));
-                updateSettings({ appearance: { fontScale: next } });
-              }}
-              disabled={settings.appearance.fontScale <= 0.8}
-            >
-              A-
-            </button>
-            <input
-              type="range"
-              className="scale-slider"
-              min="0.8"
-              max="1.4"
-              step="0.1"
-              value={settings.appearance.fontScale}
-              onChange={(e) => {
-                updateSettings({ appearance: { fontScale: parseFloat(e.target.value) } });
-              }}
-            />
-            <button
-              className="scale-btn"
-              onClick={() => {
-                const next = Math.min(1.4, +(settings.appearance.fontScale + 0.1).toFixed(1));
-                updateSettings({ appearance: { fontScale: next } });
-              }}
-              disabled={settings.appearance.fontScale >= 1.4}
-            >
-              A+
-            </button>
-            <button
-              className="scale-reset-btn"
-              onClick={() => updateSettings({ appearance: { fontScale: 1.0 } })}
-            >
-              重置
-            </button>
-          </div>
-        </div>
-      </div>
-
       <style>{`
         .theme-switcher {
           display: flex;
@@ -122,68 +68,6 @@ export function AppearanceTab() {
         }
         .theme-btn.active:hover {
           background: var(--color-accent-hover);
-        }
-        .font-scale-control {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          flex-shrink: 0;
-        }
-        .scale-btn {
-          width: 32px;
-          height: 28px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border: 1px solid var(--color-border);
-          border-radius: var(--radius-sm);
-          font-size: 12px;
-          font-weight: 600;
-          color: var(--color-text-secondary);
-          background: var(--color-bg);
-          cursor: pointer;
-          transition: all 0.15s;
-        }
-        .scale-btn:hover:not(:disabled) {
-          background: var(--color-bg-hover);
-          color: var(--color-text-primary);
-        }
-        .scale-btn:disabled {
-          opacity: 0.4;
-          cursor: not-allowed;
-        }
-        .scale-slider {
-          width: 100px;
-          height: 4px;
-          -webkit-appearance: none;
-          appearance: none;
-          background: var(--color-border);
-          border-radius: 2px;
-          outline: none;
-        }
-        .scale-slider::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          appearance: none;
-          width: 14px;
-          height: 14px;
-          border-radius: 50%;
-          background: var(--color-accent);
-          cursor: pointer;
-          border: 2px solid var(--color-bg);
-          box-shadow: var(--shadow-sm);
-        }
-        .scale-reset-btn {
-          padding: 4px 10px;
-          font-size: 11px;
-          color: var(--color-text-tertiary);
-          background: var(--color-bg-sub);
-          border-radius: var(--radius-sm);
-          cursor: pointer;
-          transition: all 0.15s;
-        }
-        .scale-reset-btn:hover {
-          background: var(--color-bg-hover);
-          color: var(--color-text-secondary);
         }
       `}</style>
     </div>

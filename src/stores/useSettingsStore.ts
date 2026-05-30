@@ -55,7 +55,6 @@ const defaultSettings: AppSettings = {
   },
   appearance: {
     themeMode: "system",
-    fontScale: 1.0,
   },
   versionSnapshot: {
     retentionPolicy: "byCount",
@@ -316,10 +315,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     }
   },
 
-  // 应用外观设置到 DOM（主题模式 + 字体缩放）
+  // 应用外观设置到 DOM（主题模式）
   applyAppearance: () => {
     const { settings } = get();
-    const { themeMode, fontScale } = settings.appearance;
+    const { themeMode } = settings.appearance;
 
     // 应用主题
     const root = document.documentElement;
@@ -335,9 +334,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         root.classList.add("dark");
       }
     }
-
-    // 应用字体缩放
-    root.style.setProperty("--font-scale", String(fontScale));
   },
 
   // 初始化系统主题偏好监听

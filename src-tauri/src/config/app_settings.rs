@@ -41,20 +41,12 @@ pub struct AppearanceSettings {
     /// 主题模式：light / dark / system
     #[serde(default)]
     pub theme_mode: ThemeMode,
-    /// 字体大小倍率，1.0 为默认大小
-    #[serde(default = "default_font_scale")]
-    pub font_scale: f64,
-}
-
-fn default_font_scale() -> f64 {
-    1.0
 }
 
 impl Default for AppearanceSettings {
     fn default() -> Self {
         Self {
             theme_mode: ThemeMode::default(),
-            font_scale: default_font_scale(),
         }
     }
 }
@@ -294,11 +286,6 @@ pub fn merge_with_defaults(
         },
         appearance: AppearanceSettings {
             theme_mode: user_settings.appearance.theme_mode.clone(),
-            font_scale: if user_settings.appearance.font_scale == 0.0 {
-                default_settings.appearance.font_scale
-            } else {
-                user_settings.appearance.font_scale
-            },
         },
         version_snapshot: VersionSnapshot {
             retention_policy: user_settings.version_snapshot.retention_policy.clone(),

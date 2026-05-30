@@ -253,7 +253,7 @@ AppState {
 ### 应用设置
 `AppSettings` 含以下子配置（JSON 文件存储），前端 SettingsDialog 含 8 个标签页：
 - `GeneralSettings`: 作者名、确认级别(Always/EditOnly/Never)、语言 → **GeneralTab**
-- `AppearanceSettings`: 主题模式(light/dark/system)、字体缩放 → **AppearanceTab**
+- `AppearanceSettings`: 主题模式(light/dark/system) → **AppearanceTab**
 - `VersionSnapshot`: 保留策略(ByCount/ByDays/Both)、最大数量/天数
 - `WorkspaceDefaults`: 默认工作区 ID → **WorkspaceTab**
 - `Shortcuts`: 快捷键配置（newSession/closeSession/sendMessage/toggleSidebar/quickPrompt）→ **ShortcutsTab**

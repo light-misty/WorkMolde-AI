@@ -21,7 +21,6 @@ export interface GeneralSettings {
 
 export interface AppearanceSettings {
   themeMode: ThemeMode;
-  fontScale: number;
 }
 
 export interface VersionSnapshotSettings {
