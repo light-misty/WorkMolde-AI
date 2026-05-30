@@ -108,7 +108,7 @@ class WordHandler:
         section.left_margin = Cm(2.54)
         section.right_margin = Cm(2.54)
 
-        # 应用专业样式覆盖
+        # 应用专业样式覆盖（含文档默认字体和列表样式）
         self._apply_style_overrides(doc)
 
         # 设置文档属性
@@ -132,7 +132,7 @@ class WordHandler:
 
         # 添加目录
         if include_toc:
-            doc.add_heading("目录", level=1)
+            self._add_styled_heading(doc, 1, "目录")
             self._add_toc(doc)
 
         # 处理内容：优先尝试结构化 JSON，否则尝试 Markdown 解析，最后按纯文本处理
@@ -181,6 +181,9 @@ class WordHandler:
         # 添加页脚
         if footer_text or page_number:
             self._add_footer(doc, footer_text or "", page_number)
+
+        # 第三层防御：后处理扫描，确保所有 run 都有东亚字体设置
+        self._ensure_all_runs_have_fonts(doc)
 
         doc.save(path)
         self.logger.info("generate: Word 文档已生成, path=%s", path)
@@ -511,12 +514,17 @@ class WordHandler:
     def _apply_style_overrides(self, doc: Document):
         """应用专业样式覆盖
 
+        - 文档默认字体: 拉丁 Arial，东亚 微软雅黑
         - 拉丁字体: Arial，东亚字体: 微软雅黑
         - 标题1: 深蓝色 22pt 粗体
         - 标题2: 中蓝色 16pt 粗体
         - 标题3: 浅蓝色 14pt 粗体
         - 正文: 12pt, 行间距 1.5
         """
+        # 第一层防御：设置文档默认字体（w:docDefaults）
+        # 这是 Word 渲染字体时的最终回退，确保任何未显式设置字体的 run 都使用正确字体
+        self._set_document_default_fonts(doc)
+
         # 设置默认字体
         style_normal = doc.styles["Normal"]
         style_normal.font.name = self.LATIN_FONT
@@ -563,6 +571,14 @@ class WordHandler:
         style_h4.font.color.rgb = RGBColor(0x40, 0x40, 0x40)
         self._set_style_east_asian_font(style_h4, self.EAST_ASIAN_FONT)
 
+        # 列表样式：设置东亚字体（List Bullet / List Number 默认没有 rPr）
+        for style_name in ["List Bullet", "List Number", "List Continue", "Title", "Subtitle", "Quote", "Intense Quote", "TOC Heading"]:
+            try:
+                style = doc.styles[style_name]
+                self._set_style_east_asian_font(style, self.EAST_ASIAN_FONT)
+            except KeyError:
+                pass
+
         self.logger.debug("_apply_style_overrides: 已应用专业样式覆盖")
 
     def _set_style_east_asian_font(self, style, east_asian_font: str):
@@ -575,6 +591,103 @@ class WordHandler:
         rFonts.set(qn('w:eastAsia'), east_asian_font)
         rFonts.set(qn('w:ascii'), self.LATIN_FONT)
         rFonts.set(qn('w:hAnsi'), self.LATIN_FONT)
+
+    def _set_document_default_fonts(self, doc: Document):
+        """设置文档默认字体（w:docDefaults）
+
+        这是 Word 字体回退链的最顶层，当 run 和 style 都没有指定字体时使用。
+        必须同时设置 w:ascii、w:hAnsi 和 w:eastAsia 三个属性。
+        """
+        styles_element = doc.styles.element
+
+        doc_defaults = styles_element.find(qn('w:docDefaults'))
+        if doc_defaults is None:
+            doc_defaults = OxmlElement('w:docDefaults')
+            styles_element.insert(0, doc_defaults)
+
+        rpr_default = doc_defaults.find(qn('w:rPrDefault'))
+        if rpr_default is None:
+            rpr_default = OxmlElement('w:rPrDefault')
+            doc_defaults.append(rpr_default)
+
+        rpr = rpr_default.find(qn('w:rPr'))
+        if rpr is None:
+            rpr = OxmlElement('w:rPr')
+            rpr_default.append(rpr)
+
+        rfonts = rpr.find(qn('w:rFonts'))
+        if rfonts is None:
+            rfonts = OxmlElement('w:rFonts')
+            rpr.insert(0, rfonts)
+
+        rfonts.set(qn('w:ascii'), self.LATIN_FONT)
+        rfonts.set(qn('w:hAnsi'), self.LATIN_FONT)
+        rfonts.set(qn('w:eastAsia'), self.EAST_ASIAN_FONT)
+
+        self.logger.debug("_set_document_default_fonts: 已设置文档默认字体 ascii=%s, eastAsia=%s",
+                          self.LATIN_FONT, self.EAST_ASIAN_FONT)
+
+    def _ensure_all_runs_have_fonts(self, doc: Document):
+        """后处理扫描：确保文档中所有 run 都有东亚字体设置
+
+        这是第三层防御，扫描所有段落和表格中的 run，
+        对缺少 w:eastAsia 的 run 补充设置。
+        确保零遗漏。
+        """
+        fixed_count = 0
+
+        # 扫描正文段落
+        for para in doc.paragraphs:
+            for run in para.runs:
+                if self._fix_run_east_asian_font(run):
+                    fixed_count += 1
+
+        # 扫描表格
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for para in cell.paragraphs:
+                        for run in para.runs:
+                            if self._fix_run_east_asian_font(run):
+                                fixed_count += 1
+
+        # 扫描页眉页脚
+        for section in doc.sections:
+            for header in [section.header, section.first_page_header, section.even_page_header]:
+                if header and header.paragraphs:
+                    for para in header.paragraphs:
+                        for run in para.runs:
+                            if self._fix_run_east_asian_font(run):
+                                fixed_count += 1
+            for footer in [section.footer, section.first_page_footer, section.even_page_footer]:
+                if footer and footer.paragraphs:
+                    for para in footer.paragraphs:
+                        for run in para.runs:
+                            if self._fix_run_east_asian_font(run):
+                                fixed_count += 1
+
+        if fixed_count > 0:
+            self.logger.info("_ensure_all_runs_have_fonts: 修复了 %d 个缺少东亚字体的 run", fixed_count)
+
+    def _fix_run_east_asian_font(self, run) -> bool:
+        """检查并修复单个 run 的东亚字体设置，返回是否进行了修复"""
+        rPr = run._r.find(qn('w:rPr'))
+        if rPr is None:
+            # run 完全没有格式设置，不需要修复（会继承 style 或 docDefaults）
+            return False
+
+        rFonts = rPr.find(qn('w:rFonts'))
+        if rFonts is None:
+            # run 有 rPr 但没有 rFonts，不需要修复
+            return False
+
+        # run 有 rFonts，检查是否缺少 eastAsia
+        east_asia = rFonts.get(qn('w:eastAsia'))
+        if east_asia is None or east_asia == '':
+            rFonts.set(qn('w:eastAsia'), self.EAST_ASIAN_FONT)
+            return True
+
+        return False
 
     # ------------------------------------------------------------------ #
     #  结构化内容处理（保留原有功能）
@@ -863,7 +976,8 @@ class WordHandler:
 
         if page_number:
             if text:
-                paragraph.add_run(" ")
+                space_run = paragraph.add_run(" ")
+                self._set_run_fonts(space_run, self.LATIN_FONT, self.EAST_ASIAN_FONT)
             run_begin = paragraph.add_run()
             fldChar_begin = OxmlElement("w:fldChar")
             fldChar_begin.set(qn("w:fldCharType"), "begin")
@@ -881,6 +995,7 @@ class WordHandler:
             run_sep._r.append(fldChar_sep)
 
             run_placeholder = paragraph.add_run("1")
+            self._set_run_fonts(run_placeholder, self.LATIN_FONT, self.EAST_ASIAN_FONT)
 
             run_end = paragraph.add_run()
             fldChar_end = OxmlElement("w:fldChar")
@@ -901,6 +1016,7 @@ class WordHandler:
         bookmark_end.set(qn("w:id"), str(numeric_id))
 
         run = paragraph.add_run(text)
+        self._set_run_fonts(run, self.LATIN_FONT, self.EAST_ASIAN_FONT)
 
         run._r.addprevious(bookmark_start)
         run._r.addnext(bookmark_end)
@@ -919,6 +1035,12 @@ class WordHandler:
 
         new_run = OxmlElement("w:r")
         rPr = OxmlElement("w:rPr")
+
+        rFonts = OxmlElement("w:rFonts")
+        rFonts.set(qn("w:ascii"), self.LATIN_FONT)
+        rFonts.set(qn("w:hAnsi"), self.LATIN_FONT)
+        rFonts.set(qn("w:eastAsia"), self.EAST_ASIAN_FONT)
+        rPr.append(rFonts)
 
         color_elem = OxmlElement("w:color")
         color_elem.set(qn("w:val"), "2E75B6")
@@ -944,6 +1066,12 @@ class WordHandler:
 
         new_run = OxmlElement("w:r")
         rPr = OxmlElement("w:rPr")
+
+        rFonts = OxmlElement("w:rFonts")
+        rFonts.set(qn("w:ascii"), self.LATIN_FONT)
+        rFonts.set(qn("w:hAnsi"), self.LATIN_FONT)
+        rFonts.set(qn("w:eastAsia"), self.EAST_ASIAN_FONT)
+        rPr.append(rFonts)
 
         color_elem = OxmlElement("w:color")
         color_elem.set(qn("w:val"), "2E75B6")
@@ -986,7 +1114,8 @@ class WordHandler:
         fldChar_sep.set(qn("w:fldCharType"), "separate")
         run_sep._r.append(fldChar_sep)
 
-        run_placeholder = paragraph.add_run('（请右键点击此处，选择"更新域"以生成目录）')
+        run_placeholder = paragraph.add_run('\uff08\u8bf7\u53f3\u952e\u70b9\u51fb\u6b64\u5904\uff0c\u9009\u62e9\u201c\u66f4\u65b0\u57df\u201d\u4ee5\u751f\u6210\u76ee\u5f55\uff09')
+        self._set_run_fonts(run_placeholder, self.LATIN_FONT, self.EAST_ASIAN_FONT)
 
         run_end = paragraph.add_run()
         fldChar_end = OxmlElement("w:fldChar")
@@ -1153,6 +1282,9 @@ class WordHandler:
             elif op_type == "addToc":
                 self._add_toc(doc)
                 modified_count += 1
+
+        # 后处理扫描：确保所有 run 都有东亚字体设置
+        self._ensure_all_runs_have_fonts(doc)
 
         doc.save(path)
         self.logger.info("modify: Word 文档修改完成, path=%s, 修改数=%d", path, modified_count)
