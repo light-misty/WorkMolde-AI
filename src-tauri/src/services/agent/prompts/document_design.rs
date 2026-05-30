@@ -7,68 +7,73 @@
 pub const WORD_DESIGN_GUIDE: &str = r#"
 ## Word 文档生成规范
 
-### 页面尺寸（DXA 单位，1440 DXA = 1 inch）
-- US Letter: 12240 x 15840 DXA（美国文档默认，内容宽度 9360）
-- A4: 11906 x 16838 DXA（国际文档默认，内容宽度 9026）
-- python-docx 中设置: section.page_width, section.page_height
-- 横向布局时传入纵向尺寸，python-docx 内部自动交换宽高
+### 内容格式要求（重要）
+- content 参数支持 Markdown 格式，系统会自动将 Markdown 解析为专业 Word 元素
+- 推荐使用 Markdown 格式编写内容，这样可以获得最佳的排版效果
+- 支持的 Markdown 语法: # 标题、**粗体**、*斜体*、`代码`、- 列表、1. 有序列表、| 表格 |、```代码块```、---分隔线
+- 也可以使用结构化 JSON 格式: {"blocks": [{type, ...}]}
+- 绝对不要在 content 中输出原始 Markdown 标记（如 # ** - 等）而不使用正确的格式
 
-### 样式覆盖规范（使用 Arial 字体）
-- 默认字体: Arial 12pt (size=24, 半磅单位)
-- Heading1: 16pt 粗体 (size=32), 间距前后 240 DXA, outlineLevel=0（TOC 必需）
-- Heading2: 14pt 粗体 (size=28), 间距前后 180 DXA, outlineLevel=1
-- 使用内置样式 ID 覆盖: id="Heading1", basedOn="Normal", quickFormat=true
+### 专业配色方案（已内置）
+- 标题1: 深蓝色 (#1F4E79) 22pt 粗体
+- 标题2: 中蓝色 (#2E75B6) 16pt 粗体
+- 标题3: 浅蓝色 (#5B9BD5) 14pt 粗体
+- 表头: 蓝色背景 (#D6E4F0) + 深蓝色粗体文字
+- 表格交替行: 浅蓝色背景 (#EDF2F9)
+- 字体: 拉丁字体 Arial，东亚字体 微软雅黑（中文不再显示为 MS Gothic/MS Mincho）
+- 页边距: 2.54cm（1 inch）四边
+
+### 页面尺寸（DXA 单位，1440 DXA = 1 inch）
+- US Letter: 12240 x 15840 DXA
+- A4: 11906 x 16838 DXA（默认）
 
 ### 表格规范
-- 必须同时设置表格宽度和每个单元格宽度（双宽度设置）
-- 表格宽度: table.columns[i].width 和 cell.width 都必须设置
-- 始终使用 DXA 单位，不使用百分比（百分比在 Google Docs 中会出错）
-- 边框: 单线 1pt 灰色 (#CCCCCC), BorderStyle.SINGLE
-- 使用 ShadingType.CLEAR 而非 SOLID（SOLID 会导致黑色背景）
-- 单元格内边距: top=80, bottom=80, left=120, right=120 (DXA)
+- 使用 Markdown 表格语法: | 列1 | 列2 | \n |---|---|
+- 表头自动应用蓝色背景和粗体样式
+- 数据行自动应用交替行颜色
+- 边框使用蓝灰色 (#B4C6E7)
 
 ### 列表规范
-- 必须使用列表样式（WD_STYLE_PARAGRAPH.LIST_BULLET / LevelFormat.BULLET）
-- 绝对禁止使用 Unicode 字符（如 \u2022 或 "•"）手动插入项目符号
-- 缩进: 左 720 DXA, 悬挂 360 DXA
-- 编号列表使用 LevelFormat.DECIMAL, text="%1."
+- 使用 Markdown 列表语法: - 无序列表项 或 1. 有序列表项
+- 系统自动使用 Word 列表样式，不会出现原始的 - 或 1. 标记
 
-### 图片规范
-- 必须指定图片格式（png/jpg/jpeg/gif/bmp/svg），type 参数为必填项
-- python-docx 中使用 document.add_picture() 插入图片, 需指定 width/height
-- 提供 altText 三字段: title, description, name（均为必填项）
+### 代码块
+- 使用 Markdown 代码块语法: ```language ... ```
+- 代码块自动应用 Consolas 等宽字体 + 浅灰色背景
 
 ### 页眉页脚
-- 使用 section.header / section.footer API
-- 支持页码: 插入 PageNumber 域代码（CURRENT / TOTAL_PAGES）
-- 页边距: 1440 DXA = 1 inch
-
-### 超链接
-- 外部链接: 使用 python-docx 的 OxmlElement 创建 hyperlink
-- 内部链接: 使用书签（Bookmark）+ 超链接引用（anchor）
-
-### 颜色编码标准
-- 蓝色文字 (RGB: 0,0,255): 硬编码输入值，用户会修改的数字
-- 黑色文字 (RGB: 0,0,0): 所有公式和计算
-- 绿色文字 (RGB: 0,128,0): 跨工作表引用
-- 红色文字 (RGB: 255,0,0): 外部文件链接
+- header 参数设置页眉文本
+- footer 参数设置页脚文本
+- pageNumber 参数控制是否显示页码（默认 true）
 
 ### 关键规则
-- 始终显式设置页面尺寸（python-docx 默认 A4）
-- 不使用 \n 换行，使用独立的 Paragraph 元素
-- PageBreak 必须在 Paragraph 内部
-- 表格必须设置 width（DXA 单位），不使用 WidthType.PERCENTAGE
+- 始终使用 Markdown 或结构化 JSON 格式编写 content，不要输出纯文本
+- 表格必须使用 Markdown 表格语法或结构化 JSON，不要用纯文本描述
+- 标题使用 # 语法，不要在段落中手动标注"第一章"等
 "#;
 
 /// Excel 文档设计指导
 pub const EXCEL_DESIGN_GUIDE: &str = r#"
 ## Excel 文档生成规范
 
+### 内容格式要求（重要）
+- 推荐使用 sheets 参数提供结构化数据，这样可以获得最佳的专业样式效果
+- sheets 参数格式: [{"name": "工作表名", "headers": ["列1", "列2"], "data": [[...], [...]]}]
+- 系统会自动应用专业样式: 蓝色表头背景、交替行颜色、蓝灰色边框、冻结窗格
+- 如果提供 title 参数，系统会自动在第一行添加合并的标题行
+
+### 专业配色方案（已内置）
+- 表头: 蓝色背景 (#D6E4F0) + 深蓝色粗体文字 (#1F4E79)
+- 交替行: 浅蓝色背景 (#EDF2F9)
+- 边框: 蓝灰色 (#B4C6E7)
+- 标题行: 深蓝色粗体 (#1F4E79) 16pt + 浅蓝色背景 (#F2F7FB)
+- 字体: 微软雅黑 11pt
+
 ### 核心原则：使用公式而非硬编码值
 - 错误: 在 Python 中计算 sum, 然后硬编码结果
 - 正确: 使用 Excel 公式 =SUM(B2:B9)
-- 公式单元格写入方式: ws['B10'] = '=SUM(B2:B9)'
-- 增长率公式: ws['C5'] = '=(C4-C2)/C2'
+- 公式单元格写入方式: 在 cells 或 formulas 字段中提供 formula 值
+- 增长率公式: formula: "=(C4-C2)/C2"
 
 ### 数字格式标准
 - 年份: 格式化为文本字符串（"2024" 而非 "2,024"），使用 @ 格式码
@@ -85,89 +90,84 @@ pub const EXCEL_DESIGN_GUIDE: &str = r#"
 - 红色文字 (RGB: 255,0,0): 外部文件链接
 - 黄色背景 (RGB: 255,255,0): 关键假设
 
-### 库选择指南
-- pandas: 数据分析、批量操作、简单数据导出
-- openpyxl: 复杂格式、公式、Excel 特定功能
-
-### openpyxl 注意事项
-- 单元格索引从 1 开始 (row=1, column=1 即 A1)
-- data_only=True 读取计算值, 但保存会丢失公式
-- 公式不会被 Python 计算, 需要 Excel 或 recalc 脚本
-- 大文件使用 read_only=True 读取或 write_only=True 写入
-- 指定数据类型避免推断问题: pd.read_excel('file.xlsx', dtype={'id': str})
+### 关键规则
+- 优先使用 sheets 参数提供结构化数据，而非 content 纯文本
+- 表头使用 headers 字段，数据使用 data 字段
+- 公式使用 cells 或 formulas 字段中的 formula 属性
+- 数字格式使用 numberFormats 参数指定范围和格式类型
 "#;
 
 /// PPT 文档设计指导
 pub const PPT_DESIGN_GUIDE: &str = r#"
 ## PPT 文档生成规范
 
-### 设计原则
-- 不要创建无聊的幻灯片
-- 选择大胆的、内容驱动的颜色方案
-- 一种颜色占主导（60-70% 视觉权重）
-- 深色背景用于标题和结论页, 浅色用于内容页
-- 承诺一个视觉主题并贯穿始终
+### 内容格式要求（重要）
+- 使用 slides 参数提供结构化幻灯片数据
+- slides 参数格式: [{"title": "标题", "content": "内容", "layout": "title|content|twoColumn"}]
+- 系统会自动应用专业样式: 配色方案、东亚字体、页码、标题分隔线
 
-### 5种颜色方案及RGB值
+### 专业配色方案（已内置，默认 Ocean Gradient）
 | 方案 | 主色 | 辅色 | 强调色 |
 |------|------|------|--------|
-| Midnight Executive | #1E2761 (navy) | #CADCFC (ice blue) | #FFFFFF (white) |
-| Forest & Moss | #2C5F2D (forest) | #97BC62 (moss) | #F5F5F5 (cream) |
-| Coral Energy | #F96167 (coral) | #F9E795 (gold) | #2F3C7E (navy) |
-| Ocean Gradient | #065A82 (deep blue) | #1C7293 (teal) | #21295C (midnight) |
-| Charcoal Minimal | #36454F (charcoal) | #F2F2F2 (off-white) | #212121 (black) |
+| ocean | #065A82 (deep blue) | #1C7293 (teal) | #21295C (midnight) |
+| midnight | #1E2761 (navy) | #CADCFC (ice blue) | #FFFFFF (white) |
+| forest | #2C5F2D (forest) | #97BC62 (moss) | #F5F5F5 (cream) |
+| coral | #F96167 (coral) | #F9E795 (gold) | #2F3C7E (navy) |
+| charcoal | #36454F (charcoal) | #F2F2F2 (off-white) | #212121 (black) |
 
-### 字体规范
-| 元素 | 大小 |
-|------|------|
-| 幻灯片标题 | 36-44pt 粗体 |
-| 节标题 | 20-24pt 粗体 |
-| 正文 | 14-16pt |
-| 注释 | 10-12pt 淡色 |
+### 字体规范（已内置东亚字体支持）
+- 拉丁字体: Calibri，东亚字体: 微软雅黑
+- 幻灯片标题: 36-44pt 粗体
+- 节标题: 20-24pt 粗体
+- 正文: 14-16pt
+- 注释: 10-12pt 淡色
 
 ### 间距规范
 - 最小边距: 0.5 inch
 - 内容块间距: 0.3-0.5 inch
 - 留白呼吸空间, 不要填满每一寸
 
-### 避免的错误
-- 不要重复相同的布局
-- 不要居中正文段落
-- 不要默认使用蓝色
-- 不要创建纯文字幻灯片
-- 不要在标题下使用强调线
+### 自动功能
+- 每张幻灯片自动添加页码（右下角）
+- 内容页标题下方自动添加彩色分隔线
+- 标题页支持 subtitle 字段显示副标题
+
+### 关键规则
+- 使用 colorScheme 参数选择配色方案（推荐 "ocean"）
+- 每张幻灯片内容不宜过多，保持简洁
+- 标题页使用 layout: "title"，内容页使用 layout: "content"
 "#;
 
 /// PDF 文档设计指导
 pub const PDF_DESIGN_GUIDE: &str = r#"
 ## PDF 文档生成规范
 
-### 下标和上标
-- 不要使用 Unicode 下标/上标字符
-- reportlab 中使用 XML 标签: H<sub>2</sub>O, x<super>2</super>
-- 在 Paragraph 中使用: Paragraph("H<sub>2</sub>O", style)
+### 内容格式要求（重要）
+- content 参数支持 Markdown 格式，系统会自动将 Markdown 解析为专业 PDF 元素
+- 推荐使用 Markdown 格式编写内容，这样可以获得最佳的排版效果
+- 支持的 Markdown 语法: # 标题、**粗体**、*斜体*、`代码`、- 列表、1. 有序列表、| 表格 |、```代码块```、---分隔线
+- 也可以使用结构化 JSON 格式
+- 绝对不要在 content 中输出原始 Markdown 标记而不使用正确的格式
 
-### Platypus 框架使用
-- 使用 SimpleDocTemplate + Paragraph 创建结构化 PDF
-- 基本流程: 创建 story 列表 -> 添加元素 -> doc.build(story)
-- 常用元素: Paragraph, Spacer, PageBreak, Table, Image
-- 样式: 使用 getSampleStyleSheet() 获取基础样式
+### 专业配色方案（已内置）
+- 标题1: 深蓝色 (#1F4E79) 20pt
+- 标题2: 中蓝色 (#2E75B6) 16pt
+- 标题3: 浅蓝色 (#5B9BD5) 14pt
+- 表头: 蓝色背景 (#2E75B6) + 白色粗体文字
+- 表格交替行: 浅蓝色背景 (#D6E4F0)
+- 代码块: 等宽字体 + 浅灰色背景 (#F5F5F5)
+- 字体: 微软雅黑（已自动注册中文字体）
 
-### 高级操作（基于 pypdf）
-- 合并: 使用 PdfWriter.add_page() 逐页添加
-- 拆分: 每页单独保存为独立 PDF
-- 旋转: page.rotate(90) 顺时针旋转
-- 水印: page.merge_page(watermark) 叠加水印页
-- 加密: writer.encrypt(user_pwd, owner_pwd) 设置密码保护
+### 表格规范
+- 使用 Markdown 表格语法: | 列1 | 列2 | \n |---|---|
+- 表头自动应用蓝色背景和白色粗体样式
+- 数据行自动应用交替行颜色
+- 单元格自动应用内边距
 
-### 表格提取（基于 pdfplumber）
-- 使用 pdfplumber 的 page.extract_tables() 提取表格
-- 支持布局保留的文本提取: page.extract_text()
-
-### reportlab 注意事项
-- 特殊字符必须使用 html.escape() 转义
-- 中文字体需注册后使用
-- 页面尺寸: letter (612x792) 或 A4 (595x842)
+### 关键规则
+- 始终使用 Markdown 或结构化 JSON 格式编写 content
+- 表格必须使用 Markdown 表格语法或结构化 JSON
+- 特殊字符会自动转义，无需手动处理
 "#;
 
 /// 获取所有文档设计指导, 拼接为完整字符串

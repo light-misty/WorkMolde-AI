@@ -1,13 +1,15 @@
 """Word 文档处理器
 基于 python-docx 实现 Word 文档的生成、读取、修改、转换
 遵循 docx Skill 规范：页面尺寸、样式覆盖、专业表格、列表、页眉页脚、书签超链接、颜色编码
+支持 Markdown 内容自动解析为专业 Word 元素
 """
 
 import os
 import json
+import re
 import html
 import logging
-from typing import Any
+from typing import Any, Optional, List, Tuple
 
 from docx import Document
 from docx.shared import Inches, Pt, Cm, RGBColor, Emu
@@ -23,8 +25,7 @@ class WordHandler:
 
     logger = logging.getLogger(__name__)
 
-    # 颜色编码映射表：根据 colorType 字段应用对应颜色
-    # 遵循 Skill 规范：蓝色(0,0,255)=输入值、黑色(0,0,0)=公式、绿色(0,128,0)=跨表引用、红色(255,0,0)=外部链接
+    # 颜色编码映射表
     COLOR_MAP = {
         "input": RGBColor(0x00, 0x00, 0xFF),
         "formula": RGBColor(0x00, 0x00, 0x00),
@@ -32,14 +33,28 @@ class WordHandler:
         "external": RGBColor(0xFF, 0x00, 0x00),
     }
 
-    # 页面尺寸预设（DXA 单位，1 inch = 1440 DXA）
+    # 页面尺寸预设（DXA 单位）
     PAGE_SIZES = {
         "letter": {"width": 12240, "height": 15840},
         "a4": {"width": 11906, "height": 16838},
     }
 
-    # DXA 到 EMU 的转换系数：1 DXA = 635 EMU
     DXA_TO_EMU = 635
+
+    # 专业配色方案
+    THEME_COLORS = {
+        "heading1": RGBColor(0x1F, 0x4E, 0x79),
+        "heading2": RGBColor(0x2E, 0x75, 0xB6),
+        "heading3": RGBColor(0x5B, 0x9B, 0xD5),
+        "table_header_bg": "D6E4F0",
+        "table_alt_row_bg": "EDF2F9",
+        "table_border": "B4C6E7",
+        "accent": RGBColor(0x2E, 0x75, 0xB6),
+    }
+
+    # 东亚字体和拉丁字体
+    EAST_ASIAN_FONT = "微软雅黑"
+    LATIN_FONT = "Arial"
 
     def generate(self, params: dict) -> dict:
         """生成 Word 文档
@@ -47,9 +62,7 @@ class WordHandler:
         params:
             path: 输出文件路径
             title: 文档标题
-            content: 文档内容（结构化 JSON 字符串或纯文本）
-                    结构化格式: {"blocks": [{type, ...}]}
-                    block 类型: heading/paragraph/table/list/image
+            content: 文档内容（Markdown 文本、结构化 JSON 字符串或纯文本）
             author: 作者
             template: 模板路径（可选）
             pageSize: 页面尺寸 "letter" | "a4"（可选）
@@ -80,7 +93,6 @@ class WordHandler:
 
         self.logger.info("generate: 开始生成 Word 文档, path=%s", path)
 
-        # 确保输出目录存在
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
         doc = Document()
@@ -89,7 +101,14 @@ class WordHandler:
         if page_size:
             self._set_page_size(doc, page_size)
 
-        # 应用样式覆盖：默认字体 Arial 12pt，标题层级规范
+        # 设置专业页边距（2.54cm = 1 inch）
+        section = doc.sections[0]
+        section.top_margin = Cm(2.54)
+        section.bottom_margin = Cm(2.54)
+        section.left_margin = Cm(2.54)
+        section.right_margin = Cm(2.54)
+
+        # 应用专业样式覆盖
         self._apply_style_overrides(doc)
 
         # 设置文档属性
@@ -98,31 +117,40 @@ class WordHandler:
         if title:
             doc.core_properties.title = title
 
-        # 添加标题
+        # 添加标题（使用专业标题样式）
         if title:
-            doc.add_heading(title, level=0)
+            title_para = doc.add_paragraph()
+            title_run = title_para.add_run(title)
+            title_run.font.size = Pt(26)
+            title_run.font.bold = True
+            title_run.font.color.rgb = self.THEME_COLORS["heading1"]
+            self._set_run_fonts(title_run, self.LATIN_FONT, self.EAST_ASIAN_FONT)
+            title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            title_para.paragraph_format.space_after = Pt(12)
+            # 标题下方添加分隔线
+            self._add_horizontal_rule(doc)
 
-        # 添加目录（在标题之后、正文之前）
+        # 添加目录
         if include_toc:
             doc.add_heading("目录", level=1)
             self._add_toc(doc)
 
-        # 处理内容
+        # 处理内容：优先尝试结构化 JSON，否则尝试 Markdown 解析，最后按纯文本处理
         if isinstance(content, str):
-            # 尝试解析为结构化 JSON
             parsed_content = self._try_parse_json_content(content)
             if parsed_content is not None:
                 self._process_structured_content(doc, parsed_content, color_coding)
+            elif self._looks_like_markdown(content):
+                self._process_markdown_content(doc, content, color_coding)
             else:
-                # 纯文本内容，按段落分割
                 for paragraph_text in content.split("\n"):
                     if paragraph_text.strip():
-                        doc.add_paragraph(paragraph_text)
+                        p = doc.add_paragraph()
+                        run = p.add_run(paragraph_text)
+                        self._set_run_fonts(run, self.LATIN_FONT, self.EAST_ASIAN_FONT)
         elif isinstance(content, list):
-            # 结构化内容列表（blocks 数组）
             self._process_structured_content(doc, content, color_coding)
         elif isinstance(content, dict):
-            # 结构化内容字典 {"blocks": [...]}
             blocks = content.get("blocks", [])
             self._process_structured_content(doc, blocks, color_coding)
 
@@ -150,7 +178,7 @@ class WordHandler:
         if header_text:
             self._add_header(doc, header_text)
 
-        # 添加页脚（含可选页码）
+        # 添加页脚
         if footer_text or page_number:
             self._add_footer(doc, footer_text or "", page_number)
 
@@ -161,13 +189,816 @@ class WordHandler:
             "message": f"Word 文档已生成: {path}",
         }
 
-    def read(self, params: dict) -> dict:
-        """读取 Word 文档内容
+    # ------------------------------------------------------------------ #
+    #  Markdown 解析（核心新增功能）
+    # ------------------------------------------------------------------ #
 
-        params:
-            path: 文件路径
-            include_formatting: 是否包含格式信息（可选，默认 false）
+    def _looks_like_markdown(self, content: str) -> bool:
+        """判断内容是否看起来像 Markdown 格式"""
+        if not content or not content.strip():
+            return False
+        md_patterns = [
+            r'^#{1,6}\s+',           # 标题
+            r'^\s*[-*+]\s+',         # 无序列表
+            r'^\s*\d+\.\s+',         # 有序列表
+            r'\*\*[^*]+\*\*',        # 粗体
+            r'\*[^*]+\*',            # 斜体
+            r'^\|.+\|$',             # 表格
+            r'^```',                 # 代码块
+            r'^---+$',               # 分隔线
+        ]
+        lines = content.split('\n')
+        md_line_count = 0
+        for line in lines[:50]:
+            for pattern in md_patterns:
+                if re.search(pattern, line):
+                    md_line_count += 1
+                    break
+        # 超过 20% 的行匹配 Markdown 模式则判定为 Markdown
+        return md_line_count > 0 and md_line_count / min(len(lines), 50) > 0.15
+
+    def _process_markdown_content(self, doc: Document, content: str, color_coding: bool = True):
+        """将 Markdown 内容解析并转换为专业 Word 元素"""
+        lines = content.split('\n')
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+
+            # 代码块处理
+            if line.strip().startswith('```'):
+                code_lines = []
+                i += 1
+                while i < len(lines) and not lines[i].strip().startswith('```'):
+                    code_lines.append(lines[i])
+                    i += 1
+                i += 1  # 跳过结束的 ```
+                if code_lines:
+                    self._add_code_block(doc, '\n'.join(code_lines))
+                continue
+
+            # 标题处理
+            heading_match = re.match(r'^(#{1,6})\s+(.+)$', line)
+            if heading_match:
+                level = len(heading_match.group(1))
+                text = heading_match.group(2).strip()
+                self._add_styled_heading(doc, level, text)
+                i += 1
+                continue
+
+            # 分隔线
+            if re.match(r'^-{3,}$|^\*{3,}$|^_{3,}$', line.strip()):
+                self._add_horizontal_rule(doc)
+                i += 1
+                continue
+
+            # 表格处理
+            if '|' in line and i + 1 < len(lines) and re.match(r'^[\s|:-]+$', lines[i + 1]):
+                table_lines = []
+                while i < len(lines) and '|' in lines[i]:
+                    table_lines.append(lines[i])
+                    i += 1
+                self._add_markdown_table(doc, table_lines)
+                continue
+
+            # 无序列表
+            ul_match = re.match(r'^\s*[-*+]\s+(.+)$', line)
+            if ul_match:
+                items = []
+                while i < len(lines):
+                    m = re.match(r'^\s*[-*+]\s+(.+)$', lines[i])
+                    if not m:
+                        break
+                    items.append(m.group(1))
+                    i += 1
+                self._add_styled_list(doc, items, ordered=False)
+                continue
+
+            # 有序列表
+            ol_match = re.match(r'^\s*(\d+)\.\s+(.+)$', line)
+            if ol_match:
+                items = []
+                while i < len(lines):
+                    m = re.match(r'^\s*\d+\.\s+(.+)$', lines[i])
+                    if not m:
+                        break
+                    items.append(m.group(1))
+                    i += 1
+                self._add_styled_list(doc, items, ordered=True)
+                continue
+
+            # 空行
+            if not line.strip():
+                i += 1
+                continue
+
+            # 普通段落（支持行内格式）
+            self._add_rich_paragraph(doc, line)
+            i += 1
+
+    def _add_styled_heading(self, doc: Document, level: int, text: str):
+        """添加带专业样式的标题"""
+        heading = doc.add_heading(text, level=min(level, 4))
+        # 设置标题颜色
+        color_key = f"heading{min(level, 3)}"
+        color = self.THEME_COLORS.get(color_key, self.THEME_COLORS["heading3"])
+        for run in heading.runs:
+            run.font.color.rgb = color
+            self._set_run_fonts(run, self.LATIN_FONT, self.EAST_ASIAN_FONT)
+        # 标题下方增加间距
+        heading.paragraph_format.space_before = Pt(18 if level <= 2 else 12)
+        heading.paragraph_format.space_after = Pt(8)
+
+    def _add_rich_paragraph(self, doc: Document, text: str):
+        """添加支持行内格式的段落（粗体、斜体、行内代码）"""
+        p = doc.add_paragraph()
+        self._parse_inline_format(p, text)
+        p.paragraph_format.space_after = Pt(6)
+
+    def _parse_inline_format(self, paragraph, text: str):
+        """解析行内格式并添加到段落"""
+        # 匹配粗体、斜体、行内代码的混合模式
+        pattern = r'(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)'
+        last_end = 0
+
+        for match in re.finditer(pattern, text):
+            # 添加匹配前的普通文本
+            if match.start() > last_end:
+                plain_text = text[last_end:match.start()]
+                if plain_text:
+                    run = paragraph.add_run(plain_text)
+                    self._set_run_fonts(run, self.LATIN_FONT, self.EAST_ASIAN_FONT)
+
+            if match.group(2):  # 粗体 **text**
+                run = paragraph.add_run(match.group(2))
+                run.font.bold = True
+                self._set_run_fonts(run, self.LATIN_FONT, self.EAST_ASIAN_FONT)
+            elif match.group(3):  # 斜体 *text*
+                run = paragraph.add_run(match.group(3))
+                run.font.italic = True
+                self._set_run_fonts(run, self.LATIN_FONT, self.EAST_ASIAN_FONT)
+            elif match.group(4):  # 行内代码 `text`
+                run = paragraph.add_run(match.group(4))
+                run.font.name = "Consolas"
+                rPr = run._r.get_or_add_rPr()
+                rFonts = rPr.find(qn('w:rFonts'))
+                if rFonts is None:
+                    rFonts = OxmlElement('w:rFonts')
+                    rPr.insert(0, rFonts)
+                rFonts.set(qn('w:eastAsia'), 'Consolas')
+                run.font.size = Pt(10)
+                run.font.color.rgb = RGBColor(0xC7, 0x25, 0x4E)
+                # 浅灰色背景
+                shd = OxmlElement('w:shd')
+                shd.set(qn('w:val'), 'clear')
+                shd.set(qn('w:color'), 'auto')
+                shd.set(qn('w:fill'), 'F0F0F0')
+                rPr.append(shd)
+
+            last_end = match.end()
+
+        # 添加剩余的普通文本
+        if last_end < len(text):
+            remaining = text[last_end:]
+            if remaining:
+                run = paragraph.add_run(remaining)
+                self._set_run_fonts(run, self.LATIN_FONT, self.EAST_ASIAN_FONT)
+
+        # 如果没有匹配任何格式，确保文本被添加
+        if not paragraph.runs and text:
+            run = paragraph.add_run(text)
+            self._set_run_fonts(run, self.LATIN_FONT, self.EAST_ASIAN_FONT)
+
+    def _add_styled_list(self, doc: Document, items: list, ordered: bool = False):
+        """添加带专业样式的列表"""
+        for item in items:
+            if ordered:
+                p = doc.add_paragraph(style="List Number")
+            else:
+                p = doc.add_paragraph(style="List Bullet")
+            # 支持列表项中的行内格式
+            self._parse_inline_format(p, item)
+            # 设置列表项字体
+            for run in p.runs:
+                self._set_run_fonts(run, self.LATIN_FONT, self.EAST_ASIAN_FONT)
+            p.paragraph_format.space_after = Pt(3)
+
+    def _add_code_block(self, doc: Document, code: str):
+        """添加代码块（带背景色和等宽字体）"""
+        for line in code.split('\n'):
+            p = doc.add_paragraph()
+            run = p.add_run(line)
+            run.font.name = "Consolas"
+            rPr = run._r.get_or_add_rPr()
+            rFonts = rPr.find(qn('w:rFonts'))
+            if rFonts is None:
+                rFonts = OxmlElement('w:rFonts')
+                rPr.insert(0, rFonts)
+            rFonts.set(qn('w:eastAsia'), 'Consolas')
+            run.font.size = Pt(9)
+            run.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+            # 浅灰色背景
+            shd = OxmlElement('w:shd')
+            shd.set(qn('w:val'), 'clear')
+            shd.set(qn('w:color'), 'auto')
+            shd.set(qn('w:fill'), 'F5F5F5')
+            rPr.append(shd)
+            # 左缩进
+            p.paragraph_format.left_indent = Cm(1)
+            p.paragraph_format.space_after = Pt(1)
+            p.paragraph_format.space_before = Pt(1)
+
+    def _add_markdown_table(self, doc: Document, table_lines: list):
+        """从 Markdown 表格行创建专业表格"""
+        if len(table_lines) < 2:
+            return
+
+        # 解析表头
+        headers = [cell.strip() for cell in table_lines[0].split('|') if cell.strip()]
+        # 跳过分隔行（第二行）
+        # 解析数据行
+        data_rows = []
+        for line in table_lines[2:]:
+            cells = [cell.strip() for cell in line.split('|') if cell.strip()]
+            if cells:
+                data_rows.append(cells)
+
+        num_cols = len(headers)
+        if num_cols == 0:
+            return
+
+        num_rows = 1 + len(data_rows)
+
+        table = doc.add_table(rows=num_rows, cols=num_cols)
+        table.style = "Table Grid"
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER
+
+        # 填充表头
+        for j, header_text in enumerate(headers):
+            if j < num_cols:
+                cell = table.rows[0].cells[j]
+                cell.text = ""
+                p = cell.paragraphs[0]
+                run = p.add_run(header_text)
+                run.font.bold = True
+                run.font.color.rgb = RGBColor(0x1F, 0x4E, 0x79)
+                run.font.size = Pt(11)
+                self._set_run_fonts(run, self.LATIN_FONT, self.EAST_ASIAN_FONT)
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                # 表头背景色
+                self._set_cell_shading(cell, self.THEME_COLORS["table_header_bg"])
+
+        # 填充数据行
+        for i, row_data in enumerate(data_rows):
+            for j, cell_text in enumerate(row_data):
+                if j < num_cols:
+                    cell = table.rows[i + 1].cells[j]
+                    cell.text = ""
+                    p = cell.paragraphs[0]
+                    run = p.add_run(cell_text)
+                    run.font.size = Pt(10)
+                    self._set_run_fonts(run, self.LATIN_FONT, self.EAST_ASIAN_FONT)
+                    # 交替行背景色
+                    if i % 2 == 1:
+                        self._set_cell_shading(cell, self.THEME_COLORS["table_alt_row_bg"])
+
+        # 设置表格边框
+        self._set_table_borders(table, self.THEME_COLORS["table_border"], 1)
+
+        # 表格后添加间距
+        spacer = doc.add_paragraph()
+        spacer.paragraph_format.space_before = Pt(6)
+
+    def _add_horizontal_rule(self, doc: Document):
+        """添加水平分隔线"""
+        p = doc.add_paragraph()
+        pPr = p._p.get_or_add_pPr()
+        pBdr = OxmlElement('w:pBdr')
+        bottom = OxmlElement('w:bottom')
+        bottom.set(qn('w:val'), 'single')
+        bottom.set(qn('w:sz'), '6')
+        bottom.set(qn('w:space'), '1')
+        bottom.set(qn('w:color'), 'B4C6E7')
+        pBdr.append(bottom)
+        pPr.append(pBdr)
+        p.paragraph_format.space_after = Pt(6)
+
+    def _set_cell_shading(self, cell, color_hex: str):
+        """设置单元格背景色"""
+        tc = cell._tc
+        tcPr = tc.get_or_add_tcPr()
+        shd = OxmlElement('w:shd')
+        shd.set(qn('w:val'), 'clear')
+        shd.set(qn('w:color'), 'auto')
+        shd.set(qn('w:fill'), color_hex)
+        tcPr.append(shd)
+
+    def _set_run_fonts(self, run, latin_font: str, east_asian_font: str):
+        """设置 run 的拉丁字体和东亚字体"""
+        run.font.name = latin_font
+        rPr = run._r.get_or_add_rPr()
+        rFonts = rPr.find(qn('w:rFonts'))
+        if rFonts is None:
+            rFonts = OxmlElement('w:rFonts')
+            rPr.insert(0, rFonts)
+        rFonts.set(qn('w:eastAsia'), east_asian_font)
+        rFonts.set(qn('w:ascii'), latin_font)
+        rFonts.set(qn('w:hAnsi'), latin_font)
+
+    # ------------------------------------------------------------------ #
+    #  样式覆盖（专业配色方案）
+    # ------------------------------------------------------------------ #
+
+    def _apply_style_overrides(self, doc: Document):
+        """应用专业样式覆盖
+
+        - 拉丁字体: Arial，东亚字体: 微软雅黑
+        - 标题1: 深蓝色 22pt 粗体
+        - 标题2: 中蓝色 16pt 粗体
+        - 标题3: 浅蓝色 14pt 粗体
+        - 正文: 12pt, 行间距 1.5
         """
+        # 设置默认字体
+        style_normal = doc.styles["Normal"]
+        style_normal.font.name = self.LATIN_FONT
+        style_normal.font.size = Pt(12)
+        style_normal.paragraph_format.line_spacing = 1.5
+        # 设置东亚字体
+        self._set_style_east_asian_font(style_normal, self.EAST_ASIAN_FONT)
+
+        # 标题1: 深蓝色 22pt 粗体
+        style_h1 = doc.styles["Heading 1"]
+        style_h1.font.name = self.LATIN_FONT
+        style_h1.font.size = Pt(22)
+        style_h1.font.bold = True
+        style_h1.font.color.rgb = self.THEME_COLORS["heading1"]
+        style_h1.paragraph_format.space_before = Pt(24)
+        style_h1.paragraph_format.space_after = Pt(8)
+        self._set_style_east_asian_font(style_h1, self.EAST_ASIAN_FONT)
+
+        # 标题2: 中蓝色 16pt 粗体
+        style_h2 = doc.styles["Heading 2"]
+        style_h2.font.name = self.LATIN_FONT
+        style_h2.font.size = Pt(16)
+        style_h2.font.bold = True
+        style_h2.font.color.rgb = self.THEME_COLORS["heading2"]
+        style_h2.paragraph_format.space_before = Pt(18)
+        style_h2.paragraph_format.space_after = Pt(6)
+        self._set_style_east_asian_font(style_h2, self.EAST_ASIAN_FONT)
+
+        # 标题3: 浅蓝色 14pt 粗体
+        style_h3 = doc.styles["Heading 3"]
+        style_h3.font.name = self.LATIN_FONT
+        style_h3.font.size = Pt(14)
+        style_h3.font.bold = True
+        style_h3.font.color.rgb = self.THEME_COLORS["heading3"]
+        style_h3.paragraph_format.space_before = Pt(12)
+        style_h3.paragraph_format.space_after = Pt(4)
+        self._set_style_east_asian_font(style_h3, self.EAST_ASIAN_FONT)
+
+        # 标题4: 深灰色 12pt 粗体
+        style_h4 = doc.styles["Heading 4"]
+        style_h4.font.name = self.LATIN_FONT
+        style_h4.font.size = Pt(12)
+        style_h4.font.bold = True
+        style_h4.font.color.rgb = RGBColor(0x40, 0x40, 0x40)
+        self._set_style_east_asian_font(style_h4, self.EAST_ASIAN_FONT)
+
+        self.logger.debug("_apply_style_overrides: 已应用专业样式覆盖")
+
+    def _set_style_east_asian_font(self, style, east_asian_font: str):
+        """设置样式的东亚字体"""
+        rPr = style.element.get_or_add_rPr()
+        rFonts = rPr.find(qn('w:rFonts'))
+        if rFonts is None:
+            rFonts = OxmlElement('w:rFonts')
+            rPr.insert(0, rFonts)
+        rFonts.set(qn('w:eastAsia'), east_asian_font)
+        rFonts.set(qn('w:ascii'), self.LATIN_FONT)
+        rFonts.set(qn('w:hAnsi'), self.LATIN_FONT)
+
+    # ------------------------------------------------------------------ #
+    #  结构化内容处理（保留原有功能）
+    # ------------------------------------------------------------------ #
+
+    def _try_parse_json_content(self, content: str):
+        """尝试将字符串内容解析为结构化 JSON"""
+        if not content or not content.strip():
+            return None
+        try:
+            parsed = json.loads(content)
+            if isinstance(parsed, dict):
+                return parsed.get("blocks", [])
+            elif isinstance(parsed, list):
+                return parsed
+            return None
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+    def _process_structured_content(self, doc: Document, blocks: list, color_coding: bool = True):
+        """处理结构化内容块列表"""
+        for block in blocks:
+            if not isinstance(block, dict):
+                continue
+            self._add_content_block(doc, block, color_coding=color_coding)
+
+    def _add_content_block(self, doc: Document, block: dict, color_coding: bool = True):
+        """添加结构化内容块"""
+        block_type = block.get("type", "paragraph")
+
+        if block_type == "heading":
+            self._add_heading_block(doc, block, color_coding)
+        elif block_type == "paragraph":
+            self._add_paragraph_block(doc, block, color_coding)
+        elif block_type == "table":
+            self._add_table_block(doc, block, color_coding)
+        elif block_type == "list":
+            self._add_list_block(doc, block, color_coding)
+        elif block_type == "image":
+            self._add_image_block(doc, block)
+
+    def _add_heading_block(self, doc: Document, block: dict, color_coding: bool):
+        """添加标题块"""
+        level = block.get("level", 1)
+        text = block.get("text", "")
+        self._add_styled_heading(doc, level, text)
+        if color_coding and "colorType" in block:
+            color = self.COLOR_MAP.get(block["colorType"])
+            if color:
+                heading = doc.paragraphs[-1]
+                for run in heading.runs:
+                    run.font.color.rgb = color
+
+    def _add_paragraph_block(self, doc: Document, block: dict, color_coding: bool):
+        """添加段落块"""
+        text = block.get("text", "")
+        style = block.get("style", None)
+        alignment = block.get("alignment", None)
+        bold = block.get("bold", False)
+        italic = block.get("italic", False)
+
+        p = doc.add_paragraph()
+        self._parse_inline_format(p, text)
+        if style:
+            p.style = style
+        if alignment:
+            align_map = {
+                "left": WD_ALIGN_PARAGRAPH.LEFT,
+                "center": WD_ALIGN_PARAGRAPH.CENTER,
+                "right": WD_ALIGN_PARAGRAPH.RIGHT,
+                "justify": WD_ALIGN_PARAGRAPH.JUSTIFY,
+            }
+            if alignment in align_map:
+                p.alignment = align_map[alignment]
+
+        if bold or italic:
+            for run in p.runs:
+                if bold:
+                    run.font.bold = True
+                if italic:
+                    run.font.italic = True
+
+        if color_coding and "colorType" in block:
+            color = self.COLOR_MAP.get(block["colorType"])
+            if color:
+                for run in p.runs:
+                    run.font.color.rgb = color
+
+    def _add_table_block(self, doc: Document, block: dict, color_coding: bool):
+        """添加专业表格块"""
+        headers = block.get("headers", [])
+        rows_data = block.get("rows", [])
+        data = block.get("data", [])
+        table_width_dxa = block.get("width", None)
+        col_widths_dxa = block.get("colWidths", [])
+
+        if isinstance(rows_data, list) and rows_data and not isinstance(rows_data[0], (int, float)):
+            if headers:
+                all_rows = [headers] + rows_data
+            else:
+                all_rows = rows_data
+            num_rows = len(all_rows)
+            num_cols = max(len(r) for r in all_rows) if all_rows else 1
+        else:
+            num_rows = rows_data if isinstance(rows_data, int) else (len(data) if data else 1)
+            num_cols = block.get("cols", 1)
+            all_rows = data if data else [[""] * num_cols for _ in range(num_rows)]
+
+        table = doc.add_table(rows=num_rows, cols=num_cols)
+        table.style = "Table Grid"
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER
+
+        if table_width_dxa:
+            table.width = Emu(table_width_dxa * self.DXA_TO_EMU)
+
+        if col_widths_dxa and len(col_widths_dxa) >= num_cols:
+            for i, col_w in enumerate(col_widths_dxa):
+                if i < num_cols:
+                    col_width_emu = Emu(col_w * self.DXA_TO_EMU)
+                    table.columns[i].width = col_width_emu
+
+        # 填充表格数据
+        for i, row_data in enumerate(all_rows):
+            for j, cell_text in enumerate(row_data):
+                if j < num_cols:
+                    cell = table.rows[i].cells[j]
+                    cell.text = ""
+                    p = cell.paragraphs[0]
+                    run = p.add_run(str(cell_text))
+                    self._set_run_fonts(run, self.LATIN_FONT, self.EAST_ASIAN_FONT)
+                    if col_widths_dxa and j < len(col_widths_dxa):
+                        cell.width = Emu(col_widths_dxa[j] * self.DXA_TO_EMU)
+
+        # 专业边框
+        self._set_table_borders(table, self.THEME_COLORS["table_border"], 1)
+
+        # 表头行样式：蓝色背景 + 粗体居中
+        if headers and num_rows > 0:
+            for cell in table.rows[0].cells:
+                self._set_cell_shading(cell, self.THEME_COLORS["table_header_bg"])
+                for paragraph in cell.paragraphs:
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    for run in paragraph.runs:
+                        run.font.bold = True
+                        run.font.color.rgb = RGBColor(0x1F, 0x4E, 0x79)
+
+        # 交替行背景色
+        start_row = 1 if headers else 0
+        for i in range(start_row, num_rows):
+            if (i - start_row) % 2 == 1:
+                for cell in table.rows[i].cells:
+                    self._set_cell_shading(cell, self.THEME_COLORS["table_alt_row_bg"])
+
+        if color_coding and "colorType" in block:
+            color = self.COLOR_MAP.get(block["colorType"])
+            if color:
+                for row in table.rows:
+                    for cell in row.cells:
+                        for paragraph in cell.paragraphs:
+                            for run in paragraph.runs:
+                                run.font.color.rgb = color
+
+    def _add_list_block(self, doc: Document, block: dict, color_coding: bool):
+        """添加列表块"""
+        items = block.get("items", [])
+        ordered = block.get("ordered", False)
+        self._add_styled_list(doc, items, ordered)
+
+        if color_coding and "colorType" in block:
+            color = self.COLOR_MAP.get(block["colorType"])
+            if color:
+                # 对最后添加的列表项应用颜色
+                for _ in items:
+                    para = doc.paragraphs[-1]
+                    for run in para.runs:
+                        run.font.color.rgb = color
+
+    def _add_image_block(self, doc: Document, block: dict):
+        """添加图片块"""
+        image_path = block.get("path", "")
+        width = block.get("width", None)
+        height = block.get("height", None)
+        alt_text = block.get("altText", {})
+
+        if not image_path or not os.path.exists(image_path):
+            self.logger.warning("_add_image_block: 图片路径不存在: %s", image_path)
+            return
+
+        if width and height:
+            pic = doc.add_picture(image_path, width=Inches(width), height=Inches(height))
+        elif width:
+            pic = doc.add_picture(image_path, width=Inches(width))
+        elif height:
+            pic = doc.add_picture(image_path, height=Inches(height))
+        else:
+            pic = doc.add_picture(image_path)
+
+        if alt_text:
+            inline = pic.inline
+            if inline is not None:
+                docPr = inline.find(qn('wp:docPr'))
+                if docPr is not None:
+                    if "title" in alt_text:
+                        docPr.set("title", alt_text["title"])
+                    if "description" in alt_text:
+                        docPr.set("descr", alt_text["description"])
+                    if "name" in alt_text:
+                        docPr.set("name", alt_text["name"])
+
+    # ------------------------------------------------------------------ #
+    #  表格边框设置
+    # ------------------------------------------------------------------ #
+
+    def _set_table_borders(self, table, color_hex: str = "CCCCCC", size_pt: int = 1):
+        """设置表格边框样式"""
+        tbl = table._tbl
+        tblPr = tbl.tblPr if tbl.tblPr is not None else OxmlElement("w:tblPr")
+
+        borders = OxmlElement("w:tblBorders")
+        for border_name in ("top", "left", "bottom", "right", "insideH", "insideV"):
+            border = OxmlElement(f"w:{border_name}")
+            border.set(qn("w:val"), "single")
+            border.set(qn("w:sz"), str(size_pt * 8))
+            border.set(qn("w:space"), "0")
+            border.set(qn("w:color"), color_hex)
+            borders.append(border)
+
+        existing_borders = tblPr.find(qn("w:tblBorders"))
+        if existing_borders is not None:
+            tblPr.remove(existing_borders)
+
+        tblPr.append(borders)
+
+    # ------------------------------------------------------------------ #
+    #  页面尺寸设置
+    # ------------------------------------------------------------------ #
+
+    def _set_page_size(self, doc: Document, size: str):
+        """设置文档页面尺寸"""
+        size_lower = size.lower() if size else ""
+        if size_lower not in self.PAGE_SIZES:
+            self.logger.warning("_set_page_size: 不支持的页面尺寸: %s", size)
+            return
+
+        page_size = self.PAGE_SIZES[size_lower]
+        section = doc.sections[0]
+        section.page_width = Emu(page_size["width"] * self.DXA_TO_EMU)
+        section.page_height = Emu(page_size["height"] * self.DXA_TO_EMU)
+
+    # ------------------------------------------------------------------ #
+    #  页眉页脚
+    # ------------------------------------------------------------------ #
+
+    def _add_header(self, doc: Document, text: str):
+        """添加页眉"""
+        section = doc.sections[0]
+        header = section.header
+        header.is_linked_to_previous = False
+        if header.paragraphs:
+            paragraph = header.paragraphs[0]
+        else:
+            paragraph = header.add_paragraph()
+        paragraph.text = ""
+        run = paragraph.add_run(text)
+        run.font.size = Pt(9)
+        run.font.color.rgb = RGBColor(0x80, 0x80, 0x80)
+        self._set_run_fonts(run, self.LATIN_FONT, self.EAST_ASIAN_FONT)
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    def _add_footer(self, doc: Document, text: str, page_number: bool = True):
+        """添加页脚（含可选页码域代码）"""
+        section = doc.sections[0]
+        footer = section.footer
+        footer.is_linked_to_previous = False
+        if footer.paragraphs:
+            paragraph = footer.paragraphs[0]
+        else:
+            paragraph = footer.add_paragraph()
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        if text:
+            run = paragraph.add_run(text)
+            run.font.size = Pt(9)
+            run.font.color.rgb = RGBColor(0x80, 0x80, 0x80)
+            self._set_run_fonts(run, self.LATIN_FONT, self.EAST_ASIAN_FONT)
+
+        if page_number:
+            if text:
+                paragraph.add_run(" ")
+            run_begin = paragraph.add_run()
+            fldChar_begin = OxmlElement("w:fldChar")
+            fldChar_begin.set(qn("w:fldCharType"), "begin")
+            run_begin._r.append(fldChar_begin)
+
+            run_instr = paragraph.add_run()
+            instrText = OxmlElement("w:instrText")
+            instrText.set(qn("xml:space"), "preserve")
+            instrText.text = " PAGE "
+            run_instr._r.append(instrText)
+
+            run_sep = paragraph.add_run()
+            fldChar_sep = OxmlElement("w:fldChar")
+            fldChar_sep.set(qn("w:fldCharType"), "separate")
+            run_sep._r.append(fldChar_sep)
+
+            run_placeholder = paragraph.add_run("1")
+
+            run_end = paragraph.add_run()
+            fldChar_end = OxmlElement("w:fldChar")
+            fldChar_end.set(qn("w:fldCharType"), "end")
+            run_end._r.append(fldChar_end)
+
+    # ------------------------------------------------------------------ #
+    #  书签和超链接
+    # ------------------------------------------------------------------ #
+
+    def _add_bookmark(self, paragraph, bookmark_id: str, text: str, numeric_id: int = 0):
+        """在段落中添加书签"""
+        bookmark_start = OxmlElement("w:bookmarkStart")
+        bookmark_start.set(qn("w:id"), str(numeric_id))
+        bookmark_start.set(qn("w:name"), bookmark_id)
+
+        bookmark_end = OxmlElement("w:bookmarkEnd")
+        bookmark_end.set(qn("w:id"), str(numeric_id))
+
+        run = paragraph.add_run(text)
+
+        run._r.addprevious(bookmark_start)
+        run._r.addnext(bookmark_end)
+
+    def _add_hyperlink(self, paragraph, text: str, url: str):
+        """添加外部超链接"""
+        part = paragraph.part
+        r_id = part.relate_to(
+            url,
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+            is_external=True,
+        )
+
+        hyperlink = OxmlElement("w:hyperlink")
+        hyperlink.set(qn("r:id"), r_id)
+
+        new_run = OxmlElement("w:r")
+        rPr = OxmlElement("w:rPr")
+
+        color_elem = OxmlElement("w:color")
+        color_elem.set(qn("w:val"), "2E75B6")
+        rPr.append(color_elem)
+
+        u_elem = OxmlElement("w:u")
+        u_elem.set(qn("w:val"), "single")
+        rPr.append(u_elem)
+
+        new_run.append(rPr)
+
+        t_elem = OxmlElement("w:t")
+        t_elem.text = text
+        new_run.append(t_elem)
+
+        hyperlink.append(new_run)
+        paragraph._p.append(hyperlink)
+
+    def _add_internal_link(self, paragraph, text: str, anchor: str):
+        """添加内部书签链接"""
+        hyperlink = OxmlElement("w:hyperlink")
+        hyperlink.set(qn("w:anchor"), anchor)
+
+        new_run = OxmlElement("w:r")
+        rPr = OxmlElement("w:rPr")
+
+        color_elem = OxmlElement("w:color")
+        color_elem.set(qn("w:val"), "2E75B6")
+        rPr.append(color_elem)
+
+        u_elem = OxmlElement("w:u")
+        u_elem.set(qn("w:val"), "single")
+        rPr.append(u_elem)
+
+        new_run.append(rPr)
+
+        t_elem = OxmlElement("w:t")
+        t_elem.text = text
+        new_run.append(t_elem)
+
+        hyperlink.append(new_run)
+        paragraph._p.append(hyperlink)
+
+    # ------------------------------------------------------------------ #
+    #  目录
+    # ------------------------------------------------------------------ #
+
+    def _add_toc(self, doc: Document):
+        """添加目录（TOC 域代码）"""
+        paragraph = doc.add_paragraph()
+
+        run_begin = paragraph.add_run()
+        fldChar_begin = OxmlElement("w:fldChar")
+        fldChar_begin.set(qn("w:fldCharType"), "begin")
+        run_begin._r.append(fldChar_begin)
+
+        run_instr = paragraph.add_run()
+        instrText = OxmlElement("w:instrText")
+        instrText.set(qn("xml:space"), "preserve")
+        instrText.text = ' TOC \\o "1-3" \\h \\z \\u '
+        run_instr._r.append(instrText)
+
+        run_sep = paragraph.add_run()
+        fldChar_sep = OxmlElement("w:fldChar")
+        fldChar_sep.set(qn("w:fldCharType"), "separate")
+        run_sep._r.append(fldChar_sep)
+
+        run_placeholder = paragraph.add_run('（请右键点击此处，选择"更新域"以生成目录）')
+
+        run_end = paragraph.add_run()
+        fldChar_end = OxmlElement("w:fldChar")
+        fldChar_end.set(qn("w:fldCharType"), "end")
+        run_end._r.append(fldChar_end)
+
+    # ------------------------------------------------------------------ #
+    #  格式转换辅助方法
+    # ------------------------------------------------------------------ #
+
+    def read(self, params: dict) -> dict:
+        """读取 Word 文档内容"""
         path = params.get("path", "")
         if not path:
             self.logger.error("read: 缺少文件路径")
@@ -179,7 +1010,6 @@ class WordHandler:
 
         doc = Document(path)
 
-        # 提取段落文本
         paragraphs = []
         for para in doc.paragraphs:
             para_info = {
@@ -188,7 +1018,6 @@ class WordHandler:
             }
             paragraphs.append(para_info)
 
-        # 提取表格
         tables = []
         for table in doc.tables:
             table_data = []
@@ -197,7 +1026,6 @@ class WordHandler:
                 table_data.append(row_data)
             tables.append(table_data)
 
-        # 文档属性
         props = {
             "title": doc.core_properties.title or "",
             "author": doc.core_properties.author or "",
@@ -215,23 +1043,7 @@ class WordHandler:
         }
 
     def modify(self, params: dict) -> dict:
-        """修改 Word 文档
-
-        params:
-            path: 文件路径
-            operations: 修改操作列表
-                [{"type": "replace", "old": "...", "new": "..."},  # 全文搜索替换
-                 {"type": "replace", "index": 1, "text": "..."},   # 按段落索引替换整段
-                 {"type": "add_paragraph", "text": "...", "position": 0},
-                 {"type": "add_table", "rows": 3, "cols": 2, "data": [[...]]},
-                 {"type": "addHeader", "text": "页眉文本"},
-                 {"type": "addFooter", "text": "页脚文本", "pageNumber": true},
-                 {"type": "addBookmark", "id": "chapter1", "text": "第一章"},
-                 {"type": "addHyperlink", "text": "点击跳转", "url": "https://..."},
-                 {"type": "addHyperlink", "text": "跳转", "anchor": "chapter1"},
-                 {"type": "setPageSize", "size": "a4"},
-                 {"type": "addToc"}]
-        """
+        """修改 Word 文档"""
         path = params.get("path", "")
         operations = params.get("operations", [])
         if not path:
@@ -250,19 +1062,15 @@ class WordHandler:
 
             if op_type == "replace":
                 if "index" in op:
-                    # 按段落索引替换整段内容
                     index = op.get("index", 0)
                     new_text = op.get("text", "")
                     if 0 <= index < len(doc.paragraphs):
                         para = doc.paragraphs[index]
                         para.clear()
-                        para.add_run(new_text)
+                        run = para.add_run(new_text)
+                        self._set_run_fonts(run, self.LATIN_FONT, self.EAST_ASIAN_FONT)
                         modified_count += 1
-                        self.logger.debug("modify: 按索引替换段落 %d, 新文本: %s", index, new_text[:50])
-                    else:
-                        self.logger.warning("modify: 段落索引 %d 超出范围 (0-%d)", index, len(doc.paragraphs) - 1)
                 else:
-                    # 全文搜索替换
                     old_text = op.get("old", "")
                     new_text = op.get("new", "")
                     for para in doc.paragraphs:
@@ -275,7 +1083,8 @@ class WordHandler:
             elif op_type == "add_paragraph":
                 text = op.get("text", "")
                 style = op.get("style", None)
-                p = doc.add_paragraph(text)
+                p = doc.add_paragraph()
+                self._parse_inline_format(p, text)
                 if style:
                     p.style = style
                 modified_count += 1
@@ -283,7 +1092,7 @@ class WordHandler:
             elif op_type == "add_heading":
                 text = op.get("text", "")
                 level = op.get("level", 1)
-                doc.add_heading(text, level=level)
+                self._add_styled_heading(doc, level, text)
                 modified_count += 1
 
             elif op_type == "add_table":
@@ -296,7 +1105,11 @@ class WordHandler:
                     if i < rows:
                         for j, cell_text in enumerate(row_data):
                             if j < cols:
-                                table.rows[i].cells[j].text = str(cell_text)
+                                cell = table.rows[i].cells[j]
+                                cell.text = ""
+                                p = cell.paragraphs[0]
+                                run = p.add_run(str(cell_text))
+                                self._set_run_fonts(run, self.LATIN_FONT, self.EAST_ASIAN_FONT)
                 modified_count += 1
 
             elif op_type == "addHeader":
@@ -318,8 +1131,6 @@ class WordHandler:
                     numeric_id = abs(hash(bm_id)) % 10000
                     self._add_bookmark(p, bm_id, bm_text, numeric_id)
                     modified_count += 1
-                else:
-                    self.logger.warning("modify: addBookmark 缺少 id 字段")
 
             elif op_type == "addHyperlink":
                 hl_text = op.get("text", "")
@@ -332,16 +1143,12 @@ class WordHandler:
                 elif hl_anchor:
                     self._add_internal_link(p, hl_text, hl_anchor)
                     modified_count += 1
-                else:
-                    self.logger.warning("modify: addHyperlink 缺少 url 或 anchor 字段")
 
             elif op_type == "setPageSize":
                 size = op.get("size", "")
                 if size:
                     self._set_page_size(doc, size)
                     modified_count += 1
-                else:
-                    self.logger.warning("modify: setPageSize 缺少 size 字段")
 
             elif op_type == "addToc":
                 self._add_toc(doc)
@@ -356,13 +1163,7 @@ class WordHandler:
         }
 
     def convert(self, params: dict) -> dict:
-        """格式转换
-
-        params:
-            path: 源文件路径
-            output_path: 输出文件路径
-            format: 目标格式（md, txt, pdf）
-        """
+        """格式转换"""
         path = params.get("path", "")
         output_path = params.get("output_path", "")
         target_format = params.get("format", "md")
@@ -378,22 +1179,16 @@ class WordHandler:
 
         if target_format in ("md", "markdown"):
             content = self._convert_to_markdown(doc)
-
         elif target_format == "txt":
             content = "\n".join(para.text for para in doc.paragraphs)
-
         elif target_format == "pdf":
             content = self._convert_to_pdf(doc, output_path or os.path.splitext(path)[0] + ".pdf")
-            # PDF 已写入文件，content 置空
             content = None
-
         else:
             self.logger.error("convert: 不支持的目标格式: %s", target_format)
             return {"error": f"不支持的目标格式: {target_format}"}
 
-        # 写入输出文件或返回内容
         if content is None:
-            # content 为 None 表示已在转换分支内直接写入文件（如 PDF）
             self.logger.info("convert: 格式转换完成, output_path=%s, format=%s", output_path, target_format)
             return {
                 "path": output_path,
@@ -417,11 +1212,7 @@ class WordHandler:
             }
 
     def analyze(self, params: dict) -> dict:
-        """分析 Word 文档
-
-        params:
-            path: 文件路径
-        """
+        """分析 Word 文档"""
         path = params.get("path", "")
         if not path:
             self.logger.error("analyze: 缺少文件路径")
@@ -433,7 +1224,6 @@ class WordHandler:
 
         doc = Document(path)
 
-        # 统计信息
         total_chars = sum(len(p.text) for p in doc.paragraphs)
         total_words = sum(len(p.text.split()) for p in doc.paragraphs)
         heading_count = sum(
@@ -441,7 +1231,6 @@ class WordHandler:
             if p.style and ("Heading" in p.style.name or "Title" in p.style.name)
         )
 
-        # 提取标题结构
         headings = []
         for para in doc.paragraphs:
             if para.style and ("Heading" in para.style.name or "Title" in para.style.name):
@@ -470,586 +1259,6 @@ class WordHandler:
             },
         }
 
-    # ------------------------------------------------------------------ #
-    #  样式覆盖（Skill 规范）
-    # ------------------------------------------------------------------ #
-
-    def _apply_style_overrides(self, doc: Document):
-        """应用样式覆盖，遵循 Skill 规范
-
-        - 默认字体: Arial 12pt
-        - 标题1: 16pt 粗体, 间距前后 240 DXA
-        - 标题2: 14pt 粗体, 间距前后 180 DXA
-        - 正文: 12pt, 行间距 1.5
-        """
-        # 设置默认字体为 Arial 12pt
-        style_normal = doc.styles["Normal"]
-        style_normal.font.name = "Arial"
-        style_normal.font.size = Pt(12)
-        # 设置行间距 1.5 倍
-        style_normal.paragraph_format.line_spacing = 1.5
-
-        # 标题1: 16pt 粗体, 间距前后 240 DXA
-        style_h1 = doc.styles["Heading 1"]
-        style_h1.font.name = "Arial"
-        style_h1.font.size = Pt(16)
-        style_h1.font.bold = True
-        style_h1.paragraph_format.space_before = Emu(240 * self.DXA_TO_EMU)
-        style_h1.paragraph_format.space_after = Emu(240 * self.DXA_TO_EMU)
-
-        # 标题2: 14pt 粗体, 间距前后 180 DXA
-        style_h2 = doc.styles["Heading 2"]
-        style_h2.font.name = "Arial"
-        style_h2.font.size = Pt(14)
-        style_h2.font.bold = True
-        style_h2.paragraph_format.space_before = Emu(180 * self.DXA_TO_EMU)
-        style_h2.paragraph_format.space_after = Emu(180 * self.DXA_TO_EMU)
-
-        self.logger.debug("_apply_style_overrides: 已应用样式覆盖")
-
-    # ------------------------------------------------------------------ #
-    #  结构化内容处理
-    # ------------------------------------------------------------------ #
-
-    def _try_parse_json_content(self, content: str):
-        """尝试将字符串内容解析为结构化 JSON
-
-        支持格式:
-        - {"blocks": [{type, ...}]}
-        - [{type, ...}]（直接数组）
-
-        Returns:
-            解析后的 blocks 列表，或 None（非 JSON 格式）
-        """
-        if not content or not content.strip():
-            return None
-        try:
-            parsed = json.loads(content)
-            if isinstance(parsed, dict):
-                return parsed.get("blocks", [])
-            elif isinstance(parsed, list):
-                return parsed
-            return None
-        except (json.JSONDecodeError, TypeError):
-            return None
-
-    def _process_structured_content(self, doc: Document, blocks: list, color_coding: bool = True):
-        """处理结构化内容块列表
-
-        Args:
-            doc: Document 对象
-            blocks: 内容块列表
-            color_coding: 是否启用颜色编码
-        """
-        for block in blocks:
-            if not isinstance(block, dict):
-                continue
-            self._add_content_block(doc, block, color_coding=color_coding)
-
-    def _add_content_block(self, doc: Document, block: dict, color_coding: bool = True):
-        """添加结构化内容块
-
-        支持的 block 类型:
-        - heading: 标题 {type:"heading", level:1, text:"...", colorType:"input"}
-        - paragraph: 段落 {type:"paragraph", text:"...", style, alignment, colorType, bold, italic}
-        - table: 专业表格 {type:"table", headers:[], rows:[], width, colWidths, colorType}
-        - list: 列表 {type:"list", items:[], ordered, colorType}
-        - image: 图片 {type:"image", path:"...", width, height, format, altText}
-        """
-        block_type = block.get("type", "paragraph")
-
-        if block_type == "heading":
-            self._add_heading_block(doc, block, color_coding)
-
-        elif block_type == "paragraph":
-            self._add_paragraph_block(doc, block, color_coding)
-
-        elif block_type == "table":
-            self._add_table_block(doc, block, color_coding)
-
-        elif block_type == "list":
-            self._add_list_block(doc, block, color_coding)
-
-        elif block_type == "image":
-            self._add_image_block(doc, block)
-
-    def _add_heading_block(self, doc: Document, block: dict, color_coding: bool):
-        """添加标题块"""
-        level = block.get("level", 1)
-        text = block.get("text", "")
-        heading = doc.add_heading(text, level=level)
-        # 颜色编码：根据 colorType 应用颜色
-        if color_coding and "colorType" in block:
-            color = self.COLOR_MAP.get(block["colorType"])
-            if color:
-                for run in heading.runs:
-                    run.font.color.rgb = color
-
-    def _add_paragraph_block(self, doc: Document, block: dict, color_coding: bool):
-        """添加段落块"""
-        text = block.get("text", "")
-        style = block.get("style", None)
-        alignment = block.get("alignment", None)
-        bold = block.get("bold", False)
-        italic = block.get("italic", False)
-
-        p = doc.add_paragraph(text)
-        if style:
-            p.style = style
-        if alignment:
-            align_map = {
-                "left": WD_ALIGN_PARAGRAPH.LEFT,
-                "center": WD_ALIGN_PARAGRAPH.CENTER,
-                "right": WD_ALIGN_PARAGRAPH.RIGHT,
-                "justify": WD_ALIGN_PARAGRAPH.JUSTIFY,
-            }
-            if alignment in align_map:
-                p.alignment = align_map[alignment]
-
-        # 应用粗体/斜体
-        if bold or italic:
-            for run in p.runs:
-                if bold:
-                    run.font.bold = True
-                if italic:
-                    run.font.italic = True
-
-        # 颜色编码：根据 colorType 应用颜色
-        if color_coding and "colorType" in block:
-            color = self.COLOR_MAP.get(block["colorType"])
-            if color:
-                for run in p.runs:
-                    run.font.color.rgb = color
-
-    def _add_table_block(self, doc: Document, block: dict, color_coding: bool):
-        """添加专业表格块，遵循 Skill 规范
-
-        规范要求:
-        - 设置表格宽度（DXA 单位）
-        - 同时设置列宽和每个单元格的宽度
-        - 边框: 单线 1pt 灰色 (#CCCCCC)
-        - 使用 ShadingType.CLEAR 而非 SOLID 防止黑色背景
-        """
-        headers = block.get("headers", [])
-        rows_data = block.get("rows", [])
-        data = block.get("data", [])
-        # 表格总宽度（DXA 单位），默认使用页面可用宽度
-        table_width_dxa = block.get("width", None)
-        # 各列宽度（DXA 单位列表）
-        col_widths_dxa = block.get("colWidths", [])
-
-        # 兼容两种格式
-        if isinstance(rows_data, list) and rows_data and not isinstance(rows_data[0], (int, float)):
-            # 格式1: rows 是数据列表
-            if headers:
-                all_rows = [headers] + rows_data
-            else:
-                all_rows = rows_data
-            num_rows = len(all_rows)
-            num_cols = max(len(r) for r in all_rows) if all_rows else 1
-        else:
-            # 格式2: rows/cols 是整数
-            num_rows = rows_data if isinstance(rows_data, int) else (len(data) if data else 1)
-            num_cols = block.get("cols", 1)
-            all_rows = data if data else [[""] * num_cols for _ in range(num_rows)]
-
-        table = doc.add_table(rows=num_rows, cols=num_cols)
-        table.style = "Table Grid"
-        table.alignment = WD_TABLE_ALIGNMENT.CENTER
-
-        # 设置表格总宽度
-        if table_width_dxa:
-            table.width = Emu(table_width_dxa * self.DXA_TO_EMU)
-
-        # 设置列宽和单元格宽度
-        if col_widths_dxa and len(col_widths_dxa) >= num_cols:
-            for i, col_w in enumerate(col_widths_dxa):
-                if i < num_cols:
-                    col_width_emu = Emu(col_w * self.DXA_TO_EMU)
-                    table.columns[i].width = col_width_emu
-
-        # 填充表格数据
-        for i, row_data in enumerate(all_rows):
-            for j, cell_text in enumerate(row_data):
-                if j < num_cols:
-                    cell = table.rows[i].cells[j]
-                    cell.text = str(cell_text)
-                    # 设置单元格宽度（与列宽一致）
-                    if col_widths_dxa and j < len(col_widths_dxa):
-                        cell.width = Emu(col_widths_dxa[j] * self.DXA_TO_EMU)
-
-        # 应用专业边框：1pt 灰色 #CCCCCC
-        self._set_table_borders(table, "CCCCCC", 1)
-
-        # 表头行样式：粗体居中
-        if headers and num_rows > 0:
-            for cell in table.rows[0].cells:
-                for paragraph in cell.paragraphs:
-                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    for run in paragraph.runs:
-                        run.font.bold = True
-
-        # 颜色编码
-        if color_coding and "colorType" in block:
-            color = self.COLOR_MAP.get(block["colorType"])
-            if color:
-                for row in table.rows:
-                    for cell in row.cells:
-                        for paragraph in cell.paragraphs:
-                            for run in paragraph.runs:
-                                run.font.color.rgb = color
-
-    def _add_list_block(self, doc: Document, block: dict, color_coding: bool):
-        """添加列表块，遵循 Skill 规范
-
-        规范要求:
-        - 使用 WD_STYLE_PARAGRAPH.LIST_BULLET 而非 Unicode 字符
-        - 缩进: 左 720 DXA, 悬挂 360 DXA
-        """
-        items = block.get("items", [])
-        ordered = block.get("ordered", False)
-
-        for item in items:
-            if ordered:
-                p = doc.add_paragraph(str(item), style="List Number")
-            else:
-                p = doc.add_paragraph(str(item), style="List Bullet")
-
-            # 设置缩进：左 720 DXA，悬挂 360 DXA
-            p.paragraph_format.left_indent = Emu(720 * self.DXA_TO_EMU)
-            p.paragraph_format.first_line_indent = Emu(-360 * self.DXA_TO_EMU)
-
-            # 颜色编码
-            if color_coding and "colorType" in block:
-                color = self.COLOR_MAP.get(block["colorType"])
-                if color:
-                    for run in p.runs:
-                        run.font.color.rgb = color
-
-    def _add_image_block(self, doc: Document, block: dict):
-        """添加图片块，遵循 Skill 规范
-
-        规范要求:
-        - 必须指定图片格式（png/jpg/jpeg/gif/bmp/svg）
-        - 需指定 width/height
-        - 提供 altText 三字段: title, description, name
-        """
-        image_path = block.get("path", "")
-        width = block.get("width", None)
-        height = block.get("height", None)
-        # altText 三字段
-        alt_text = block.get("altText", {})
-
-        if not image_path or not os.path.exists(image_path):
-            self.logger.warning("_add_image_block: 图片路径不存在: %s", image_path)
-            return
-
-        # 插入图片
-        if width and height:
-            pic = doc.add_picture(image_path, width=Inches(width), height=Inches(height))
-        elif width:
-            pic = doc.add_picture(image_path, width=Inches(width))
-        elif height:
-            pic = doc.add_picture(image_path, height=Inches(height))
-        else:
-            pic = doc.add_picture(image_path)
-
-        # 设置 altText（如果提供了）
-        if alt_text:
-            inline = pic.inline
-            if inline is not None:
-                docPr = inline.find(qn('wp:docPr'))
-                if docPr is not None:
-                    if "title" in alt_text:
-                        docPr.set("title", alt_text["title"])
-                    if "description" in alt_text:
-                        docPr.set("descr", alt_text["description"])
-                    if "name" in alt_text:
-                        docPr.set("name", alt_text["name"])
-
-    # ------------------------------------------------------------------ #
-    #  表格边框设置（Skill 规范）
-    # ------------------------------------------------------------------ #
-
-    def _set_table_borders(self, table, color_hex: str = "CCCCCC", size_pt: int = 1):
-        """设置表格边框样式
-
-        遵循 Skill 规范: 单线 1pt 灰色边框
-
-        Args:
-            table: 表格对象
-            color_hex: 边框颜色十六进制值（不带 #）
-            size_pt: 边框粗细（单位: 1/8 pt，1 表示 1/8 pt）
-        """
-        tbl = table._tbl
-        tblPr = tbl.tblPr if tbl.tblPr is not None else OxmlElement("w:tblPr")
-
-        borders = OxmlElement("w:tblBorders")
-        for border_name in ("top", "left", "bottom", "right", "insideH", "insideV"):
-            border = OxmlElement(f"w:{border_name}")
-            border.set(qn("w:val"), "single")
-            border.set(qn("w:sz"), str(size_pt * 8))  # sz 单位为 1/8 pt
-            border.set(qn("w:space"), "0")
-            border.set(qn("w:color"), color_hex)
-            borders.append(border)
-
-        # 移除已有边框设置
-        existing_borders = tblPr.find(qn("w:tblBorders"))
-        if existing_borders is not None:
-            tblPr.remove(existing_borders)
-
-        tblPr.append(borders)
-
-    # ------------------------------------------------------------------ #
-    #  页面尺寸设置
-    # ------------------------------------------------------------------ #
-
-    def _set_page_size(self, doc: Document, size: str):
-        """设置文档页面尺寸
-
-        Args:
-            doc: Document 对象
-            size: 页面尺寸标识 "letter" | "a4"
-        """
-        size_lower = size.lower() if size else ""
-        if size_lower not in self.PAGE_SIZES:
-            self.logger.warning("_set_page_size: 不支持的页面尺寸: %s, 支持的值: %s", size, list(self.PAGE_SIZES.keys()))
-            return
-
-        page_size = self.PAGE_SIZES[size_lower]
-        section = doc.sections[0]
-        section.page_width = Emu(page_size["width"] * self.DXA_TO_EMU)
-        section.page_height = Emu(page_size["height"] * self.DXA_TO_EMU)
-        self.logger.debug("_set_page_size: 设置页面尺寸为 %s (%d x %d DXA)", size_lower, page_size["width"], page_size["height"])
-
-    # ------------------------------------------------------------------ #
-    #  页眉页脚
-    # ------------------------------------------------------------------ #
-
-    def _add_header(self, doc: Document, text: str):
-        """添加页眉
-
-        Args:
-            doc: Document 对象
-            text: 页眉文本
-        """
-        section = doc.sections[0]
-        header = section.header
-        header.is_linked_to_previous = False
-        if header.paragraphs:
-            paragraph = header.paragraphs[0]
-        else:
-            paragraph = header.add_paragraph()
-        paragraph.text = text
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        self.logger.debug("_add_header: 已添加页眉: %s", text[:50])
-
-    def _add_footer(self, doc: Document, text: str, page_number: bool = True):
-        """添加页脚（含可选页码域代码）
-
-        Args:
-            doc: Document 对象
-            text: 页脚文本
-            page_number: 是否显示页码（默认 True）
-        """
-        section = doc.sections[0]
-        footer = section.footer
-        footer.is_linked_to_previous = False
-        if footer.paragraphs:
-            paragraph = footer.paragraphs[0]
-        else:
-            paragraph = footer.add_paragraph()
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-        # 添加页脚文本
-        if text:
-            paragraph.add_run(text)
-
-        # 添加页码域代码
-        if page_number:
-            if text:
-                paragraph.add_run(" ")
-            # fldChar begin
-            run_begin = paragraph.add_run()
-            fldChar_begin = OxmlElement("w:fldChar")
-            fldChar_begin.set(qn("w:fldCharType"), "begin")
-            run_begin._r.append(fldChar_begin)
-
-            # instrText: PAGE 域代码
-            run_instr = paragraph.add_run()
-            instrText = OxmlElement("w:instrText")
-            instrText.set(qn("xml:space"), "preserve")
-            instrText.text = " PAGE "
-            run_instr._r.append(instrText)
-
-            # fldChar separate
-            run_sep = paragraph.add_run()
-            fldChar_sep = OxmlElement("w:fldChar")
-            fldChar_sep.set(qn("w:fldCharType"), "separate")
-            run_sep._r.append(fldChar_sep)
-
-            # 占位文本
-            run_placeholder = paragraph.add_run("1")
-
-            # fldChar end
-            run_end = paragraph.add_run()
-            fldChar_end = OxmlElement("w:fldChar")
-            fldChar_end.set(qn("w:fldCharType"), "end")
-            run_end._r.append(fldChar_end)
-
-        self.logger.debug("_add_footer: 已添加页脚, text=%s, pageNumber=%s", text[:50] if text else "", page_number)
-
-    # ------------------------------------------------------------------ #
-    #  书签和超链接
-    # ------------------------------------------------------------------ #
-
-    def _add_bookmark(self, paragraph, bookmark_id: str, text: str, numeric_id: int = 0):
-        """在段落中添加书签
-
-        Args:
-            paragraph: 段落对象
-            bookmark_id: 书签名称（字符串标识）
-            text: 书签包围的文本
-            numeric_id: 书签数字 ID（XML 中 w:id 需要整数）
-        """
-        bookmark_start = OxmlElement("w:bookmarkStart")
-        bookmark_start.set(qn("w:id"), str(numeric_id))
-        bookmark_start.set(qn("w:name"), bookmark_id)
-
-        bookmark_end = OxmlElement("w:bookmarkEnd")
-        bookmark_end.set(qn("w:id"), str(numeric_id))
-
-        run = paragraph.add_run(text)
-
-        run._r.addprevious(bookmark_start)
-        run._r.addnext(bookmark_end)
-
-        self.logger.debug("_add_bookmark: 已添加书签 id=%s, text=%s", bookmark_id, text[:50])
-
-    def _add_hyperlink(self, paragraph, text: str, url: str):
-        """添加外部超链接
-
-        python-docx 没有原生超链接 API，需要通过 OxmlElement 操作 XML 实现。
-
-        Args:
-            paragraph: 段落对象
-            text: 超链接显示文本
-            url: 超链接目标 URL
-        """
-        part = paragraph.part
-        r_id = part.relate_to(
-            url,
-            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
-            is_external=True,
-        )
-
-        hyperlink = OxmlElement("w:hyperlink")
-        hyperlink.set(qn("r:id"), r_id)
-
-        new_run = OxmlElement("w:r")
-        rPr = OxmlElement("w:rPr")
-
-        # 蓝色字体
-        color_elem = OxmlElement("w:color")
-        color_elem.set(qn("w:val"), "0563C1")
-        rPr.append(color_elem)
-
-        # 下划线
-        u_elem = OxmlElement("w:u")
-        u_elem.set(qn("w:val"), "single")
-        rPr.append(u_elem)
-
-        new_run.append(rPr)
-
-        t_elem = OxmlElement("w:t")
-        t_elem.text = text
-        new_run.append(t_elem)
-
-        hyperlink.append(new_run)
-        paragraph._p.append(hyperlink)
-
-        self.logger.debug("_add_hyperlink: 已添加超链接 text=%s, url=%s", text[:50], url[:80])
-
-    def _add_internal_link(self, paragraph, text: str, anchor: str):
-        """添加内部书签链接
-
-        Args:
-            paragraph: 段落对象
-            text: 链接显示文本
-            anchor: 目标书签名称（对应 bookmarkStart 的 w:name）
-        """
-        hyperlink = OxmlElement("w:hyperlink")
-        hyperlink.set(qn("w:anchor"), anchor)
-
-        new_run = OxmlElement("w:r")
-        rPr = OxmlElement("w:rPr")
-
-        # 蓝色字体
-        color_elem = OxmlElement("w:color")
-        color_elem.set(qn("w:val"), "0563C1")
-        rPr.append(color_elem)
-
-        # 下划线
-        u_elem = OxmlElement("w:u")
-        u_elem.set(qn("w:val"), "single")
-        rPr.append(u_elem)
-
-        new_run.append(rPr)
-
-        t_elem = OxmlElement("w:t")
-        t_elem.text = text
-        new_run.append(t_elem)
-
-        hyperlink.append(new_run)
-        paragraph._p.append(hyperlink)
-
-        self.logger.debug("_add_internal_link: 已添加内部链接 text=%s, anchor=%s", text[:50], anchor)
-
-    # ------------------------------------------------------------------ #
-    #  目录
-    # ------------------------------------------------------------------ #
-
-    def _add_toc(self, doc: Document):
-        """添加目录（TOC 域代码）
-
-        注意：目录内容在 Word 中打开后需要手动更新域（右键 -> 更新域）才会显示。
-        """
-        paragraph = doc.add_paragraph()
-
-        # fldChar begin
-        run_begin = paragraph.add_run()
-        fldChar_begin = OxmlElement("w:fldChar")
-        fldChar_begin.set(qn("w:fldCharType"), "begin")
-        run_begin._r.append(fldChar_begin)
-
-        # instrText: TOC 域指令
-        run_instr = paragraph.add_run()
-        instrText = OxmlElement("w:instrText")
-        instrText.set(qn("xml:space"), "preserve")
-        instrText.text = ' TOC \\o "1-3" \\h \\z \\u '
-        run_instr._r.append(instrText)
-
-        # fldChar separate
-        run_sep = paragraph.add_run()
-        fldChar_sep = OxmlElement("w:fldChar")
-        fldChar_sep.set(qn("w:fldCharType"), "separate")
-        run_sep._r.append(fldChar_sep)
-
-        # 占位提示文本
-        run_placeholder = paragraph.add_run('（请右键点击此处，选择"更新域"以生成目录）')
-
-        # fldChar end
-        run_end = paragraph.add_run()
-        fldChar_end = OxmlElement("w:fldChar")
-        fldChar_end.set(qn("w:fldCharType"), "end")
-        run_end._r.append(fldChar_end)
-
-        self.logger.debug("_add_toc: 已添加目录域代码")
-
-    # ------------------------------------------------------------------ #
-    #  格式转换辅助方法
-    # ------------------------------------------------------------------ #
-
     def _convert_to_markdown(self, doc: Document) -> str:
         """将 Word 文档内容转换为 Markdown"""
         lines = []
@@ -1071,7 +1280,6 @@ class WordHandler:
             else:
                 lines.append(text)
 
-        # 处理表格
         for table in doc.tables:
             lines.append("")
             for i, row in enumerate(table.rows):
@@ -1090,7 +1298,6 @@ class WordHandler:
         from reportlab.lib.units import cm
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
-        # 注册中文字体
         from handlers.font_utils import register_chinese_font
         font_name = register_chinese_font()
 
@@ -1120,7 +1327,6 @@ class WordHandler:
                 elements.append(Paragraph(html.escape(text), body_style))
             elements.append(Spacer(1, 0.3 * cm))
 
-        # 处理表格
         for table in doc.tables:
             table_data = []
             for row in table.rows:

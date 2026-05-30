@@ -47,6 +47,15 @@ class ExcelHandler:
         "assumption": (None, "FFFF00"),
     }
 
+    # 专业配色方案
+    THEME_COLORS = {
+        "header_bg": "D6E4F0",
+        "header_font": "1F4E79",
+        "alt_row_bg": "EDF2F9",
+        "border_color": "B4C6E7",
+        "title_font": "1F4E79",
+    }
+
     # 表头样式：粗体居中
     HEADER_FONT = Font(bold=True)
     HEADER_ALIGNMENT = Alignment(horizontal="center")
@@ -119,18 +128,19 @@ class ExcelHandler:
 
             ws = wb.create_sheet(title=sheet_name)
 
-            # 写入表头（粗体居中）
+            # 写入表头（样式由 _apply_professional_styling 统一处理）
             if headers:
                 for col_idx, header in enumerate(headers, 1):
-                    cell = ws.cell(row=1, column=col_idx, value=header)
-                    cell.font = self.HEADER_FONT
-                    cell.alignment = self.HEADER_ALIGNMENT
+                    ws.cell(row=1, column=col_idx, value=header)
 
             # 写入数据
             start_row = 2 if headers else 1
             for row_idx, row_data in enumerate(data, start_row):
                 for col_idx, value in enumerate(row_data, 1):
                     ws.cell(row=row_idx, column=col_idx, value=value)
+
+            # 收集颜色编码单元格信息，用于专业样式应用后重新着色
+            color_coded_cells = []
 
             # 写入 cells 字段中的单元格（支持公式和颜色编码）
             if cells:
@@ -157,6 +167,7 @@ class ExcelHandler:
                             else:
                                 color_type = "input"
                         self._apply_cell_color(ws.cell(row=row, column=col), color_type)
+                        color_coded_cells.append((row, col, color_type))
 
             # 批量写入 formulas 字段中的公式
             if formulas and use_formulas:
@@ -170,6 +181,35 @@ class ExcelHandler:
                         # 公式单元格默认黑色字体
                         if color_coding:
                             self._apply_cell_color(cell, cell_color_type)
+                            color_coded_cells.append((row, col, cell_color_type))
+
+            # 计算样式参数
+            num_cols = max(ws.max_column, len(headers) if headers else 0)
+            data_start_row = 2 if headers else 1
+            data_end_row = ws.max_row
+
+            # 应用专业样式（表头、交替行、边框）
+            self._apply_professional_styling(ws, headers, data_start_row, data_end_row, num_cols)
+
+            # 重新应用颜色编码（在专业样式之上保留语义颜色）
+            for row, col, color_type in color_coded_cells:
+                self._apply_cell_color(ws.cell(row=row, column=col), color_type)
+
+            # 添加标题行（如果提供了标题）
+            if title:
+                self._add_title_row(ws, title, num_cols)
+
+            # 冻结窗格（表头行下方）
+            if headers:
+                if title:
+                    # 有标题行时，表头在第2行，冻结第3行开始
+                    ws.freeze_panes = "A3"
+                else:
+                    # 无标题行时，表头在第1行，冻结第2行开始
+                    ws.freeze_panes = "A2"
+            elif title:
+                # 仅有标题行，冻结标题行下方
+                ws.freeze_panes = "A2"
 
             # 自动调整列宽
             self._auto_adjust_column_width(ws)
@@ -549,6 +589,85 @@ class ExcelHandler:
                                 cell_range, color_type, e)
 
     # ------------------------------------------------------------------ #
+    #  专业样式辅助方法
+    # ------------------------------------------------------------------ #
+
+    def _apply_professional_styling(self, ws, headers, data_start_row, data_end_row, num_cols):
+        """应用专业样式到工作表
+
+        包含：表头蓝底深蓝粗体、交替行浅蓝背景、蓝灰色细边框
+
+        Args:
+            ws: openpyxl 工作表对象
+            headers: 表头列表（为空则不样式化表头行）
+            data_start_row: 数据起始行号
+            data_end_row: 数据结束行号
+            num_cols: 列数
+        """
+        # 表头样式：蓝底 + 深蓝粗体 + 居中
+        header_fill = PatternFill(start_color=self.THEME_COLORS["header_bg"],
+                                   end_color=self.THEME_COLORS["header_bg"], fill_type="solid")
+        header_font = Font(bold=True, color=self.THEME_COLORS["header_font"], size=11, name="微软雅黑")
+        header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+        # 蓝灰色细边框
+        thin_border = Border(
+            left=Side(style='thin', color=self.THEME_COLORS["border_color"]),
+            right=Side(style='thin', color=self.THEME_COLORS["border_color"]),
+            top=Side(style='thin', color=self.THEME_COLORS["border_color"]),
+            bottom=Side(style='thin', color=self.THEME_COLORS["border_color"]),
+        )
+
+        # 交替行浅蓝背景
+        alt_fill = PatternFill(start_color=self.THEME_COLORS["alt_row_bg"],
+                                end_color=self.THEME_COLORS["alt_row_bg"], fill_type="solid")
+        # 数据行字体
+        data_font = Font(size=11, name="微软雅黑")
+        data_alignment = Alignment(vertical="center", wrap_text=True)
+
+        # 样式化表头行
+        if headers:
+            for col in range(1, num_cols + 1):
+                cell = ws.cell(row=1, column=col)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = header_alignment
+                cell.border = thin_border
+
+        # 样式化数据行（含交替行颜色）
+        for row in range(data_start_row, data_end_row + 1):
+            for col in range(1, num_cols + 1):
+                cell = ws.cell(row=row, column=col)
+                cell.border = thin_border
+                cell.font = data_font
+                cell.alignment = data_alignment
+                # 偶数数据行使用浅蓝背景
+                if (row - data_start_row) % 2 == 1:
+                    cell.fill = alt_fill
+
+    def _add_title_row(self, ws, title, num_cols):
+        """添加专业标题行（合并单元格）
+
+        在工作表顶部插入一行，合并所有列，设置大号深蓝粗体字体
+
+        Args:
+            ws: openpyxl 工作表对象
+            title: 标题文本
+            num_cols: 列数（用于合并范围）
+        """
+        # 在第1行位置插入新行，原有内容下移
+        ws.insert_rows(1)
+        # 合并标题行所有列
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=num_cols)
+        title_cell = ws.cell(row=1, column=1, value=title)
+        title_cell.font = Font(bold=True, size=16, color=self.THEME_COLORS["title_font"], name="微软雅黑")
+        title_cell.alignment = Alignment(horizontal="center", vertical="center")
+        # 标题行浅蓝背景
+        title_cell.fill = PatternFill(start_color="F2F7FB", end_color="F2F7FB", fill_type="solid")
+        # 标题行高度
+        ws.row_dimensions[1].height = 40
+
+    # ------------------------------------------------------------------ #
     #  数字格式（Skill 规范）
     # ------------------------------------------------------------------ #
 
@@ -654,7 +773,9 @@ class ExcelHandler:
     # ------------------------------------------------------------------ #
 
     def _auto_adjust_column_width(self, ws):
-        """自动调整工作表列宽
+        """自动调整工作表列宽（考虑中文字符宽度）
+
+        中文字符约占2个英文字符宽度，最小列宽为12
 
         Args:
             ws: openpyxl 工作表对象
@@ -664,8 +785,11 @@ class ExcelHandler:
             col_letter = get_column_letter(col[0].column)
             for cell in col:
                 if cell.value:
-                    max_length = max(max_length, len(str(cell.value)))
-            ws.column_dimensions[col_letter].width = min(max_length + 2, 50)
+                    val_str = str(cell.value)
+                    # 中文字符约占2个英文字符宽度
+                    char_len = sum(2 if ord(c) > 127 else 1 for c in val_str)
+                    max_length = max(max_length, char_len)
+            ws.column_dimensions[col_letter].width = max(max_length + 4, 12)
 
     # ------------------------------------------------------------------ #
     #  格式转换辅助方法
