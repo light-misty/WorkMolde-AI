@@ -1,34 +1,23 @@
 import type { WorkflowNode, ContentNodeData } from "../../types";
+import { MarkdownPreview } from "../preview/MarkdownPreview";
 
 interface ContentNodeProps {
   node: WorkflowNode<"content">;
 }
 
-function renderSafeContent(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
-    .replace(/\n/g, "<br />");
-}
-
 export function ContentNode({ node }: ContentNodeProps) {
   const data = node.data as ContentNodeData;
+  // 判断是否处于流式输出状态
   const isStreaming = data.isStreaming || node.status === "running";
 
   return (
     <div className="wf-node animate-node-in">
       <div className="wf-content-dot" />
       <div className="wf-content-text-wrapper">
-        <div
-          className="wf-content-text"
-          dangerouslySetInnerHTML={{ __html: renderSafeContent(data.content) }}
+        <MarkdownPreview
+          content={data.content}
+          className={`wf-content-markdown${isStreaming ? " streaming" : ""}`}
         />
-        {isStreaming && <span className="wf-content-cursor" />}
       </div>
       <style>{`
         .wf-content-dot {
@@ -40,38 +29,29 @@ export function ContentNode({ node }: ContentNodeProps) {
           margin-top: 7px;
         }
         .wf-content-text-wrapper {
-          display: flex;
-          align-items: baseline;
-          gap: 0;
           min-width: 0;
           flex: 1;
         }
-        .wf-content-text {
-          font-size: 14px;
-          line-height: 1.6;
+        .wf-content-markdown {
           color: var(--color-text-primary);
           word-break: break-word;
+          line-height: 1.6;
         }
-        .wf-content-text code {
-          padding: 1px 5px;
-          border-radius: var(--radius-sm);
-          background: var(--color-bg-sub);
-          font-family: var(--font-mono);
-          font-size: 13px;
-          color: var(--color-accent);
+        .wf-content-markdown p:last-child {
+          margin-bottom: 0;
         }
-        .wf-content-text strong {
-          font-weight: 600;
+        .wf-content-markdown h1:first-child,
+        .wf-content-markdown h2:first-child,
+        .wf-content-markdown h3:first-child {
+          margin-top: 0;
         }
-        .wf-content-text em {
-          font-style: italic;
-        }
-        .wf-content-cursor {
+        .wf-content-markdown.streaming > :last-child::after {
+          content: "";
           display: inline-block;
           width: 2px;
           height: 16px;
           background: var(--color-accent);
-          margin-left: 1px;
+          margin-left: 2px;
           vertical-align: middle;
           animation: wf-cursor-blink 1s step-end infinite;
         }
