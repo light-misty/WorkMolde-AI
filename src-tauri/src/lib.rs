@@ -199,8 +199,7 @@ pub fn run() {
             // 过滤掉内置 Skill 的 ID，仅保留自定义 Skill 的禁用状态
             let app_settings = config_manager.load_app_settings().unwrap_or_default();
             let builtin_skill_ids: Vec<&str> = vec![
-                "read_document", "generate_document", "modify_document",
-                "convert_format", "analyze_document", "batch_process",
+                "docx_skill", "xlsx_skill", "pptx_skill", "pdf_skill",
             ];
             let filtered_disabled: Vec<String> = app_settings.disabled_skills.iter()
                 .filter(|id| !builtin_skill_ids.contains(&id.as_str()))

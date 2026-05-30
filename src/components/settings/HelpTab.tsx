@@ -44,15 +44,10 @@ const faqList = [
 
 // 内置 Skill 列表
 const builtinSkills = [
-  { name: "generate_document", desc: "生成 docx/xlsx/pptx/pdf/md 文档" },
-  { name: "read_document", desc: "读取文档内容" },
-  { name: "modify_document", desc: "修改文档（替换/添加段落/添加表格等）" },
-  { name: "delete_document", desc: "删除文件（含路径安全校验+可选备份）" },
-  { name: "convert_format", desc: "格式转换（Word/Excel/PPT/Markdown 转 PDF 等）" },
-  { name: "search_documents", desc: "文件搜索（支持文件名/内容/扩展名过滤）" },
-  { name: "analyze_document", desc: "文档分析" },
-  { name: "list_workspace", desc: "列出目录结构" },
-  { name: "batch_process", desc: "批量处理（批量转换/修改/分析）" },
+  { name: "docx_skill", desc: "Word 文档操作（生成/读取/修改/转换/分析）" },
+  { name: "xlsx_skill", desc: "Excel 文档操作（生成/读取/修改/转换/分析）" },
+  { name: "pptx_skill", desc: "PPT 文档操作（生成/读取/修改/转换/分析）" },
+  { name: "pdf_skill", desc: "PDF 文档操作（生成/读取/修改/转换/分析）" },
 ];
 
 export function HelpTab() {

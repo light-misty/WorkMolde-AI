@@ -1,41 +1,74 @@
 """PDF 文档处理器
-基于 reportlab 实现 PDF 生成，基于 pdfkit 实现 HTML 转 PDF
-支持高级操作：合并、拆分、旋转、水印、加密（依赖 pypdf）
+基于 reportlab + pypdf 实现 PDF 文档的生成、读取、修改、转换
+遵循 pdf Skill 规范：Platypus 框架、下标上标 XML 标签、中文字体注册、合并/拆分/旋转/水印/加密
 """
 
 import os
-import io
+import json
 import html
+import io
 import logging
-from typing import Any
+from typing import Any, Optional
+
+from reportlab.lib.pagesizes import A4, letter
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import cm, inch
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer,
+    PageBreak,
+    Table,
+    TableStyle,
+)
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
 
 class PdfHandler:
-    """PDF (.pdf) 文档处理器"""
+    """PDF 文档处理器"""
 
     logger = logging.getLogger(__name__)
+
+    # 页面尺寸映射
+    PAGE_SIZES = {
+        "a4": A4,
+        "letter": letter,
+    }
 
     def generate(self, params: dict) -> dict:
         """生成 PDF 文档
 
+        遵循 Skill 规范：
+        - 使用 reportlab Platypus 框架（SimpleDocTemplate + Paragraph + Spacer + PageBreak）
+        - 下标上标使用 <sub>/<super> XML 标签，不使用 Unicode 字符
+        - 页面尺寸设置（letter / A4）
+        - 中文字体注册（使用 font_utils.register_chinese_font()）
+
         params:
             path: 输出文件路径
+            content: 文档内容（纯文本或结构化 JSON）
+                    结构化格式: {"blocks": [{type, ...}]}
+                    block 类型: heading/paragraph/table/list/spacer/pagebreak
             title: 文档标题
-            content: 文档内容
             author: 作者
-            subscripts: 下标列表 [{text: "2", position: 1}]，position 为字符插入位置
-            superscripts: 上标列表 [{text: "2", position: 3}]，position 为字符插入位置
-            pageSize: 页面尺寸 "letter" | "a4"（默认 a4）
+            pageSize: 页面尺寸 "letter" | "a4"（默认 "a4"）
+            margins: 边距 {"top", "right", "bottom", "left"}（单位: cm，默认 2.54cm）
+            headerText: 页眉文本（可选）
+            footerText: 页脚文本（可选）
+            pageNumber: 是否显示页码（默认 true）
         """
         path = params.get("path", "")
-        title = params.get("title", "")
         content = params.get("content", "")
+        title = params.get("title", "")
         author = params.get("author", "")
-        # 下标和上标参数
-        subscripts = params.get("subscripts", [])
-        superscripts = params.get("superscripts", [])
-        # 页面尺寸参数
-        page_size_name = params.get("pageSize", "a4").lower()
+        page_size_name = params.get("pageSize", "a4")
+        margins = params.get("margins", {})
+        header_text = params.get("headerText", None)
+        footer_text = params.get("footerText", None)
+        page_number = params.get("pageNumber", True)
 
         if not path:
             self.logger.error("generate: 缺少输出文件路径")
@@ -45,103 +78,92 @@ class PdfHandler:
 
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
-        try:
-            from reportlab.lib.pagesizes import A4, letter
-            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-            from reportlab.lib.units import cm
-            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-        except ImportError:
-            self.logger.error("generate: reportlab 未安装，无法生成 PDF")
-            return {"error": "reportlab 未安装，无法生成 PDF"}
-
+        # 注册中文字体
         from handlers.font_utils import register_chinese_font
         font_name = register_chinese_font()
 
-        # 根据参数选择页面尺寸
-        page_size = letter if page_size_name == "letter" else A4
+        # 页面尺寸
+        page_size = self.PAGE_SIZES.get(page_size_name.lower(), A4)
 
-        doc = SimpleDocTemplate(path, pagesize=page_size)
-        styles = getSampleStyleSheet()
+        # 边距（默认 2.54cm = 1 inch）
+        margin_top = margins.get("top", 2.54) * cm
+        margin_right = margins.get("right", 2.54) * cm
+        margin_bottom = margins.get("bottom", 2.54) * cm
+        margin_left = margins.get("left", 2.54) * cm
 
-        # 自定义标题样式
-        title_style = ParagraphStyle(
-            "CustomTitle",
-            parent=styles["Title"],
-            fontName=font_name,
-            fontSize=24,
-            spaceAfter=30,
+        # 创建文档
+        doc = SimpleDocTemplate(
+            path,
+            pagesize=page_size,
+            topMargin=margin_top,
+            rightMargin=margin_right,
+            bottomMargin=margin_bottom,
+            leftMargin=margin_left,
         )
 
-        # 自定义正文样式
-        body_style = ParagraphStyle(
-            "CustomBody",
-            parent=styles["Normal"],
-            fontName=font_name,
-            fontSize=12,
-            leading=20,
-            spaceAfter=10,
-        )
-
-        elements = []
-
-        # 添加标题（Paragraph 使用 XML 标记语法，需转义特殊字符）
+        # 设置文档元数据
         if title:
-            # 标题不支持下标上标，直接转义
-            elements.append(Paragraph(html.escape(title), title_style))
-            elements.append(Spacer(1, 1 * cm))
-
-        # 判断是否需要应用下标/上标
-        has_sub_super = bool(subscripts or superscripts)
-
-        # 添加内容
-        if isinstance(content, str):
-            if has_sub_super:
-                # 有下标/上标时，先对整个内容应用标签，再按行分割
-                processed = self._apply_sub_super(content, subscripts, superscripts)
-                for line in processed.split("\n"):
-                    if line.strip():
-                        elements.append(Paragraph(line, body_style))
-            else:
-                for line in content.split("\n"):
-                    if line.strip():
-                        # 检查内容是否已包含 reportlab XML 标签，直接渲染
-                        if "<sub>" in line or "<super>" in line:
-                            elements.append(Paragraph(line, body_style))
-                        else:
-                            elements.append(Paragraph(html.escape(line), body_style))
-        elif isinstance(content, list):
-            for item in content:
-                if isinstance(item, str):
-                    if has_sub_super:
-                        processed = self._apply_sub_super(item, subscripts, superscripts)
-                        elements.append(Paragraph(processed, body_style))
-                    else:
-                        if "<sub>" in item or "<super>" in item:
-                            elements.append(Paragraph(item, body_style))
-                        else:
-                            elements.append(Paragraph(html.escape(item), body_style))
-                elif isinstance(item, dict):
-                    text = item.get("text", "")
-                    style_type = item.get("style", "body")
-                    if has_sub_super:
-                        processed = self._apply_sub_super(text, subscripts, superscripts)
-                        target_style = title_style if style_type == "heading" else body_style
-                        elements.append(Paragraph(processed, target_style))
-                    else:
-                        if "<sub>" in text or "<super>" in text:
-                            target_style = title_style if style_type == "heading" else body_style
-                            elements.append(Paragraph(text, target_style))
-                        else:
-                            if style_type == "heading":
-                                elements.append(Paragraph(html.escape(text), title_style))
-                            else:
-                                elements.append(Paragraph(html.escape(text), body_style))
-
-        # 设置作者
+            doc.title = title
         if author:
             doc.author = author
 
-        doc.build(elements)
+        # 构建样式
+        styles = getSampleStyleSheet()
+        custom_styles = self._build_custom_styles(styles, font_name)
+
+        # 构建内容元素
+        elements = []
+
+        # 添加标题
+        if title:
+            elements.append(Paragraph(self._escape_xml(title), custom_styles["title"]))
+            elements.append(Spacer(1, 0.5 * cm))
+
+        # 处理内容
+        if isinstance(content, str):
+            parsed_blocks = self._try_parse_json_content(content)
+            if parsed_blocks is not None:
+                self._process_structured_blocks(elements, parsed_blocks, custom_styles)
+            else:
+                # 纯文本内容，按段落分割
+                for line in content.split("\n"):
+                    if line.strip():
+                        elements.append(Paragraph(self._escape_xml(line), custom_styles["body"]))
+                        elements.append(Spacer(1, 0.3 * cm))
+        elif isinstance(content, list):
+            self._process_structured_blocks(elements, content, custom_styles)
+        elif isinstance(content, dict):
+            blocks = content.get("blocks", [])
+            self._process_structured_blocks(elements, blocks, custom_styles)
+
+        # 构建文档（含页眉页脚回调）
+        def on_page(canvas, doc):
+            """每页回调：绘制页眉和页脚"""
+            canvas.saveState()
+            page_w, page_h = page_size
+
+            # 页眉
+            if header_text:
+                canvas.setFont(font_name, 9)
+                canvas.setFillColor(colors.grey)
+                canvas.drawString(margin_left, page_h - margin_top + 0.5 * cm, header_text)
+
+            # 页脚（含页码）
+            if footer_text or page_number:
+                footer_parts = []
+                if footer_text:
+                    footer_parts.append(footer_text)
+                if page_number:
+                    footer_parts.append(str(canvas.getPageNumber()))
+                footer_str = " - ".join(footer_parts) if footer_parts else ""
+                if footer_str:
+                    canvas.setFont(font_name, 9)
+                    canvas.setFillColor(colors.grey)
+                    canvas.drawCentredString(page_w / 2, margin_bottom - 0.8 * cm, footer_str)
+
+            canvas.restoreState()
+
+        doc.build(elements, onFirstPage=on_page, onLaterPages=on_page)
 
         self.logger.info("generate: PDF 文档已生成, path=%s", path)
         return {
@@ -150,8 +172,14 @@ class PdfHandler:
         }
 
     def read(self, params: dict) -> dict:
-        """读取 PDF 文档（提取文本）"""
+        """读取 PDF 文档内容
+
+        params:
+            path: 文件路径
+            pages: 要读取的页码列表（可选，默认读取所有）
+        """
         path = params.get("path", "")
+        pages = params.get("pages", None)
         if not path:
             self.logger.error("read: 缺少文件路径")
             return {"error": "缺少文件路径"}
@@ -161,154 +189,203 @@ class PdfHandler:
         self.logger.info("read: 开始读取 PDF 文档, path=%s", path)
 
         try:
-            import fitz  # PyMuPDF
-            doc = fitz.open(path)
-            pages = []
-            for page in doc:
-                pages.append({
-                    "page_number": page.number + 1,
-                    "text": page.get_text(),
-                })
-            doc.close()
-            self.logger.info("read: PDF 文档读取完成, path=%s, 页数=%d", path, len(pages))
-            return {
-                "pages": pages,
-                "page_count": len(pages),
-            }
+            import pdfplumber
         except ImportError:
-            # 回退方案：使用 pdfminer，统一返回结构
-            try:
-                from pdfminer.high_level import extract_text
-                text = extract_text(path)
-                # 将文本按换页符分割为页面，保持与 PyMuPDF 一致的返回结构
-                page_texts = text.split("\f")
-                pages = []
-                for i, page_text in enumerate(page_texts):
-                    if page_text.strip():
-                        pages.append({
-                            "page_number": i + 1,
-                            "text": page_text,
-                        })
-                self.logger.info("read: PDF 文档读取完成(pdfminer), path=%s, 页数=%d", path, len(pages))
-                return {
-                    "pages": pages,
-                    "page_count": len(pages),
-                }
-            except ImportError:
-                self.logger.error("read: 未安装 PDF 读取库（PyMuPDF 或 pdfminer.six）")
-                return {
-                    "pages": [],
-                    "page_count": 0,
-                    "error": "未安装 PDF 读取库（PyMuPDF 或 pdfminer.six）",
-                }
+            self.logger.error("read: pdfplumber 未安装，无法读取 PDF")
+            return {"error": "pdfplumber 未安装"}
+
+        text_content = []
+        with pdfplumber.open(path) as pdf:
+            total_pages = len(pdf.pages)
+            page_indices = range(total_pages)
+            if pages:
+                page_indices = [p - 1 for p in pages if 1 <= p <= total_pages]
+
+            for idx in page_indices:
+                page = pdf.pages[idx]
+                page_text = page.extract_text() or ""
+                text_content.append({
+                    "page": idx + 1,
+                    "text": page_text,
+                })
+
+        self.logger.info("read: PDF 文档读取完成, path=%s, 总页数=%d", path, len(text_content))
+        return {
+            "pages": text_content,
+            "total_pages": len(text_content),
+        }
 
     def modify(self, params: dict) -> dict:
-        """修改 PDF 文档，支持高级操作
+        """修改 PDF 文档
 
-        支持两种调用格式：
+        遵循 Skill 规范：
+        - 合并 PDF（pypdf PdfWriter.add_page）
+        - 拆分 PDF（按页码范围）
+        - 旋转页面（page.rotate）
+        - 添加水印（文字/图片，使用 reportlab+pypdf 叠加）
+        - 加密（writer.encrypt）
 
-        格式1 - 直接操作（向后兼容）:
-            type: 操作类型（merge/split/rotate/addWatermark/encrypt）
-            其他参数根据操作类型而定
-
-        格式2 - operations 数组（与其他 Handler 一致，由 Rust 端调用）:
-            path: 源 PDF 文件路径
+        params:
+            path: 源文件路径
+            output_path: 输出文件路径（可选，默认覆盖源文件）
             operations: 操作列表
-                - {type: "merge", files: [...], outputPath: "..."}
-                - {type: "split", ranges: ["1-5", "6-10"], outputDir: "..."}
-                - {type: "rotate", pages: [1,2,3], angle: 90, outputPath: "..."}
-                - {type: "addWatermark", text: "...", outputPath: "..."}
-                  或 {type: "addWatermark", image: "...", outputPath: "..."}
-                - {type: "encrypt", userPassword: "...", ownerPassword: "...", outputPath: "..."}
+                - merge: 合并 PDF {type:"merge", files:["path1.pdf","path2.pdf"]}
+                - split: 拆分 PDF {type:"split", ranges:[[1,3],[4,6]]}
+                - rotate: 旋转页面 {type:"rotate", pages:[1,2], angle:90}
+                - watermark: 添加水印 {type:"watermark", text:"DRAFT", fontSize:60,
+                              color:"CCCCCC", opacity:0.3, angle:45}
+                - watermark_image: 图片水印 {type:"watermark_image", image:"logo.png",
+                              opacity:0.3, x:100, y:100}
+                - encrypt: 加密 {type:"encrypt", password:"123456"}
         """
-        # 判断是 operations 数组格式还是直接操作格式
+        path = params.get("path", "")
+        output_path = params.get("output_path", "")
         operations = params.get("operations", [])
-        if operations and isinstance(operations, list):
-            # operations 数组格式：逐个执行操作，返回最后一个操作的结果
-            path = params.get("path", "")
-            last_result = None
-            executed_count = 0
-            for op in operations:
-                # 将操作参数合并到顶层，同时传入 path
-                op_params = dict(op)
-                op_params["path"] = op_params.get("path", path)
-                # camelCase 转 snake_case 的路径映射
-                if "outputPath" in op_params and "output_path" not in op_params:
-                    op_params["output_path"] = op_params.pop("outputPath")
-                if "outputDir" in op_params and "output_dir" not in op_params:
-                    op_params["output_dir"] = op_params.pop("outputDir")
-                result = self._execute_single_operation(op_params)
-                if isinstance(result, dict) and "error" in result:
-                    # 操作失败，立即返回错误
-                    return result
-                last_result = result
-                executed_count += 1
-            if last_result is None:
-                return {"error": "没有可执行的操作"}
-            # 在结果中添加执行计数
-            if isinstance(last_result, dict):
-                last_result["executed_count"] = executed_count
-            return last_result
-        else:
-            # 直接操作格式（向后兼容）
-            return self._execute_single_operation(params)
 
-    def _execute_single_operation(self, params: dict) -> dict:
-        """执行单个 PDF 操作
+        if not path:
+            self.logger.error("modify: 缺少文件路径")
+            return {"error": "缺少文件路径"}
+        if not os.path.exists(path):
+            raise FileNotFoundError(path)
 
-        Args:
-            params: 操作参数，必须包含 type 字段
-        """
-        operation = params.get("type", "")
+        self.logger.info("modify: 开始修改 PDF 文档, path=%s, 操作数=%d", path, len(operations))
 
-        if not operation:
-            self.logger.error("modify: 缺少操作类型")
-            return {"error": "PDF 格式不支持直接修改，请指定操作类型: merge/split/rotate/addWatermark/encrypt"}
+        from pypdf import PdfReader, PdfWriter
 
-        self.logger.info("modify: 执行 PDF 高级操作, type=%s", operation)
+        modified_count = 0
 
-        if operation == "merge":
-            return self._merge_pdfs(
-                params.get("files", []),
-                params.get("output_path", ""),
-            )
-        elif operation == "split":
-            return self._split_pdf(
-                params.get("path", ""),
-                params.get("ranges", []),
-                params.get("output_dir", ""),
-            )
-        elif operation == "rotate":
-            return self._rotate_pages(
-                params.get("path", ""),
-                params.get("pages", []),
-                params.get("angle", 90),
-                params.get("output_path", ""),
-            )
-        elif operation == "addWatermark":
-            # 根据参数判断是文字水印还是图片水印
-            if "image" in params:
-                return self._add_image_watermark(
-                    params.get("path", ""),
-                    params.get("image", ""),
-                    params.get("output_path", ""),
-                )
-            else:
-                return self._add_text_watermark(
-                    params.get("path", ""),
-                    params.get("text", ""),
-                    params.get("output_path", ""),
-                )
-        elif operation == "encrypt":
-            return self._encrypt_pdf(
-                params.get("path", ""),
-                params.get("userPassword", ""),
-                params.get("ownerPassword", ""),
-                params.get("output_path", ""),
-            )
-        else:
-            self.logger.error("modify: 不支持的操作类型: %s", operation)
-            return {"error": f"不支持的操作类型: {operation}，支持: merge/split/rotate/addWatermark/encrypt"}
+        for op in operations:
+            op_type = op.get("type", "")
+
+            if op_type == "merge":
+                # 合并 PDF
+                files = op.get("files", [])
+                if not files:
+                    self.logger.warning("modify: merge 操作缺少 files 参数")
+                    continue
+
+                out = output_path or path
+                os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
+
+                writer = PdfWriter()
+                # 先添加源文件
+                reader = PdfReader(path)
+                for page in reader.pages:
+                    writer.add_page(page)
+                # 再添加其他文件
+                for f in files:
+                    if os.path.exists(f):
+                        r = PdfReader(f)
+                        for page in r.pages:
+                            writer.add_page(page)
+                        modified_count += 1
+                    else:
+                        self.logger.warning("modify: 合并文件不存在: %s", f)
+
+                with open(out, "wb") as f:
+                    writer.write(f)
+                self.logger.info("modify: 合并完成, 输出=%s, 合并文件数=%d", out, modified_count)
+
+            elif op_type == "split":
+                # 拆分 PDF
+                ranges = op.get("ranges", [])
+                if not ranges:
+                    self.logger.warning("modify: split 操作缺少 ranges 参数")
+                    continue
+
+                reader = PdfReader(path)
+                total_pages = len(reader.pages)
+                out_dir = os.path.dirname(output_path) if output_path else os.path.dirname(path)
+                base_name = os.path.splitext(os.path.basename(path))[0]
+
+                for rng in ranges:
+                    start = rng[0] - 1 if len(rng) > 0 else 0
+                    end = rng[1] if len(rng) > 1 else start + 1
+                    start = max(0, start)
+                    end = min(end, total_pages)
+
+                    writer = PdfWriter()
+                    for i in range(start, end):
+                        writer.add_page(reader.pages[i])
+
+                    split_path = os.path.join(out_dir or ".", f"{base_name}_p{start+1}-{end}.pdf")
+                    with open(split_path, "wb") as f:
+                        writer.write(f)
+                    modified_count += 1
+                    self.logger.info("modify: 拆分完成, 输出=%s, 页码范围=%d-%d", split_path, start+1, end)
+
+            elif op_type == "rotate":
+                # 旋转页面
+                pages_to_rotate = op.get("pages", [])
+                angle = op.get("angle", 90)
+                out = output_path or path
+
+                reader = PdfReader(path)
+                writer = PdfWriter()
+                for i, page in enumerate(reader.pages):
+                    if (i + 1) in pages_to_rotate or not pages_to_rotate:
+                        page.rotate(angle)
+                    writer.add_page(page)
+
+                with open(out, "wb") as f:
+                    writer.write(f)
+                modified_count += len(pages_to_rotate) if pages_to_rotate else len(reader.pages)
+                self.logger.info("modify: 旋转完成, 输出=%s, 旋转页数=%d", out, modified_count)
+
+            elif op_type == "watermark":
+                # 添加文字水印
+                text = op.get("text", "DRAFT")
+                font_size = op.get("fontSize", 60)
+                color_hex = op.get("color", "CCCCCC")
+                opacity = op.get("opacity", 0.3)
+                angle = op.get("angle", 45)
+                out = output_path or path
+
+                self._add_text_watermark(path, out, text, font_size, color_hex, opacity, angle)
+                modified_count += 1
+                self.logger.info("modify: 水印添加完成, 输出=%s, 文本=%s", out, text)
+
+            elif op_type == "watermark_image":
+                # 添加图片水印
+                image_path = op.get("image", "")
+                opacity = op.get("opacity", 0.3)
+                x = op.get("x", None)
+                y = op.get("y", None)
+                out = output_path or path
+
+                if not image_path or not os.path.exists(image_path):
+                    self.logger.warning("modify: 水印图片不存在: %s", image_path)
+                    continue
+
+                self._add_image_watermark(path, out, image_path, opacity, x, y)
+                modified_count += 1
+                self.logger.info("modify: 图片水印添加完成, 输出=%s", out)
+
+            elif op_type == "encrypt":
+                # 加密 PDF
+                password = op.get("password", "")
+                if not password:
+                    self.logger.warning("modify: encrypt 操作缺少 password 参数")
+                    continue
+                out = output_path or path
+
+                reader = PdfReader(path)
+                writer = PdfWriter()
+                for page in reader.pages:
+                    writer.add_page(page)
+                writer.encrypt(password)
+
+                with open(out, "wb") as f:
+                    writer.write(f)
+                modified_count += 1
+                self.logger.info("modify: 加密完成, 输出=%s", out)
+
+        self.logger.info("modify: PDF 文档修改完成, path=%s, 修改数=%d", path, modified_count)
+        return {
+            "path": output_path or path,
+            "modified_count": modified_count,
+            "message": f"已执行 {modified_count} 项修改",
+        }
 
     def convert(self, params: dict) -> dict:
         """格式转换
@@ -328,28 +405,37 @@ class PdfHandler:
         if not os.path.exists(path):
             raise FileNotFoundError(path)
 
-        # PDF 只支持文本提取类转换，不支持转为二进制格式
-        supported_formats = ("txt", "md", "markdown", "html")
-        if target_format not in supported_formats:
-            self.logger.error("convert: 不支持的目标格式: %s，PDF 仅支持转为 txt/md/html", target_format)
-            return {"error": f"不支持的目标格式: {target_format}，PDF 仅支持转为 txt/md/html"}
-
         self.logger.info("convert: 开始格式转换, path=%s, format=%s", path, target_format)
 
-        # 提取 PDF 各页文本
-        pages = self._extract_pages(path)
-        if pages is None:
-            return {"error": "未安装 PDF 读取库（PyMuPDF 或 pdfminer.six）"}
+        # 读取 PDF 内容
+        try:
+            import pdfplumber
+        except ImportError:
+            self.logger.error("convert: pdfplumber 未安装，无法读取 PDF")
+            return {"error": "pdfplumber 未安装"}
 
-        # 根据目标格式生成内容
+        pages_text = []
+        with pdfplumber.open(path) as pdf:
+            for page in pdf.pages:
+                text = page.extract_text() or ""
+                pages_text.append(text)
+
+        # 转换为目标格式
         if target_format == "txt":
-            content = self._convert_to_txt(pages)
+            content = "\n\n".join(pages_text)
         elif target_format in ("md", "markdown"):
-            content = self._convert_to_md(pages)
+            parts = []
+            for i, text in enumerate(pages_text):
+                parts.append(f"## 第 {i + 1} 页\n")
+                parts.append(text)
+                parts.append("")
+            content = "\n".join(parts)
         elif target_format == "html":
-            content = self._convert_to_html(pages)
+            content = self._convert_pages_to_html(pages_text)
+        else:
+            self.logger.error("convert: 不支持的目标格式: %s", target_format)
+            return {"error": f"不支持的目标格式: {target_format}"}
 
-        # 写入输出文件或直接返回内容
         if output_path:
             os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
             with open(output_path, "w", encoding="utf-8") as f:
@@ -366,100 +452,6 @@ class PdfHandler:
                 "format": target_format,
             }
 
-    def _extract_pages(self, path: str) -> list[dict] | None:
-        """提取 PDF 各页文本，优先使用 PyMuPDF，回退到 pdfminer
-
-        返回:
-            [{"page_number": 1, "text": "..."}, ...] 或 None（库未安装时）
-        """
-        try:
-            import fitz  # PyMuPDF
-            doc = fitz.open(path)
-            pages = []
-            for page in doc:
-                pages.append({
-                    "page_number": page.number + 1,
-                    "text": page.get_text(),
-                })
-            doc.close()
-            return pages
-        except ImportError:
-            # 回退方案：使用 pdfminer
-            try:
-                from pdfminer.high_level import extract_text
-                text = extract_text(path)
-                # 将文本按换页符分割为页面
-                page_texts = text.split("\f")
-                pages = []
-                for i, page_text in enumerate(page_texts):
-                    if page_text.strip():
-                        pages.append({
-                            "page_number": i + 1,
-                            "text": page_text,
-                        })
-                return pages
-            except ImportError:
-                self.logger.error("convert: 未安装 PDF 读取库（PyMuPDF 或 pdfminer.six）")
-                return None
-
-    def _convert_to_txt(self, pages: list[dict]) -> str:
-        """将页面文本列表转换为纯文本格式"""
-        parts = []
-        for page in pages:
-            parts.append(page["text"])
-        return "\n\n".join(parts)
-
-    def _convert_to_md(self, pages: list[dict]) -> str:
-        """将页面文本列表转换为 Markdown 格式，每页用 ## 标题分隔"""
-        lines = []
-        for page in pages:
-            page_num = page["page_number"]
-            text = page["text"].strip()
-            if not text:
-                continue
-            lines.append(f"## 第 {page_num} 页")
-            lines.append("")
-            lines.append(text)
-            lines.append("")
-        return "\n".join(lines)
-
-    def _convert_to_html(self, pages: list[dict]) -> str:
-        """将页面文本列表转换为 HTML 格式，每页用 section 标签包裹，段落用 p 标签"""
-        sections = []
-        for page in pages:
-            page_num = page["page_number"]
-            text = page["text"].strip()
-            if not text:
-                continue
-            # 将文本按空行分割为段落
-            paragraphs = text.split("\n\n")
-            para_tags = []
-            for para in paragraphs:
-                para = para.strip()
-                if para:
-                    # 将段落内换行替换为 <br>
-                    para_html = html.escape(para).replace("\n", "<br>")
-                    para_tags.append(f"<p>{para_html}</p>")
-            section_content = "\n    ".join(para_tags)
-            sections.append(
-                f'<section data-page="{page_num}">\n'
-                f"    {section_content}\n"
-                f"</section>"
-            )
-        body = "\n\n".join(sections)
-        return (
-            "<!DOCTYPE html>\n"
-            "<html lang=\"zh-CN\">\n"
-            "<head>\n"
-            '  <meta charset="UTF-8">\n'
-            "  <title>PDF 转换结果</title>\n"
-            "</head>\n"
-            "<body>\n"
-            f"{body}\n"
-            "</body>\n"
-            "</html>"
-        )
-
     def analyze(self, params: dict) -> dict:
         """分析 PDF 文档"""
         path = params.get("path", "")
@@ -471,316 +463,329 @@ class PdfHandler:
 
         self.logger.info("analyze: 开始分析 PDF 文档, path=%s", path)
 
-        try:
-            import fitz
-            doc = fitz.open(path)
-            info = {
-                "file_size": os.path.getsize(path),
-                "page_count": len(doc),
-                "metadata": doc.metadata,
-            }
-            doc.close()
-            self.logger.info("analyze: PDF 文档分析完成, path=%s, 页数=%d", path, info["page_count"])
-            return info
-        except ImportError:
-            self.logger.error("analyze: 未安装 PyMuPDF")
-            return {
-                "file_size": os.path.getsize(path),
-                "page_count": 0,
-                "error": "未安装 PyMuPDF",
-            }
-
-    def _apply_sub_super(self, text: str, subscripts: list, superscripts: list) -> str:
-        """在下标和上标位置插入 reportlab XML 标签，同时正确转义非标签文本
-
-        将 subscripts/superscripts 列表中的条目按 position 插入到文本中，
-        非标签部分的特殊字符会被转义，<sub>/<super> 标签本身保留供 reportlab Paragraph 解析。
-
-        Args:
-            text: 原始文本
-            subscripts: 下标列表 [{text: "2", position: 1}]
-            superscripts: 上标列表 [{text: "2", position: 3}]
-
-        Returns:
-            处理后的文本，包含 <sub>/<super> 标签
-        """
-        # 合并所有插入点
-        insertions = []
-        for sub in subscripts:
-            insertions.append((sub.get("position", 0), "sub", sub.get("text", "")))
-        for sup in superscripts:
-            insertions.append((sup.get("position", 0), "super", sup.get("text", "")))
-
-        if not insertions:
-            return html.escape(text)
-
-        # 按位置正序排列，依次分割文本
-        insertions.sort(key=lambda x: x[0])
-
-        # 分割文本，转义各部分，然后用标签重新连接
-        parts = []
-        last_pos = 0
-        for pos, tag_type, tag_text in insertions:
-            # 转义标签位置前的文本
-            parts.append(html.escape(text[last_pos:pos]))
-            # 插入标签（标签本身不转义，标签内文本需转义）
-            parts.append(f"<{tag_type}>{html.escape(tag_text)}</{tag_type}>")
-            last_pos = pos
-        # 转义最后一部分文本
-        parts.append(html.escape(text[last_pos:]))
-
-        return "".join(parts)
-
-    def _merge_pdfs(self, files: list, output_path: str) -> dict:
-        """合并多个 PDF 文件
-
-        Args:
-            files: 要合并的 PDF 文件路径列表
-            output_path: 输出文件路径
-
-        Returns:
-            操作结果字典
-        """
-        try:
-            from pypdf import PdfWriter, PdfReader
-        except ImportError:
-            self.logger.error("_merge_pdfs: pypdf 未安装")
-            return {"error": "需要安装 pypdf 库: pip install pypdf"}
-
-        if not files:
-            self.logger.error("_merge_pdfs: 缺少要合并的文件列表")
-            return {"error": "缺少要合并的文件列表"}
-
-        if not output_path:
-            self.logger.error("_merge_pdfs: 缺少输出文件路径")
-            return {"error": "缺少输出文件路径"}
-
-        self.logger.info("_merge_pdfs: 开始合并 %d 个 PDF 文件", len(files))
-
-        writer = PdfWriter()
-        merged_count = 0
-        for file_path in files:
-            if not os.path.exists(file_path):
-                self.logger.error("_merge_pdfs: 文件不存在: %s", file_path)
-                return {"error": f"文件不存在: {file_path}"}
-            reader = PdfReader(file_path)
-            for page in reader.pages:
-                writer.add_page(page)
-            merged_count += 1
-
-        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-        with open(output_path, "wb") as f:
-            writer.write(f)
-
-        self.logger.info("_merge_pdfs: 合并完成, output_path=%s, 文件数=%d", output_path, merged_count)
-        return {
-            "path": output_path,
-            "message": f"已合并 {merged_count} 个 PDF 文件",
-        }
-
-    def _split_pdf(self, path: str, ranges: list, output_dir: str) -> dict:
-        """按页码范围拆分 PDF 文件
-
-        Args:
-            path: 源 PDF 文件路径
-            ranges: 页码范围列表，如 ["1-5", "6-10"]
-            output_dir: 输出目录（默认为源文件所在目录）
-
-        Returns:
-            操作结果字典，包含生成的文件列表
-        """
-        try:
-            from pypdf import PdfWriter, PdfReader
-        except ImportError:
-            self.logger.error("_split_pdf: pypdf 未安装")
-            return {"error": "需要安装 pypdf 库: pip install pypdf"}
-
-        if not path or not os.path.exists(path):
-            self.logger.error("_split_pdf: 源文件不存在: %s", path)
-            return {"error": "源文件不存在"}
-
-        if not ranges:
-            self.logger.error("_split_pdf: 缺少拆分页码范围")
-            return {"error": "缺少拆分页码范围"}
-
-        # 默认输出到源文件所在目录
-        if not output_dir:
-            output_dir = os.path.dirname(path) or "."
-
-        os.makedirs(output_dir, exist_ok=True)
+        from pypdf import PdfReader
 
         reader = PdfReader(path)
         total_pages = len(reader.pages)
-        base_name = os.path.splitext(os.path.basename(path))[0]
-        output_files = []
 
-        self.logger.info("_split_pdf: 开始拆分, path=%s, ranges=%s, 总页数=%d", path, ranges, total_pages)
+        # 提取元数据
+        meta = reader.metadata
+        metadata = {}
+        if meta:
+            metadata = {
+                "title": meta.title or "",
+                "author": meta.author or "",
+                "subject": meta.subject or "",
+                "creator": meta.creator or "",
+                "producer": meta.producer or "",
+            }
 
-        for range_str in ranges:
-            # 解析页码范围，格式: "1-5" 表示第1到5页
-            parts = range_str.split("-")
-            if len(parts) != 2:
-                self.logger.error("_split_pdf: 无效的页码范围: %s", range_str)
-                return {"error": f"无效的页码范围: {range_str}，格式应为 '起始页-结束页'"}
+        # 统计文本
+        total_chars = 0
+        try:
+            import pdfplumber
+            with pdfplumber.open(path) as pdf:
+                for page in pdf.pages:
+                    text = page.extract_text() or ""
+                    total_chars += len(text)
+        except ImportError:
+            self.logger.warning("analyze: pdfplumber 未安装，跳过文本统计")
 
-            try:
-                start = int(parts[0].strip())
-                end = int(parts[1].strip())
-            except ValueError:
-                self.logger.error("_split_pdf: 页码范围包含非数字: %s", range_str)
-                return {"error": f"页码范围包含非数字: {range_str}"}
-
-            # 校验页码范围有效性
-            if start < 1 or end < 1 or start > end:
-                self.logger.error("_split_pdf: 无效的页码范围: %s", range_str)
-                return {"error": f"无效的页码范围: {range_str}，起始页和结束页须为正整数且起始页不大于结束页"}
-            if start > total_pages:
-                self.logger.error("_split_pdf: 起始页超出范围: %s (总页数=%d)", range_str, total_pages)
-                return {"error": f"起始页超出范围: {range_str}，文档共 {total_pages} 页"}
-
-            writer = PdfWriter()
-            # 将页码转为0索引，逐页添加
-            actual_end = min(end, total_pages)
-            for i in range(start - 1, actual_end):
-                writer.add_page(reader.pages[i])
-
-            # 输出文件名: 原文件名_1-5.pdf
-            output_name = f"{base_name}_{range_str}.pdf"
-            output_path = os.path.join(output_dir, output_name)
-            with open(output_path, "wb") as f:
-                writer.write(f)
-            output_files.append(output_path)
-
-        self.logger.info("_split_pdf: 拆分完成, 生成 %d 个文件", len(output_files))
+        self.logger.info("analyze: PDF 文档分析完成, path=%s, 总页数=%d", path, total_pages)
         return {
-            "files": output_files,
-            "message": f"已拆分为 {len(output_files)} 个文件",
+            "file_size": os.path.getsize(path),
+            "total_pages": total_pages,
+            "total_chars": total_chars,
+            "metadata": metadata,
         }
 
-    def _rotate_pages(self, path: str, pages: list, angle: int, output_path: str) -> dict:
-        """旋转 PDF 指定页面
+    # ------------------------------------------------------------------ #
+    #  样式构建
+    # ------------------------------------------------------------------ #
+
+    def _build_custom_styles(self, styles, font_name: str) -> dict:
+        """构建自定义样式集
 
         Args:
-            path: 源 PDF 文件路径
-            pages: 要旋转的页码列表（1索引），如 [1, 2, 3]
-            angle: 旋转角度（90的倍数），如 90, 180, 270
-            output_path: 输出文件路径（默认覆盖源文件）
+            styles: reportlab 样式集
+            font_name: 已注册的中文字体名称
 
         Returns:
-            操作结果字典
+            样式字典 {name: ParagraphStyle}
         """
+        custom = {}
+
+        # 标题样式
+        custom["title"] = ParagraphStyle(
+            "CustomTitle",
+            parent=styles["Title"],
+            fontName=font_name,
+            fontSize=24,
+            spaceAfter=15,
+            alignment=TA_CENTER,
+        )
+
+        # 一级标题
+        custom["heading1"] = ParagraphStyle(
+            "CustomHeading1",
+            parent=styles["Heading1"],
+            fontName=font_name,
+            fontSize=18,
+            spaceBefore=20,
+            spaceAfter=10,
+        )
+
+        # 二级标题
+        custom["heading2"] = ParagraphStyle(
+            "CustomHeading2",
+            parent=styles["Heading2"],
+            fontName=font_name,
+            fontSize=14,
+            spaceBefore=15,
+            spaceAfter=8,
+        )
+
+        # 正文样式
+        custom["body"] = ParagraphStyle(
+            "CustomBody",
+            parent=styles["Normal"],
+            fontName=font_name,
+            fontSize=12,
+            leading=20,
+            spaceAfter=8,
+            alignment=TA_JUSTIFY,
+        )
+
+        # 列表样式
+        custom["list"] = ParagraphStyle(
+            "CustomList",
+            parent=styles["Normal"],
+            fontName=font_name,
+            fontSize=12,
+            leading=20,
+            spaceAfter=4,
+            leftIndent=20,
+            bulletIndent=10,
+        )
+
+        # 注释样式
+        custom["note"] = ParagraphStyle(
+            "CustomNote",
+            parent=styles["Normal"],
+            fontName=font_name,
+            fontSize=10,
+            leading=16,
+            spaceAfter=4,
+            textColor=colors.grey,
+        )
+
+        return custom
+
+    # ------------------------------------------------------------------ #
+    #  结构化内容处理
+    # ------------------------------------------------------------------ #
+
+    def _try_parse_json_content(self, content: str):
+        """尝试将字符串内容解析为结构化 JSON
+
+        Returns:
+            解析后的 blocks 列表，或 None（非 JSON 格式）
+        """
+        if not content or not content.strip():
+            return None
         try:
-            from pypdf import PdfWriter, PdfReader
-        except ImportError:
-            self.logger.error("_rotate_pages: pypdf 未安装")
-            return {"error": "需要安装 pypdf 库: pip install pypdf"}
+            parsed = json.loads(content)
+            if isinstance(parsed, dict):
+                return parsed.get("blocks", [])
+            elif isinstance(parsed, list):
+                return parsed
+            return None
+        except (json.JSONDecodeError, TypeError):
+            return None
 
-        if not path or not os.path.exists(path):
-            self.logger.error("_rotate_pages: 源文件不存在: %s", path)
-            return {"error": "源文件不存在"}
+    def _process_structured_blocks(self, elements: list, blocks: list, styles: dict):
+        """处理结构化内容块列表
 
-        if not pages:
-            self.logger.error("_rotate_pages: 缺少要旋转的页码列表")
-            return {"error": "缺少要旋转的页码列表"}
+        支持的 block 类型:
+        - heading: 标题 {type:"heading", level:1, text:"..."}
+        - paragraph: 段落 {type:"paragraph", text:"..."}
+        - table: 表格 {type:"table", headers:[], rows:[]}
+        - list: 列表 {type:"list", items:[]}
+        - spacer: 间距 {type:"spacer", height:0.5}
+        - pagebreak: 分页 {type:"pagebreak"}
+        """
+        for block in blocks:
+            if not isinstance(block, dict):
+                continue
+            self._add_block(elements, block, styles)
 
-        # 默认覆盖源文件
-        if not output_path:
-            output_path = path
+    def _add_block(self, elements: list, block: dict, styles: dict):
+        """添加单个内容块"""
+        block_type = block.get("type", "paragraph")
 
-        self.logger.info("_rotate_pages: 开始旋转, path=%s, pages=%s, angle=%d", path, pages, angle)
+        if block_type == "heading":
+            level = block.get("level", 1)
+            text = block.get("text", "")
+            style_key = f"heading{level}" if level <= 2 else "heading2"
+            style = styles.get(style_key, styles["heading1"])
+            elements.append(Paragraph(self._escape_xml(text), style))
+            elements.append(Spacer(1, 0.3 * cm))
 
-        reader = PdfReader(path)
-        writer = PdfWriter()
-        rotated_count = 0
+        elif block_type == "paragraph":
+            text = block.get("text", "")
+            elements.append(Paragraph(self._escape_xml(text), styles["body"]))
+            elements.append(Spacer(1, 0.2 * cm))
 
-        for i, page in enumerate(reader.pages):
-            # 页码为1索引，判断当前页是否在旋转列表中
-            if (i + 1) in pages:
-                page.rotate(angle)
-                rotated_count += 1
-            writer.add_page(page)
+        elif block_type == "table":
+            headers = block.get("headers", [])
+            rows = block.get("rows", [])
+            self._add_table_block(elements, headers, rows, styles)
 
-        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-        with open(output_path, "wb") as f:
-            writer.write(f)
+        elif block_type == "list":
+            items = block.get("items", [])
+            for item in items:
+                bullet_text = f"&bull; {self._escape_xml(str(item))}"
+                elements.append(Paragraph(bullet_text, styles["list"]))
+            elements.append(Spacer(1, 0.2 * cm))
 
-        self.logger.info("_rotate_pages: 旋转完成, 旋转了 %d 个页面", rotated_count)
-        return {
-            "path": output_path,
-            "message": f"已旋转 {rotated_count} 个页面，角度: {angle} 度",
-        }
+        elif block_type == "spacer":
+            height = block.get("height", 0.5)
+            elements.append(Spacer(1, height * cm))
 
-    def _add_text_watermark(self, path: str, text: str, output_path: str) -> dict:
+        elif block_type == "pagebreak":
+            elements.append(PageBreak())
+
+    def _add_table_block(self, elements: list, headers: list, rows: list, styles: dict):
+        """添加表格块"""
+        table_data = []
+        if headers:
+            table_data.append(headers)
+        for row in rows:
+            table_data.append([str(cell) for cell in row])
+
+        if not table_data:
+            return
+
+        # 获取字体名称
+        font_name = styles["body"].fontName
+
+        table = Table(table_data)
+        style_commands = [
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("FONTNAME", (0, 0), (-1, -1), font_name),
+            ("FONTSIZE", (0, 0), (-1, -1), 10),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]
+
+        # 表头行样式
+        if headers:
+            style_commands.extend([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.Color(0.9, 0.9, 0.9)),
+                ("FONTNAME", (0, 0), (-1, 0), font_name),
+                ("FONTSIZE", (0, 0), (-1, 0), 11),
+                ("BOLD", (0, 0), (-1, 0), True),
+            ])
+
+        table.setStyle(TableStyle(style_commands))
+        elements.append(table)
+        elements.append(Spacer(1, 0.5 * cm))
+
+    # ------------------------------------------------------------------ #
+    #  XML 转义辅助
+    # ------------------------------------------------------------------ #
+
+    def _escape_xml(self, text: str) -> str:
+        """转义 XML 特殊字符，同时保留 <sub>/<super> 标签
+
+        遵循 Skill 规范：下标上标使用 <sub>/<super> XML 标签，不使用 Unicode 字符
+
+        Args:
+            text: 原始文本
+
+        Returns:
+            转义后的文本（保留 sub/super 标签）
+        """
+        # 先保护 sub/super 标签
+        import re
+        # 匹配 <sub>...</sub> 和 <super>...</super>
+        protected_tags = []
+
+        def protect_tag(match):
+            protected_tags.append(match.group(0))
+            return f"__PROTECTED_{len(protected_tags) - 1}__"
+
+        text = re.sub(r"<(sub|super)>(.*?)</\1>", protect_tag, text, flags=re.IGNORECASE | re.DOTALL)
+
+        # 转义 XML 特殊字符
+        text = html.escape(text)
+
+        # 恢复 sub/super 标签
+        for i, tag in enumerate(protected_tags):
+            text = text.replace(f"__PROTECTED_{i}__", tag)
+
+        # 处理换行符（reportlab Paragraph 使用 <br/> 换行）
+        text = text.replace("\n", "<br/>")
+
+        return text
+
+    # ------------------------------------------------------------------ #
+    #  水印相关方法
+    # ------------------------------------------------------------------ #
+
+    def _add_text_watermark(self, input_path: str, output_path: str,
+                            text: str, font_size: int = 60,
+                            color_hex: str = "CCCCCC", opacity: float = 0.3,
+                            angle: int = 45):
         """添加文字水印
 
-        使用 reportlab 生成水印 PDF 页面，再用 pypdf 叠加到每一页。
-        水印文字为半透明灰色，45度旋转。
+        使用 reportlab 生成水印页，再用 pypdf 叠加到原文
 
         Args:
-            path: 源 PDF 文件路径
-            text: 水印文字内容
-            output_path: 输出文件路径（默认覆盖源文件）
-
-        Returns:
-            操作结果字典
+            input_path: 源 PDF 路径
+            output_path: 输出 PDF 路径
+            text: 水印文字
+            font_size: 字号
+            color_hex: 颜色（十六进制）
+            opacity: 透明度
+            angle: 旋转角度
         """
-        try:
-            from pypdf import PdfWriter, PdfReader
-        except ImportError:
-            self.logger.error("_add_text_watermark: pypdf 未安装")
-            return {"error": "需要安装 pypdf 库: pip install pypdf"}
-
-        try:
-            from reportlab.pdfgen import canvas
-            from reportlab.lib.colors import Color
-        except ImportError:
-            self.logger.error("_add_text_watermark: reportlab 未安装")
-            return {"error": "需要安装 reportlab 库: pip install reportlab"}
-
-        if not path or not os.path.exists(path):
-            self.logger.error("_add_text_watermark: 源文件不存在: %s", path)
-            return {"error": "源文件不存在"}
-
-        if not text:
-            self.logger.error("_add_text_watermark: 缺少水印文字")
-            return {"error": "缺少水印文字"}
-
-        # 默认覆盖源文件
-        if not output_path:
-            output_path = path
-
-        self.logger.info("_add_text_watermark: 开始添加文字水印, path=%s, text=%s", path, text)
-
-        # 注册中文字体，以支持中文水印
+        from pypdf import PdfReader, PdfWriter
         from handlers.font_utils import register_chinese_font
+
         font_name = register_chinese_font()
 
-        reader = PdfReader(path)
+        # 读取源 PDF
+        reader = PdfReader(input_path)
+        page_width = float(reader.pages[0].mediabox.width)
+        page_height = float(reader.pages[0].mediabox.height)
+
+        # 用 reportlab 生成水印页
+        watermark_buffer = io.BytesIO()
+        from reportlab.pdfgen import canvas as pdfcanvas
+        c = pdfcanvas.Canvas(watermark_buffer, pagesize=(page_width, page_height))
+
+        # 解析颜色
+        r = int(color_hex[0:2], 16) / 255.0
+        g = int(color_hex[2:4], 16) / 255.0
+        b = int(color_hex[4:6], 16) / 255.0
+
+        c.setFillRGB(r, g, b, alpha=opacity)
+        c.setFont(font_name, font_size)
+
+        # 居中旋转绘制
+        c.translate(page_width / 2, page_height / 2)
+        c.rotate(angle)
+        c.drawCentredString(0, 0, text)
+        c.save()
+
+        watermark_buffer.seek(0)
+        watermark_reader = PdfReader(watermark_buffer)
+        watermark_page = watermark_reader.pages[0]
+
+        # 叠加水印到每一页
         writer = PdfWriter()
-
         for page in reader.pages:
-            # 获取当前页面尺寸，为每一页生成对应尺寸的水印
-            page_width = float(page.mediabox.width)
-            page_height = float(page.mediabox.height)
-
-            # 使用 reportlab 创建水印 PDF 页面
-            packet = io.BytesIO()
-            can = canvas.Canvas(packet, pagesize=(page_width, page_height))
-            can.saveState()
-            can.setFont(font_name, 40)
-            # 半透明灰色水印
-            can.setFillColor(Color(0.75, 0.75, 0.75, alpha=0.3))
-            # 移动到页面中心并旋转45度
-            can.translate(page_width / 2, page_height / 2)
-            can.rotate(45)
-            can.drawCentredString(0, 0, text)
-            can.restoreState()
-            can.save()
-
-            # 将水印页面叠加到当前页面
-            packet.seek(0)
-            watermark_reader = PdfReader(packet)
-            watermark_page = watermark_reader.pages[0]
             page.merge_page(watermark_page)
             writer.add_page(page)
 
@@ -788,78 +793,49 @@ class PdfHandler:
         with open(output_path, "wb") as f:
             writer.write(f)
 
-        self.logger.info("_add_text_watermark: 水印添加完成, output_path=%s", output_path)
-        return {
-            "path": output_path,
-            "message": f"已添加文字水印: {text}",
-        }
-
-    def _add_image_watermark(self, path: str, image_path: str, output_path: str) -> dict:
+    def _add_image_watermark(self, input_path: str, output_path: str,
+                             image_path: str, opacity: float = 0.3,
+                             x: Optional[float] = None, y: Optional[float] = None):
         """添加图片水印
 
-        使用 reportlab 将图片绘制到 PDF 页面，再用 pypdf 叠加到每一页。
+        使用 reportlab 生成带图片的水印页，再用 pypdf 叠加到原文
 
         Args:
-            path: 源 PDF 文件路径
-            image_path: 水印图片文件路径
-            output_path: 输出文件路径（默认覆盖源文件）
-
-        Returns:
-            操作结果字典
+            input_path: 源 PDF 路径
+            output_path: 输出 PDF 路径
+            image_path: 水印图片路径
+            opacity: 透明度
+            x: 图片 x 坐标（默认居中）
+            y: 图片 y 坐标（默认居中）
         """
-        try:
-            from pypdf import PdfWriter, PdfReader
-        except ImportError:
-            self.logger.error("_add_image_watermark: pypdf 未安装")
-            return {"error": "需要安装 pypdf 库: pip install pypdf"}
+        from pypdf import PdfReader, PdfWriter
 
-        try:
-            from reportlab.pdfgen import canvas
-            from reportlab.lib.colors import Color
-        except ImportError:
-            self.logger.error("_add_image_watermark: reportlab 未安装")
-            return {"error": "需要安装 reportlab 库: pip install reportlab"}
+        reader = PdfReader(input_path)
+        page_width = float(reader.pages[0].mediabox.width)
+        page_height = float(reader.pages[0].mediabox.height)
 
-        if not path or not os.path.exists(path):
-            self.logger.error("_add_image_watermark: 源文件不存在: %s", path)
-            return {"error": "源文件不存在"}
+        # 用 reportlab 生成水印页
+        watermark_buffer = io.BytesIO()
+        from reportlab.pdfgen import canvas as pdfcanvas
+        c = pdfcanvas.Canvas(watermark_buffer, pagesize=(page_width, page_height))
 
-        if not image_path or not os.path.exists(image_path):
-            self.logger.error("_add_image_watermark: 水印图片不存在: %s", image_path)
-            return {"error": "水印图片不存在"}
+        # 计算图片位置
+        if x is None:
+            x = page_width / 2 - 100
+        if y is None:
+            y = page_height / 2 - 100
 
-        # 默认覆盖源文件
-        if not output_path:
-            output_path = path
+        c.setFillAlpha(opacity)
+        c.drawImage(image_path, x, y, width=200, height=200, preserveAspectRatio=True, mask="auto")
+        c.save()
 
-        self.logger.info("_add_image_watermark: 开始添加图片水印, path=%s, image=%s", path, image_path)
+        watermark_buffer.seek(0)
+        watermark_reader = PdfReader(watermark_buffer)
+        watermark_page = watermark_reader.pages[0]
 
-        reader = PdfReader(path)
+        # 叠加水印到每一页
         writer = PdfWriter()
-
         for page in reader.pages:
-            page_width = float(page.mediabox.width)
-            page_height = float(page.mediabox.height)
-
-            # 使用 reportlab 创建带图片的水印 PDF 页面
-            packet = io.BytesIO()
-            can = canvas.Canvas(packet, pagesize=(page_width, page_height))
-            can.saveState()
-            # 设置全局透明度
-            can.setFillAlpha(0.3)
-            # 图片居中放置，宽度为页面宽度的50%
-            img_width = page_width * 0.5
-            img_height = page_height * 0.5
-            x = (page_width - img_width) / 2
-            y = (page_height - img_height) / 2
-            can.drawImage(image_path, x, y, width=img_width, height=img_height, mask="auto")
-            can.restoreState()
-            can.save()
-
-            # 将水印页面叠加到当前页面
-            packet.seek(0)
-            watermark_reader = PdfReader(packet)
-            watermark_page = watermark_reader.pages[0]
             page.merge_page(watermark_page)
             writer.add_page(page)
 
@@ -867,55 +843,37 @@ class PdfHandler:
         with open(output_path, "wb") as f:
             writer.write(f)
 
-        self.logger.info("_add_image_watermark: 图片水印添加完成, output_path=%s", output_path)
-        return {
-            "path": output_path,
-            "message": "已添加图片水印",
-        }
+    # ------------------------------------------------------------------ #
+    #  格式转换辅助方法
+    # ------------------------------------------------------------------ #
 
-    def _encrypt_pdf(self, path: str, user_password: str, owner_password: str, output_path: str) -> dict:
-        """加密 PDF 文件
+    def _convert_pages_to_html(self, pages_text: list[str]) -> str:
+        """将 PDF 页面文本转换为 HTML"""
+        sections = []
+        for i, text in enumerate(pages_text):
+            section_lines = [f'  <div class="page">']
+            section_lines.append(f"    <h3>第 {i + 1} 页</h3>")
+            for line in text.split("\n"):
+                if line.strip():
+                    section_lines.append(f"    <p>{html.escape(line)}</p>")
+            section_lines.append("  </div>")
+            sections.append("\n".join(section_lines))
 
-        Args:
-            path: 源 PDF 文件路径
-            user_password: 用户密码（打开文档需要）
-            owner_password: 所有者密码（权限控制）
-            output_path: 输出文件路径（默认覆盖源文件）
-
-        Returns:
-            操作结果字典
-        """
-        try:
-            from pypdf import PdfWriter, PdfReader
-        except ImportError:
-            self.logger.error("_encrypt_pdf: pypdf 未安装")
-            return {"error": "需要安装 pypdf 库: pip install pypdf"}
-
-        if not path or not os.path.exists(path):
-            self.logger.error("_encrypt_pdf: 源文件不存在: %s", path)
-            return {"error": "源文件不存在"}
-
-        # 默认覆盖源文件
-        if not output_path:
-            output_path = path
-
-        self.logger.info("_encrypt_pdf: 开始加密, path=%s", path)
-
-        reader = PdfReader(path)
-        writer = PdfWriter()
-
-        for page in reader.pages:
-            writer.add_page(page)
-
-        # 使用 pypdf 加密
-        writer.encrypt(user_password, owner_password)
-
-        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-        with open(output_path, "wb") as f:
-            writer.write(f)
-
-        self.logger.info("_encrypt_pdf: 加密完成, output_path=%s", output_path)
-        return {
-            "path": output_path,
-            "message": "PDF 已加密",
-        }
+        html_doc = f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF Content</title>
+  <style>
+    body {{ font-family: "Microsoft YaHei", "SimSun", sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }}
+    .page {{ margin-bottom: 30px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; }}
+    h3 {{ color: #666; border-bottom: 1px solid #eee; padding-bottom: 5px; }}
+    p {{ line-height: 1.8; color: #333; margin: 4px 0; }}
+  </style>
+</head>
+<body>
+{chr(10).join(sections)}
+</body>
+</html>"""
+        return html_doc

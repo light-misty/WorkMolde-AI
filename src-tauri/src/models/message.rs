@@ -160,8 +160,8 @@ mod tests {
             tool_calls: Some(vec![
                 ToolCall {
                     id: "call_1".to_string(),
-                    name: "generate_document".to_string(),
-                    arguments: serde_json::json!({"format": "docx", "path": "周报.docx"}),
+                    name: "docx_skill".to_string(),
+                    arguments: serde_json::json!({"action": "generate", "path": "周报.docx"}),
                     result: None,
                 },
             ]),
@@ -173,11 +173,11 @@ mod tests {
         assert_eq!(chat_msg.role, "assistant");
         let tool_calls = chat_msg.tool_calls.unwrap();
         assert_eq!(tool_calls.len(), 1);
-        assert_eq!(tool_calls[0].name, "generate_document");
+        assert_eq!(tool_calls[0].name, "docx_skill");
         assert_eq!(tool_calls[0].id, "call_1");
         // arguments 应该是 JSON 字符串
         let args: serde_json::Value = serde_json::from_str(&tool_calls[0].arguments).unwrap();
-        assert_eq!(args["format"], "docx");
+        assert_eq!(args["action"], "generate");
     }
 
     /// 测试 tool 消息转换为 ChatMessage
@@ -190,7 +190,7 @@ mod tests {
             tool_calls: Some(vec![
                 ToolCall {
                     id: "call_1".to_string(),
-                    name: "generate_document".to_string(),
+                    name: "docx_skill".to_string(),
                     arguments: serde_json::json!({}),
                     result: Some(serde_json::json!({"success": true})),
                 },
@@ -246,14 +246,14 @@ mod tests {
             tool_calls: Some(vec![
                 ToolCall {
                     id: "call_a".to_string(),
-                    name: "read_document".to_string(),
-                    arguments: serde_json::json!({"path": "a.docx"}),
+                    name: "docx_skill".to_string(),
+                    arguments: serde_json::json!({"action": "read", "path": "a.docx"}),
                     result: None,
                 },
                 ToolCall {
                     id: "call_b".to_string(),
-                    name: "read_document".to_string(),
-                    arguments: serde_json::json!({"path": "b.docx"}),
+                    name: "xlsx_skill".to_string(),
+                    arguments: serde_json::json!({"action": "read", "path": "b.xlsx"}),
                     result: None,
                 },
             ]),
@@ -264,7 +264,7 @@ mod tests {
         let chat_msg = msg.to_chat_message().unwrap();
         let tool_calls = chat_msg.tool_calls.unwrap();
         assert_eq!(tool_calls.len(), 2);
-        assert_eq!(tool_calls[0].name, "read_document");
-        assert_eq!(tool_calls[1].name, "read_document");
+        assert_eq!(tool_calls[0].name, "docx_skill");
+        assert_eq!(tool_calls[1].name, "xlsx_skill");
     }
 }

@@ -483,31 +483,33 @@ fn extract_and_persist_preferences(
         if let Some(tool_calls) = &msg.tool_calls {
             for tc in tool_calls {
                 if let Ok(params) = serde_json::from_str::<serde_json::Value>(&tc.arguments) {
-                    // 从 generate_document 的 format 参数提取文档格式偏好
-                    if tc.name == "generate_document" {
-                        if let Some(format) = params["format"].as_str() {
+                    // 从文档 Skill 的参数提取文档格式偏好
+                    if tc.name == "docx_skill" || tc.name == "xlsx_skill"
+                        || tc.name == "pptx_skill" || tc.name == "pdf_skill"
+                    {
+                        if let Some(action) = params["action"].as_str() {
                             let pref_id = format!("pref_{}", uuid::Uuid::new_v4());
+                            let format_name = tc.name.replace("_skill", "");
                             crate::db::user_preference_repo::upsert_preference(
                                 &conn,
                                 &pref_id,
                                 "format",
                                 "preferred_document_format",
-                                format,
+                                &format_name,
                             )?;
-                        }
-                    }
-
-                    // 从 convert_format 的 target_format 参数提取格式转换偏好
-                    if tc.name == "convert_format" {
-                        if let Some(target) = params["target_format"].as_str() {
-                            let pref_id = format!("pref_{}", uuid::Uuid::new_v4());
-                            crate::db::user_preference_repo::upsert_preference(
-                                &conn,
-                                &pref_id,
-                                "format",
-                                "preferred_target_format",
-                                target,
-                            )?;
+                            // 转换操作时提取目标格式偏好
+                            if action == "convert" {
+                                if let Some(target) = params["target_format"].as_str() {
+                                    let pref_id2 = format!("pref_{}", uuid::Uuid::new_v4());
+                                    crate::db::user_preference_repo::upsert_preference(
+                                        &conn,
+                                        &pref_id2,
+                                        "format",
+                                        "preferred_target_format",
+                                        target,
+                                    )?;
+                                }
+                            }
                         }
                     }
                 }

@@ -11,25 +11,37 @@ export function formatSize(bytes: number): string {
 
 export function generateToolBrief(toolName: string, input: Record<string, unknown>): string {
   const f = (key: string) => String(input[key] ?? "");
+  const actionMap: Record<string, string> = {
+    generate: "生成",
+    read: "读取",
+    modify: "修改",
+    convert: "转换",
+    analyze: "分析",
+  };
+  const formatMap: Record<string, string> = {
+    docx_skill: "Word",
+    xlsx_skill: "Excel",
+    pptx_skill: "PPT",
+    pdf_skill: "PDF",
+  };
+  const action = actionMap[f("action")] || "";
+  const format = formatMap[toolName] || "";
   switch (toolName) {
-    case "generate_document":
-      return `生成 ${f("file_name") || "文档"}`;
-    case "read_document":
-      return `读取 ${f("file_name") || "文档"}`;
-    case "modify_document":
-      return `修改 ${f("file_name") || f("path") || "文档"}`;
-    case "delete_document":
-      return `删除 ${f("file_name") || f("path") || "文件"}`;
-    case "convert_format":
-      return `转换 ${f("file_name") || f("source_path") || "文档"} 格式`;
-    case "search_documents":
+    case "docx_skill":
+    case "xlsx_skill":
+    case "pptx_skill":
+    case "pdf_skill":
+      return `${action} ${format} ${f("path") || "文档"}`;
+    case "delete_file":
+      return `删除 ${f("path") || "文件"}`;
+    case "search_files":
       return `搜索 ${f("query") ? `"${f("query")}"` : "文件"}`;
-    case "analyze_document":
-      return `分析 ${f("file_name") || "文档"}`;
-    case "list_workspace":
-      return "列出工作区目录";
-    case "batch_process":
-      return `批量处理 ${f("operation") || "文档"}`;
+    case "list_directory":
+      return "列出目录";
+    case "read_file":
+      return `读取 ${f("path") || "文件"}`;
+    case "write_text_file":
+      return `写入 ${f("path") || "文件"}`;
     default:
       return toolName;
   }

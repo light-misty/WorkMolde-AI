@@ -16,7 +16,8 @@ use crate::services::tool::registry::ToolRegistry;
 use crate::ConfirmDecision;
 use super::context::AgentContext;
 
-const HIGH_RISK_SKILLS: &[&str] = &["delete_file", "modify_document", "batch_process"];
+// 高风险 Skill 名称列表（仅 delete_file，其他 Skill 根据 action 参数动态判断）
+const HIGH_RISK_SKILLS: &[&str] = &["delete_file"];
 const CONFIRM_TIMEOUT_SECS: u64 = 300;
 
 pub struct ExecutionResult {
@@ -138,30 +139,37 @@ impl<R: Runtime> AgentExecutor<R> {
         }
     }
 
-    fn is_high_risk_skill(name: &str) -> bool {
-        HIGH_RISK_SKILLS.contains(&name)
+    /// 检查是否为高风险操作
+    /// 1. delete_file 始终为高风险（critical）
+    /// 2. 文档 Skill（docx_skill/xlsx_skill/pptx_skill/pdf_skill）在 action 为 "modify" 时为高风险
+    fn is_high_risk_skill(name: &str, params: &serde_json::Value) -> bool {
+        if HIGH_RISK_SKILLS.contains(&name) {
+            return true;
+        }
+        // 文档 Skill 的 modify 操作需要用户确认
+        if matches!(name, "docx_skill" | "xlsx_skill" | "pptx_skill" | "pdf_skill")
+            && params["action"].as_str() == Some("modify")
+        {
+            return true;
+        }
+        false
     }
 
     /// 从 Skill 参数中提取需要创建快照的文件路径列表
-    /// modify_document / delete_document / convert_format: 单文件路径
-    /// batch_process: 多文件路径列表
+    /// delete_file: 单文件路径
+    /// 文档 Skill（docx_skill/xlsx_skill/pptx_skill/pdf_skill）: action 为 modify 时提取 path
     fn extract_snapshot_paths(&self, skill_name: &str, params: &serde_json::Value) -> Vec<String> {
         match skill_name {
-            "modify_document" | "delete_file" => {
+            "delete_file" => {
                 vec![params["path"].as_str().unwrap_or("").to_string()]
             }
-            "convert_format" => {
-                vec![params["source_path"].as_str().unwrap_or("").to_string()]
-            }
-            "batch_process" => {
-                params["paths"]
-                    .as_array()
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|v| v.as_str().map(String::from))
-                            .collect()
-                    })
-                    .unwrap_or_default()
+            "docx_skill" | "xlsx_skill" | "pptx_skill" | "pdf_skill" => {
+                // 仅在修改操作时创建快照
+                if params["action"].as_str() == Some("modify") {
+                    vec![params["path"].as_str().unwrap_or("").to_string()]
+                } else {
+                    Vec::new()
+                }
             }
             _ => Vec::new(),
         }
@@ -195,8 +203,11 @@ impl<R: Runtime> AgentExecutor<R> {
 
         let description = match tool_name {
             "delete_file" => format!("删除文件: {}", arguments["path"].as_str().unwrap_or("未知")),
-            "modify_document" => format!("修改文件: {}", arguments["path"].as_str().unwrap_or("未知")),
-            "batch_process" => format!("批量处理 {} 个文件", arguments["paths"].as_array().map(|a| a.len()).unwrap_or(0)),
+            "docx_skill" | "xlsx_skill" | "pptx_skill" | "pdf_skill" => {
+                let action = arguments["action"].as_str().unwrap_or("未知操作");
+                let path = arguments["path"].as_str().unwrap_or("未知文件");
+                format!("{} 文档 - {}: {}", tool_name, action, path)
+            }
             _ => format!("执行高风险操作: {}", tool_name),
         };
 
@@ -554,7 +565,7 @@ impl<R: Runtime> AgentExecutor<R> {
                     // 记录当前执行的步骤
                     ctx.set_current_step(format!("执行 {}", tool_call.name));
 
-                    if Self::is_high_risk_skill(&tool_call.name) {
+                    if Self::is_high_risk_skill(&tool_call.name, &params) {
                         self.emitter.emit_tool_call(ToolCallPayload {
                             session_id: ctx.session_id.clone(),
                             call_id: tool_call.id.clone(),
@@ -612,8 +623,7 @@ impl<R: Runtime> AgentExecutor<R> {
                         tool_call.name.as_str(),
                         "list_directory" | "search_files" | "read_file" | "file_info"
                         | "file_exists" | "delete_file" | "create_directory" | "write_text_file"
-                        | "generate_document" | "read_document" | "modify_document" | "analyze_document"
-                        | "convert_format" | "batch_process"
+                        | "docx_skill" | "xlsx_skill" | "pptx_skill" | "pdf_skill"
                     );
                     if needs_workspace_root && !ctx.workspace_path.is_empty() {
                         safe_params["workspace_root"] = json!(ctx.workspace_path);
@@ -626,9 +636,7 @@ impl<R: Runtime> AgentExecutor<R> {
                             if !file_path.is_empty() {
                                 let operation = match tool_call.name.as_str() {
                                     "delete_file" => "delete",
-                                    "modify_document" => "modify",
-                                    "batch_process" => "batch_modify",
-                                    "convert_format" => "convert",
+                                    "docx_skill" | "xlsx_skill" | "pptx_skill" | "pdf_skill" => "modify",
                                     _ => "unknown",
                                 };
                                 match snapshot_fn(&ctx.workspace_id, &ctx.session_id, file_path, operation) {

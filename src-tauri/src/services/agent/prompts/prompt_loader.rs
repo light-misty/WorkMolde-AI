@@ -269,14 +269,20 @@ impl PromptLoader {
 
 ### 读取操作
 - 纯文本文件(.txt/.md/.csv/.json) -> read_file（更快，不依赖Sidecar）
-- 结构化文档(.docx/.xlsx/.pptx/.pdf) -> read_document
+- Word文档(.docx) -> docx_skill，action="read"
+- Excel文档(.xlsx) -> xlsx_skill，action="read"
+- PPT文档(.pptx) -> pptx_skill，action="read"
+- PDF文档(.pdf) -> pdf_skill，action="read"
 - 仅需文件信息(大小/类型/修改时间) -> file_info
 - 仅需判断文件是否存在 -> file_exists
 
 ### 写入操作
 - 纯文本文件 -> write_text_file
-- 生成结构化文档 -> generate_document
-- 修改已有文档 -> modify_document
+- 生成Word文档 -> docx_skill，action="generate"
+- 生成Excel文档 -> xlsx_skill，action="generate"
+- 生成PPT文档 -> pptx_skill，action="generate"
+- 生成PDF文档 -> pdf_skill，action="generate"
+- 修改已有文档 -> 对应 Skill 的 action="modify"
 
 ### 搜索操作
 - 按文件名搜索 -> search_files（设置include_content=false）
@@ -293,11 +299,10 @@ impl PromptLoader {
 6. 获取到相关文件列表后，向用户展示并确认具体要处理哪个文件，再执行后续操作
 
 ### 转换操作
-- 文档格式转换 -> convert_format
-- 批量处理 -> batch_process
+- 文档格式转换 -> 对应 Skill 的 action="convert"
 
 ### 分析操作
-- 文档结构和统计 -> analyze_document
+- 文档结构和统计 -> 对应 Skill 的 action="analyze"
 
 ### 输出风格
 - 回复和文档中不得出现任何emoji表情符号，使用文字替代（如用"完成"替代"✅"，用"注意"替代"⚠️"）
@@ -340,8 +345,7 @@ impl PromptLoader {
 
 以下操作会自动触发用户确认：
 - delete_file: 删除文件（critical风险级别）
-- modify_document: 修改已有文档（high风险级别）
-- batch_process: 批量处理多个文件（high风险级别）
+- docx_skill/xlsx_skill/pptx_skill/pdf_skill 的 modify 操作: 修改已有文档（high风险级别）
 
 当你的工具调用被确认机制拦截时：
 - 你会收到"用户拒绝了操作"的反馈
@@ -358,46 +362,14 @@ impl PromptLoader {
 
 ### 示例: 生成Word文档
 用户: "帮我创建一份项目周报"
-思考: 用户需要生成Word文档，应使用generate_document工具
-工具调用: generate_document({
-  "format": "docx",
+思考: 用户需要生成Word文档，应使用docx_skill工具
+工具调用: docx_skill({
+  "action": "generate",
   "path": "项目周报.docx",
   "title": "项目周报",
   "content": "...",
   "pageSize": "a4",
   "includeToc": true
-})
-</examples>"#.to_string(),
-            "read" => r#"<examples>
-## 读取文档示例
-
-### 示例: 读取Excel文件
-用户: "看一下销售数据.xlsx里有什么"
-思考: 用户需要读取Excel文件，应使用read_document工具
-工具调用: read_document({
-  "path": "销售数据.xlsx"
-})
-</examples>"#.to_string(),
-            "modify" => r#"<examples>
-## 修改文档示例
-
-### 示例: 修改已有文档
-用户: "把报告.docx里的'2024年'改成'2025年'"
-思考: 用户需要修改Word文档中的文本，应使用modify_document工具
-工具调用: modify_document({
-  "path": "报告.docx",
-  "operations": [{"type": "replace", "old": "2024年", "new": "2025年"}]
-})
-</examples>"#.to_string(),
-            "convert" => r#"<examples>
-## 格式转换示例
-
-### 示例: Word转PDF
-用户: "把方案.docx转成PDF"
-思考: 用户需要格式转换，应使用convert_format工具
-工具调用: convert_format({
-  "source_path": "方案.docx",
-  "target_format": "pdf"
 })
 </examples>"#.to_string(),
             _ => String::new(),
@@ -438,7 +410,7 @@ mod tests {
         let content = PromptLoader::default_tool_strategy();
         assert!(content.contains("<tool_strategy>"));
         assert!(content.contains("read_file"));
-        assert!(content.contains("generate_document"));
+        assert!(content.contains("docx_skill"));
     }
 
     #[test]
@@ -458,13 +430,7 @@ mod tests {
     #[test]
     fn test_default_examples() {
         let content = PromptLoader::default_examples("generate");
-        assert!(content.contains("generate_document"));
-
-        let content = PromptLoader::default_examples("read");
-        assert!(content.contains("read_document"));
-
-        let content = PromptLoader::default_examples("modify");
-        assert!(content.contains("modify_document"));
+        assert!(content.contains("docx_skill"));
     }
 
     #[test]

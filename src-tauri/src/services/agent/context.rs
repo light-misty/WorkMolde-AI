@@ -231,26 +231,13 @@ impl AgentContext {
     }
 
     /// 更新任务类型（基于已调用的工具）
-    pub fn update_task_type_from_tool(&mut self, tool_name: &str, tool_params: Option<&serde_json::Value>) {
+    pub fn update_task_type_from_tool(&mut self, tool_name: &str, _tool_params: Option<&serde_json::Value>) {
         // 如果已经是具体类型，不再覆盖
         if self.task_type != TaskType::Unknown && self.task_type != TaskType::FileSystem {
             return;
         }
 
-        let new_type = if tool_name == "generate_document" {
-            // 根据 format 参数确定具体类型
-            if let Some(params) = tool_params {
-                if let Some(format) = params["format"].as_str() {
-                    TaskType::from_document_format(format)
-                } else {
-                    TaskType::from_tool_name(tool_name)
-                }
-            } else {
-                TaskType::from_tool_name(tool_name)
-            }
-        } else {
-            TaskType::from_tool_name(tool_name)
-        };
+        let new_type = TaskType::from_tool_name(tool_name);
 
         if new_type != TaskType::Unknown {
             log::info!("更新任务类型: {:?} -> {:?}, 基于工具调用: {}", self.task_type, new_type, tool_name);
@@ -683,14 +670,20 @@ impl AgentContext {
 
 ### 读取操作
 - 纯文本文件(.txt/.md/.csv/.json) -> read_file（更快，不依赖Sidecar）
-- 结构化文档(.docx/.xlsx/.pptx/.pdf) -> read_document
+- Word文档(.docx) -> docx_skill，action="read"
+- Excel文档(.xlsx) -> xlsx_skill，action="read"
+- PPT文档(.pptx) -> pptx_skill，action="read"
+- PDF文档(.pdf) -> pdf_skill，action="read"
 - 仅需文件信息(大小/类型/修改时间) -> file_info
 - 仅需判断文件是否存在 -> file_exists
 
 ### 写入操作
 - 纯文本文件 -> write_text_file
-- 生成结构化文档 -> generate_document
-- 修改已有文档 -> modify_document
+- 生成Word文档 -> docx_skill，action="generate"
+- 生成Excel文档 -> xlsx_skill，action="generate"
+- 生成PPT文档 -> pptx_skill，action="generate"
+- 生成PDF文档 -> pdf_skill，action="generate"
+- 修改已有文档 -> 对应 Skill 的 action="modify"
 
 ### 搜索操作
 - 按文件名搜索 -> search_files（设置include_content=false）
@@ -707,11 +700,10 @@ impl AgentContext {
 6. 获取到相关文件列表后，向用户展示并确认具体要处理哪个文件，再执行后续操作
 
 ### 转换操作
-- 文档格式转换 -> convert_format
-- 批量处理 -> batch_process
+- 文档格式转换 -> 对应 Skill 的 action="convert"
 
 ### 分析操作
-- 文档结构和统计 -> analyze_document
+- 文档结构和统计 -> 对应 Skill 的 action="analyze"
 
 ### 输出风格
 - 回复和文档中不得出现任何emoji表情符号，使用文字替代（如用"完成"替代"✅"，用"注意"替代"⚠️"）
@@ -754,8 +746,7 @@ impl AgentContext {
 
 以下操作会自动触发用户确认：
 - delete_file: 删除文件（critical风险级别）
-- modify_document: 修改已有文档（high风险级别）
-- batch_process: 批量处理多个文件（high风险级别）
+- docx_skill/xlsx_skill/pptx_skill/pdf_skill 的 modify 操作: 修改已有文档（high风险级别）
 
 当你的工具调用被确认机制拦截时：
 - 你会收到"用户拒绝了操作"的反馈
@@ -789,11 +780,7 @@ impl AgentContext {
     /// Layer 7: 示例层（按需注入）
     fn layer_examples(task_type: &TaskType) -> String {
         let example_type = match task_type {
-            TaskType::GenerateDocx | TaskType::GenerateXlsx | TaskType::GeneratePptx
-            | TaskType::GeneratePdf | TaskType::GenerateMd => "generate",
-            TaskType::ReadDocument => "read",
-            TaskType::ModifyDocument => "modify",
-            TaskType::ConvertFormat => "convert",
+            TaskType::Docx | TaskType::Xlsx | TaskType::Pptx | TaskType::Pdf | TaskType::Markdown => "generate",
             _ => return String::new(), // 其他类型不注入示例
         };
 
@@ -808,46 +795,14 @@ impl AgentContext {
 
 ### 示例: 生成Word文档
 用户: "帮我创建一份项目周报"
-思考: 用户需要生成Word文档，应使用generate_document工具
-工具调用: generate_document({
-  "format": "docx",
+思考: 用户需要生成Word文档，应使用docx_skill工具
+工具调用: docx_skill({
+  "action": "generate",
   "path": "项目周报.docx",
   "title": "项目周报",
   "content": "...",
   "pageSize": "a4",
   "includeToc": true
-})
-</examples>"#.to_string(),
-            "read" => r#"<examples>
-## 读取文档示例
-
-### 示例: 读取Excel文件
-用户: "看一下销售数据.xlsx里有什么"
-思考: 用户需要读取Excel文件，应使用read_document工具
-工具调用: read_document({
-  "path": "销售数据.xlsx"
-})
-</examples>"#.to_string(),
-            "modify" => r#"<examples>
-## 修改文档示例
-
-### 示例: 修改已有文档
-用户: "把报告.docx里的'2024年'改成'2025年'"
-思考: 用户需要修改Word文档中的文本，应使用modify_document工具
-工具调用: modify_document({
-  "path": "报告.docx",
-  "operations": [{"type": "replace", "old": "2024年", "new": "2025年"}]
-})
-</examples>"#.to_string(),
-            "convert" => r#"<examples>
-## 格式转换示例
-
-### 示例: Word转PDF
-用户: "把方案.docx转成PDF"
-思考: 用户需要格式转换，应使用convert_format工具
-工具调用: convert_format({
-  "source_path": "方案.docx",
-  "target_format": "pdf"
 })
 </examples>"#.to_string(),
             _ => String::new(),
@@ -1000,9 +955,9 @@ mod tests {
         let budget = TokenBudgetManager::default_context();
         let prompt = AgentContext::build_system_prompt_with_task(
             "/workspace",
-            &TaskType::GenerateDocx,
+            &TaskType::Docx,
             8,
-            6,
+            4,
             &budget,
         );
 
@@ -1016,23 +971,22 @@ mod tests {
         assert!(prompt.contains("<examples>"));
     }
 
-    /// 测试按任务类型构建系统提示词 - 读取任务不注入规范
+    /// 测试按任务类型构建系统提示词 - 文件系统类型不注入规范
     #[test]
-    fn test_build_system_prompt_with_task_read_document() {
+    fn test_build_system_prompt_with_task_filesystem() {
         let budget = TokenBudgetManager::default_context();
         let prompt = AgentContext::build_system_prompt_with_task(
             "/workspace",
-            &TaskType::ReadDocument,
+            &TaskType::FileSystem,
             8,
-            6,
+            4,
             &budget,
         );
 
         // 不应包含任何设计规范
         assert!(!prompt.contains("<guide"));
-        // 应包含读取示例
-        assert!(prompt.contains("<examples>"));
-        assert!(prompt.contains("read_document"));
+        // 不应包含示例
+        assert!(!prompt.contains("<examples>"));
     }
 
     /// 测试按任务类型构建系统提示词 - 未知类型默认注入Word规范
@@ -1043,7 +997,7 @@ mod tests {
             "/workspace",
             &TaskType::Unknown,
             8,
-            6,
+            4,
             &budget,
         );
 
@@ -1103,23 +1057,22 @@ mod tests {
         // 初始为 Unknown
         assert_eq!(*ctx.task_type(), TaskType::Unknown);
 
-        // 更新为 ReadDocument
-        ctx.update_task_type_from_tool("read_document", None);
-        assert_eq!(*ctx.task_type(), TaskType::ReadDocument);
+        // 更新为 Docx
+        ctx.update_task_type_from_tool("docx_skill", None);
+        assert_eq!(*ctx.task_type(), TaskType::Docx);
 
         // 再次更新不会覆盖已有具体类型
         ctx.update_task_type_from_tool("list_directory", None);
-        assert_eq!(*ctx.task_type(), TaskType::ReadDocument);
+        assert_eq!(*ctx.task_type(), TaskType::Docx);
     }
 
-    /// 测试任务类型从 generate_document 的 format 参数推断
+    /// 测试任务类型从 Skill 名称推断
     #[test]
-    fn test_update_task_type_from_generate_document() {
+    fn test_update_task_type_from_skill_name() {
         let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
 
-        let params = serde_json::json!({"format": "xlsx", "path": "test.xlsx", "content": "test"});
-        ctx.update_task_type_from_tool("generate_document", Some(&params));
-        assert_eq!(*ctx.task_type(), TaskType::GenerateXlsx);
+        ctx.update_task_type_from_tool("xlsx_skill", None);
+        assert_eq!(*ctx.task_type(), TaskType::Xlsx);
     }
 
     /// 测试工具策略层包含完整的工具选择指导
@@ -1128,21 +1081,19 @@ mod tests {
         let strategy = AgentContext::layer_tool_strategy();
         // 读取操作
         assert!(strategy.contains("read_file"));
-        assert!(strategy.contains("read_document"));
+        assert!(strategy.contains("docx_skill"));
         assert!(strategy.contains("file_info"));
         assert!(strategy.contains("file_exists"));
         // 写入操作
         assert!(strategy.contains("write_text_file"));
-        assert!(strategy.contains("generate_document"));
-        assert!(strategy.contains("modify_document"));
+        assert!(strategy.contains("xlsx_skill"));
         // 搜索操作
         assert!(strategy.contains("search_files"));
         assert!(strategy.contains("list_directory"));
         // 转换操作
-        assert!(strategy.contains("convert_format"));
-        assert!(strategy.contains("batch_process"));
+        assert!(strategy.contains("convert"));
         // 分析操作
-        assert!(strategy.contains("analyze_document"));
+        assert!(strategy.contains("analyze"));
     }
 
     /// 测试加载历史消息
@@ -1179,7 +1130,7 @@ mod tests {
         assert_eq!(ctx.persisted_count, 2);
 
         // 任务类型应该从历史消息中推断
-        assert_eq!(*ctx.task_type(), TaskType::GenerateDocx);
+        assert_eq!(*ctx.task_type(), TaskType::Docx);
     }
 
     /// 测试加载历史消息后任务类型从工具调用推断
@@ -1201,8 +1152,8 @@ mod tests {
                 tool_calls: Some(vec![LlmToolCall {
                     index: 0,
                     id: "call_1".to_string(),
-                    name: "read_document".to_string(),
-                    arguments: r#"{"path": "test.docx"}"#.to_string(),
+                    name: "docx_skill".to_string(),
+                    arguments: r#"{"action": "read", "path": "test.docx"}"#.to_string(),
                 }]),
                 tool_call_id: None,
                 reasoning_content: None,
@@ -1211,8 +1162,8 @@ mod tests {
 
         ctx.load_history_messages(history);
 
-        // 任务类型应该从工具调用中推断为 ReadDocument
-        assert_eq!(*ctx.task_type(), TaskType::ReadDocument);
+        // 任务类型应该从工具调用中推断为 Docx
+        assert_eq!(*ctx.task_type(), TaskType::Docx);
     }
 
     /// 测试加载空历史消息不影响上下文
@@ -1235,8 +1186,8 @@ mod tests {
         ctx.add_assistant_message("", Some(vec![LlmToolCall {
             index: 0,
             id: "call_1".to_string(),
-            name: "generate_document".to_string(),
-            arguments: r#"{"format": "docx", "path": "周报.docx"}"#.to_string(),
+            name: "docx_skill".to_string(),
+            arguments: r#"{"action": "generate", "path": "周报.docx"}"#.to_string(),
         }]), None);
         ctx.add_tool_result("call_1", "文档已成功生成");
         ctx.add_assistant_message("周报已生成，保存在 周报.docx", None, None);
@@ -1247,7 +1198,7 @@ mod tests {
         assert_eq!(user_goal, "帮我生成一份项目周报");
         assert!(result_summary.contains("周报已生成"));
         assert!(files_involved.contains("周报.docx"));
-        assert!(tools_used.contains("generate_document"));
+        assert!(tools_used.contains("docx_skill"));
         assert_eq!(errors_resolved, "[]");
     }
 
@@ -1395,9 +1346,9 @@ mod tests {
         let budget = TokenBudgetManager::new(8192);
         let prompt = AgentContext::build_system_prompt_with_task(
             "/workspace",
-            &TaskType::GenerateDocx,
+            &TaskType::Docx,
             8,
-            6,
+            4,
             &budget,
         );
         // 小上下文窗口应跳过规范层和示例层
@@ -1411,9 +1362,9 @@ mod tests {
         let budget = TokenBudgetManager::new(1_000_000);
         let prompt = AgentContext::build_system_prompt_with_task(
             "/workspace",
-            &TaskType::GenerateDocx,
+            &TaskType::Docx,
             8,
-            6,
+            4,
             &budget,
         );
         // 大上下文窗口应注入规范层和示例层
