@@ -75,12 +75,13 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
       setError("请输入 API Base URL");
       return;
     }
-    if (mode === "add" && !apiKey.trim()) {
-      setError("请输入 API Key");
-      return;
-    }
     if (!model.trim()) {
       setError("请输入模型名称");
+      return;
+    }
+    // 添加模式下 API Key 必填；编辑模式下可留空，后端会从已保存 Provider 查找
+    if (mode === "add" && !apiKey.trim()) {
+      setError("请输入 API Key");
       return;
     }
 
@@ -88,27 +89,19 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
     setTestResult(null);
     setError(null);
     try {
-      // 编辑模式下 API Key 留空时，使用占位符告知后端保留原值
-      // 后端 update_provider 已有空 key 保留逻辑，但 test_connection_with_config 需要实际 key
-      // 因此编辑模式下空 key 时回退到使用已保存 provider 的 testConnection
-      if (mode === "edit" && !apiKey.trim()) {
-        const targetId = provider?.id;
-        if (targetId) {
-          const result = await tauriCmd.testConnection(targetId);
-          setTestResult(result);
-        }
-      } else {
-        const config = {
-          name: name.trim(),
-          providerType,
-          apiBase: apiBase.trim(),
-          apiKey: apiKey.trim(),
-          model: model.trim(),
-          contextWindow: contextWindow.trim() ? Number(contextWindow) || undefined : undefined,
-        };
-        const result = await tauriCmd.testConnectionWithConfig(config);
-        setTestResult(result);
-      }
+      // 始终使用 testConnectionWithConfig 传递当前表单值
+      // 编辑模式下传入 providerId，后端在 API Key 为空时自动从已保存 Provider 查找
+      const config = {
+        name: name.trim(),
+        providerType,
+        apiBase: apiBase.trim(),
+        apiKey: apiKey.trim(),
+        model: model.trim(),
+        contextWindow: contextWindow.trim() ? Number(contextWindow) || undefined : undefined,
+      };
+      const providerId = mode === "edit" ? provider?.id : undefined;
+      const result = await tauriCmd.testConnectionWithConfig(config, providerId);
+      setTestResult(result);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : typeof err === "string" ? err : "连接测试失败";
       setTestResult({ success: false, latencyMs: 0, errorMessage: msg, error: msg });

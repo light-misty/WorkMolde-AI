@@ -23,16 +23,20 @@ pub async fn test_connection(
     router.test_connection(&provider_id).await
 }
 
-/// 使用临时配置测试 LLM Provider 连接（用于添加模式，不需要已保存的 provider）
+/// 使用临时配置测试 LLM Provider 连接（用于添加/编辑模式，不需要已保存的 provider）
+/// 编辑模式下传入 provider_id，当 api_key 为空时从已保存的 Provider 中查找 API Key
 #[tauri::command]
 pub async fn test_connection_with_config(
     config: ProviderConfig,
+    provider_id: Option<String>,
+    state: State<'_, AppState>,
 ) -> Result<ConnectionResult, CommandError> {
     log::info!(
-        "使用临时配置测试连接: provider_type={}, api_base={}, model={}",
+        "使用临时配置测试连接: provider_type={}, api_base={}, model={}, provider_id={:?}",
         config.provider_type,
         config.api_base,
-        config.model
+        config.model,
+        provider_id
     );
 
     // 验证必要参数（顺序与表单字段顺序一致）
@@ -47,17 +51,6 @@ pub async fn test_connection_with_config(
             error: Some("请输入 API Base URL".to_string()),
         });
     }
-    if config.api_key.trim().is_empty() {
-        return Ok(ConnectionResult {
-            success: false,
-            provider_id: None,
-            latency_ms: 0,
-            model_info: None,
-            model: None,
-            error_message: Some("请输入 API Key".to_string()),
-            error: Some("请输入 API Key".to_string()),
-        });
-    }
     if config.model.trim().is_empty() {
         return Ok(ConnectionResult {
             success: false,
@@ -69,6 +62,46 @@ pub async fn test_connection_with_config(
             error: Some("请输入模型名称".to_string()),
         });
     }
+
+    // 编辑模式下 api_key 为空时，从已保存的 Provider 中查找 API Key
+    let api_key = if config.api_key.trim().is_empty() {
+        if let Some(ref pid) = provider_id {
+            let cfg_manager = state.config.lock().await;
+            let llm_config = cfg_manager.load_llm_config().map_err(|e| {
+                log::error!("加载 LLM 配置失败: {}", e);
+                e
+            })?;
+            match llm_config.providers.iter().find(|p| p.id == *pid) {
+                Some(existing) => {
+                    log::info!("API Key 为空，使用已保存 Provider 的密钥: provider_id={}", pid);
+                    existing.api_key_encrypted.clone()
+                }
+                None => {
+                    return Ok(ConnectionResult {
+                        success: false,
+                        provider_id: None,
+                        latency_ms: 0,
+                        model_info: None,
+                        model: None,
+                        error_message: Some("请输入 API Key".to_string()),
+                        error: Some("请输入 API Key".to_string()),
+                    });
+                }
+            }
+        } else {
+            return Ok(ConnectionResult {
+                success: false,
+                provider_id: None,
+                latency_ms: 0,
+                model_info: None,
+                model: None,
+                error_message: Some("请输入 API Key".to_string()),
+                error: Some("请输入 API Key".to_string()),
+            });
+        }
+    } else {
+        config.api_key.clone()
+    };
 
     // 创建临时 AdvancedConfig
     let advanced = AdvancedConfig::default();
@@ -94,7 +127,7 @@ pub async fn test_connection_with_config(
         ProviderType::OpenAI | ProviderType::Custom | ProviderType::Ollama => {
             Box::new(OpenAiAdapter::new(
                 config.api_base.clone(),
-                config.api_key.clone(),
+                api_key.clone(),
                 config.model.clone(),
                 advanced,
             ))
@@ -102,7 +135,7 @@ pub async fn test_connection_with_config(
         ProviderType::Anthropic => {
             Box::new(AnthropicAdapter::new(
                 config.api_base.clone(),
-                config.api_key.clone(),
+                api_key.clone(),
                 config.model.clone(),
                 advanced,
             ))
@@ -110,7 +143,7 @@ pub async fn test_connection_with_config(
         ProviderType::Gemini => {
             Box::new(GeminiAdapter::new(
                 config.api_base.clone(),
-                config.api_key.clone(),
+                api_key.clone(),
                 config.model.clone(),
                 advanced,
             ))
