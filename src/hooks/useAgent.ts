@@ -86,6 +86,8 @@ export function useAgent(): UseAgentReturn {
   const lastDeepThinkingStepRef = useRef(0);
   // 追踪当前迭代已发射的 tool_call callId，避免流式阶段提前发射后流式结束重新发射时 epoch 多余递增
   const seenToolCallIdsRef = useRef<Set<string>>(new Set());
+  // 追踪最后一次 tool_call 的 iteration，用于忽略同一迭代中 tool_call 之后的残余 content 事件
+  const lastToolCallIterationRef = useRef<number | null>(null);
 
   useEffect(() => {
     sessionIdRef.current = sessionId;
@@ -141,6 +143,16 @@ export function useAgent(): UseAgentReturn {
             });
             return;
           }
+          // 忽略同一迭代中 tool_call 之后的残余 content 事件
+          // 当 tool_call 事件已到达（前端已关闭 streaming 节点），
+          // 但流式阶段还有残余的 content chunk 到达时，这些 chunk 属于已结束的迭代，
+          // 不应创建新的 content 节点（否则会出现灰色小圆点但无文字内容的空节点）
+          if (payload.isStreaming
+            && lastToolCallIterationRef.current !== null
+            && payload.iteration !== undefined
+            && payload.iteration <= lastToolCallIterationRef.current) {
+            return;
+          }
           if (contentEpochRef.current !== lastContentEpochRef.current) {
             lastContentEpochRef.current = contentEpochRef.current;
             setContent(payload.content);
@@ -170,6 +182,10 @@ export function useAgent(): UseAgentReturn {
           if (!seenToolCallIdsRef.current.has(payload.callId)) {
             seenToolCallIdsRef.current.add(payload.callId);
             contentEpochRef.current += 1;
+          }
+          // 记录最后一次 tool_call 的 iteration，用于忽略残余 content 事件
+          if (payload.iteration !== undefined) {
+            lastToolCallIterationRef.current = payload.iteration;
           }
           setCurrentToolCall(payload);
         }),
@@ -283,6 +299,7 @@ export function useAgent(): UseAgentReturn {
       deepThinkingContentRef.current = "";
       lastDeepThinkingStepRef.current = 0;
       seenToolCallIdsRef.current.clear();
+      lastToolCallIterationRef.current = null;
 
       try {
         let sid = sessionId;
