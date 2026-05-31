@@ -63,8 +63,8 @@ export default function App() {
   const [versionHistoryFilePath, setVersionHistoryFilePath] = useState("");
   const [versionHistoryFileName, setVersionHistoryFileName] = useState("");
 
-  const { addNode, updateNode, setExecutionStatus, clearNodes, setConfirmHandler, loadFromMessages, executionStatus, initContextUsageListener, loadContextUsage, clearContextUsage } = useWorkflowStore();
-  const { switchSession, loadSessions, clearCurrentSession } = useSessionStore();
+  const { addNode, updateNode, setExecutionStatus, clearNodes, setConfirmHandler, loadFromMessages, executionStatus, initContextUsageListener, loadContextUsage, clearContextUsage, saveSessionToCache, restoreSessionFromCache, clearSessionCache, getCachedStreamingRefs, todos: workflowTodos, setTodos } = useWorkflowStore();
+  const { switchSession, loadSessions, clearCurrentSession, currentSessionId } = useSessionStore();
   const updateSessionTitleLocal = useSessionStore((s) => s.updateSessionTitleLocal);
   const { loadSettings, initThemeListener } = useSettingsStore();
   const settings = useSettingsStore((s) => s.settings);
@@ -78,7 +78,6 @@ export default function App() {
     currentToolCall,
     lastToolResult,
     pendingConfirmation,
-    todos,
     doneResult,
     isStopped,
     sendMessage,
@@ -474,62 +473,138 @@ export default function App() {
     }
   }, [setExecutionStatus, stopAgent]);
 
-  // 新建会话
+  // 新建会话：先保存当前会话状态到缓存，再清空 UI
   const handleNewSession = useCallback(() => {
+    // 如果当前有会话，保存其状态到缓存
+    if (currentSessionId) {
+      saveSessionToCache(currentSessionId, {
+        streamingNodeId: streamingNodeIdRef.current,
+        thinkingNodeId: thinkingNodeIdRef.current,
+        confirmNodeId: confirmNodeIdRef.current,
+        currentIteration: currentIterationRef.current,
+      });
+    }
     clearNodes();
     resetAgent();
     clearCurrentSession();
     clearContextUsage();
+    setTodos(null);
     streamingNodeIdRef.current = null;
     thinkingNodeIdRef.current = null;
     confirmNodeIdRef.current = null;
-  }, [clearNodes, resetAgent, clearCurrentSession, clearContextUsage]);
+    currentIterationRef.current = undefined;
+  }, [clearNodes, resetAgent, clearCurrentSession, clearContextUsage, saveSessionToCache, currentSessionId, setTodos]);
 
-  // 切换到历史会话：清空当前节点，从后端加载消息并转换为工作流节点
+  // 切换到历史会话：先保存当前会话状态到缓存，再从缓存或后端恢复目标会话
   const handleSwitchSession = useCallback(async (sessionId: string) => {
+    // 如果当前有会话，保存其状态到缓存
+    if (currentSessionId) {
+      saveSessionToCache(currentSessionId, {
+        streamingNodeId: streamingNodeIdRef.current,
+        thinkingNodeId: thinkingNodeIdRef.current,
+        confirmNodeId: confirmNodeIdRef.current,
+        currentIteration: currentIterationRef.current,
+      });
+    }
+
     clearNodes();
     resetAgent();
     streamingNodeIdRef.current = null;
     thinkingNodeIdRef.current = null;
     confirmNodeIdRef.current = null;
+    currentIterationRef.current = undefined;
 
     // 更新 session store 中的当前会话 ID
     switchSession(sessionId);
     // 同步 Agent hook 的 sessionId，使后续消息发送到正确的会话
     setAgentSessionId(sessionId);
 
-    // 从后端加载会话详情（包含消息列表）
+    // 尝试从缓存恢复（即时显示）
+    const cacheHit = restoreSessionFromCache(sessionId);
+
+    // 从缓存恢复流式状态引用
+    const cachedRefs = getCachedStreamingRefs(sessionId);
+    if (cachedRefs) {
+      streamingNodeIdRef.current = cachedRefs.streamingNodeId;
+      thinkingNodeIdRef.current = cachedRefs.thinkingNodeId;
+      confirmNodeIdRef.current = cachedRefs.confirmNodeId;
+      currentIterationRef.current = cachedRefs.currentIteration;
+    }
+
+    // 无论是否缓存命中，都从后端加载最新消息以确保数据一致性
     try {
       const detail = await tauriCmd.getSession(sessionId);
-      // 将消息转换为工作流节点并填充到 store
-      loadFromMessages(detail.messages);
+      // 仅在缓存未命中时使用后端数据覆盖（缓存命中时后端数据作为补充验证）
+      if (!cacheHit) {
+        loadFromMessages(detail.messages);
+      }
     } catch (err) {
       console.error("[App] 加载历史会话失败:", err);
     }
 
+    // 检查该会话的 Agent 是否仍在运行，恢复正确的执行状态
+    try {
+      const running = await tauriCmd.isAgentRunning(sessionId);
+      if (running) {
+        setExecutionStatus("running");
+      }
+    } catch {
+      // 查询失败时不影响主流程
+    }
+
     // 加载该会话的上下文窗口使用信息
     loadContextUsage(sessionId);
-  }, [clearNodes, resetAgent, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage]);
+  }, [clearNodes, resetAgent, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, saveSessionToCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId]);
 
-  // 删除当前会话后的处理：清空工作流或切换到其他会话
+  // 删除当前会话后的处理：清空缓存，切换到其他会话或清空工作流
   const handleDeleteCurrentSession = useCallback(async (nextSessionId: string | null) => {
+    // 清除被删除会话的缓存
+    if (currentSessionId) {
+      clearSessionCache(currentSessionId);
+    }
+
     clearNodes();
     resetAgent();
     streamingNodeIdRef.current = null;
     thinkingNodeIdRef.current = null;
     confirmNodeIdRef.current = null;
+    currentIterationRef.current = undefined;
 
     if (nextSessionId) {
       // 切换到下一个可用会话
       switchSession(nextSessionId);
       setAgentSessionId(nextSessionId);
-      
-      // 加载新会话的内容
+
+      // 尝试从缓存恢复
+      const cacheHit = restoreSessionFromCache(nextSessionId);
+
+      // 从缓存恢复流式状态引用
+      const cachedRefs = getCachedStreamingRefs(nextSessionId);
+      if (cachedRefs) {
+        streamingNodeIdRef.current = cachedRefs.streamingNodeId;
+        thinkingNodeIdRef.current = cachedRefs.thinkingNodeId;
+        confirmNodeIdRef.current = cachedRefs.confirmNodeId;
+        currentIterationRef.current = cachedRefs.currentIteration;
+      }
+
+      // 缓存未命中时从后端加载
+      if (!cacheHit) {
+        try {
+          const detail = await tauriCmd.getSession(nextSessionId);
+          loadFromMessages(detail.messages);
+        } catch (err) {
+          console.error("[App] 加载切换后的会话失败:", err);
+        }
+      }
+
+      // 检查该会话的 Agent 是否仍在运行
       try {
-        const detail = await tauriCmd.getSession(nextSessionId);
-        loadFromMessages(detail.messages);
-      } catch (err) {
-        console.error("[App] 加载切换后的会话失败:", err);
+        const running = await tauriCmd.isAgentRunning(nextSessionId);
+        if (running) {
+          setExecutionStatus("running");
+        }
+      } catch {
+        // 查询失败时不影响主流程
       }
 
       // 加载该会话的上下文窗口使用信息
@@ -537,9 +612,9 @@ export default function App() {
     } else {
       // 没有其他会话，清除上下文窗口使用信息
       clearContextUsage();
+      setTodos(null);
     }
-    // 如果 nextSessionId 为 null，表示没有其他会话，工作流保持清空状态
-  }, [clearNodes, resetAgent, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, clearContextUsage]);
+  }, [clearNodes, resetAgent, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, clearContextUsage, clearSessionCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId, setTodos]);
 
   // 打开文档预览：从后端获取文档内容并显示预览浮层
   const handleOpenPreview = useCallback(async (filePath: string, fileName: string) => {
@@ -673,7 +748,7 @@ export default function App() {
             <AgentInfoSection />
             <ContextWindowSection />
             <TodoSection
-              items={todos?.todos.map((t) => ({
+              items={workflowTodos?.map((t) => ({
                 id: t.id,
                 text: t.content,
                 done: t.status === "completed",

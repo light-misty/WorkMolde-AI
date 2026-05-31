@@ -520,6 +520,16 @@ fn extract_and_persist_preferences(
     Ok(())
 }
 
+/// 检查指定会话的 Agent 是否正在运行
+#[tauri::command]
+pub async fn is_agent_running(
+    session_id: String,
+    state: State<'_, AppState>,
+) -> Result<bool, CommandError> {
+    let active = state.active_agents.lock().await;
+    Ok(active.contains_key(&session_id))
+}
+
 /// 停止 Agent 执行
 #[tauri::command]
 pub async fn stop_agent(

@@ -20,6 +20,7 @@ import {
   type TodoUpdatePayload,
   type DonePayload,
 } from "../services/event";
+import { useWorkflowStore, setCurrentSessionId, type BackgroundAgentEvent } from "../stores/useWorkflowStore";
 
 export interface UseAgentReturn {
   isLoading: boolean;
@@ -56,6 +57,11 @@ const initialState = {
   isStopped: false,
 };
 
+/** 将后台会话事件路由到 useWorkflowStore 的缓存 */
+function routeBackgroundEvent(sessionId: string, event: BackgroundAgentEvent) {
+  useWorkflowStore.getState().applyBackgroundEvent(sessionId, event);
+}
+
 export function useAgent(): UseAgentReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +89,8 @@ export function useAgent(): UseAgentReturn {
 
   useEffect(() => {
     sessionIdRef.current = sessionId;
+    // 同步更新 useWorkflowStore 的当前会话 ID 追踪，供 contextUsage 事件区分当前/后台会话
+    setCurrentSessionId(sessionId);
   }, [sessionId]);
 
   useEffect(() => {
@@ -95,7 +103,17 @@ export function useAgent(): UseAgentReturn {
           setLastThinking(payload);
         }),
         onAgentDeepThinking((payload) => {
-          if (payload.sessionId !== sessionIdRef.current) return;
+          // 后台会话：路由到缓存
+          if (payload.sessionId !== sessionIdRef.current) {
+            routeBackgroundEvent(payload.sessionId, {
+              type: "deep_thinking",
+              step: payload.step,
+              thought: payload.thought,
+              isStreaming: payload.isStreaming,
+              iteration: payload.iteration,
+            });
+            return;
+          }
           if (payload.isStreaming) {
             // step 变化表示新一轮思考开始，重置累积内容并递增 epoch
             if (payload.step !== lastDeepThinkingStepRef.current) {
@@ -113,7 +131,16 @@ export function useAgent(): UseAgentReturn {
           });
         }),
         onAgentContent((payload) => {
-          if (payload.sessionId !== sessionIdRef.current) return;
+          // 后台会话：路由到缓存
+          if (payload.sessionId !== sessionIdRef.current) {
+            routeBackgroundEvent(payload.sessionId, {
+              type: "content",
+              content: payload.content,
+              isStreaming: payload.isStreaming,
+              iteration: payload.iteration,
+            });
+            return;
+          }
           if (contentEpochRef.current !== lastContentEpochRef.current) {
             lastContentEpochRef.current = contentEpochRef.current;
             setContent(payload.content);
@@ -127,7 +154,17 @@ export function useAgent(): UseAgentReturn {
           }
         }),
         onAgentToolCall((payload) => {
-          if (payload.sessionId !== sessionIdRef.current) return;
+          // 后台会话：路由到缓存
+          if (payload.sessionId !== sessionIdRef.current) {
+            routeBackgroundEvent(payload.sessionId, {
+              type: "tool_call",
+              callId: payload.callId,
+              toolName: payload.toolName,
+              arguments: payload.arguments,
+              iteration: payload.iteration,
+            });
+            return;
+          }
           // 仅在首次见到此 callId 时递增 epoch，避免流式结束后重新发射导致多余递增
           // 多余递增会使下一个迭代的 content 事件被错误地替换而非追加
           if (!seenToolCallIdsRef.current.has(payload.callId)) {
@@ -137,7 +174,18 @@ export function useAgent(): UseAgentReturn {
           setCurrentToolCall(payload);
         }),
         onAgentToolResult((payload) => {
-          if (payload.sessionId !== sessionIdRef.current) return;
+          // 后台会话：路由到缓存
+          if (payload.sessionId !== sessionIdRef.current) {
+            routeBackgroundEvent(payload.sessionId, {
+              type: "tool_result",
+              callId: payload.callId,
+              success: payload.success,
+              result: payload.result,
+              error: payload.error,
+              durationMs: payload.durationMs,
+            });
+            return;
+          }
           setLastToolResult(payload);
         }),
         onAgentConfirm((payload) => {
@@ -145,21 +193,56 @@ export function useAgent(): UseAgentReturn {
           setPendingConfirmation(payload);
         }),
         onAgentTodoUpdate((payload) => {
-          if (payload.sessionId !== sessionIdRef.current) return;
+          // 后台会话：路由到缓存
+          if (payload.sessionId !== sessionIdRef.current) {
+            routeBackgroundEvent(payload.sessionId, {
+              type: "todo_update",
+              todos: payload.todos,
+            });
+            return;
+          }
           setTodos(payload);
+          // 同步更新 useWorkflowStore 的 todos，支持按会话缓存
+          useWorkflowStore.getState().setTodos(payload.todos);
         }),
         onAgentDone((payload) => {
-          if (payload.sessionId !== sessionIdRef.current) return;
+          // 后台会话：路由到缓存
+          if (payload.sessionId !== sessionIdRef.current) {
+            routeBackgroundEvent(payload.sessionId, {
+              type: "done",
+              summary: payload.summary,
+              totalSteps: payload.totalSteps,
+              durationMs: payload.durationMs,
+            });
+            return;
+          }
           setIsLoading(false);
           setDoneResult(payload);
         }),
         onAgentError((payload) => {
-          if (payload.sessionId !== sessionIdRef.current) return;
+          // 后台会话：路由到缓存
+          if (payload.sessionId !== sessionIdRef.current) {
+            routeBackgroundEvent(payload.sessionId, {
+              type: "error",
+              code: payload.code,
+              message: payload.message,
+              recoverable: payload.recoverable,
+            });
+            return;
+          }
           setIsLoading(false);
           setError(payload.message);
         }),
         onAgentStopped((payload) => {
-          if (payload.sessionId !== sessionIdRef.current) return;
+          // 后台会话：路由到缓存
+          if (payload.sessionId !== sessionIdRef.current) {
+            routeBackgroundEvent(payload.sessionId, {
+              type: "stopped",
+              completedSteps: payload.completedSteps,
+              reason: payload.reason,
+            });
+            return;
+          }
           setIsLoading(false);
           setIsStopped(true);
         }),

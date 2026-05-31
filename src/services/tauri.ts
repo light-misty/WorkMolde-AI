@@ -424,6 +424,13 @@ export async function getContextUsage(sessionId: string): Promise<ContextUsageIn
   return result.data;
 }
 
+/** 检查指定会话的 Agent 是否正在运行 */
+export async function isAgentRunning(sessionId: string): Promise<boolean> {
+  const result = await safeInvoke(() => invoke<boolean>("is_agent_running", { sessionId }), { context: "isAgentRunning" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
 // ================================================================
 // 模板命令
 // ================================================================
