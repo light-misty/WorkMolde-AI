@@ -86,15 +86,55 @@ impl GeminiAdapter {
             match msg.role.as_str() {
                 // system 消息提取到 systemInstruction 字段
                 "system" => {
-                    if !msg.content.is_empty() {
+                    if let Some(ref content_parts) = msg.content_parts {
+                        if !content_parts.is_empty() {
+                            // 多模态 system 消息：将 ContentPart 映射为 Gemini API 格式
+                            for cp in content_parts {
+                                match cp {
+                                    ContentPart::Text { text } => system_parts.push(json!({"text": text})),
+                                    ContentPart::Image { mime_type, data } => {
+                                        system_parts.push(json!({
+                                            "inline_data": {
+                                                "mime_type": mime_type,
+                                                "data": data
+                                            }
+                                        }));
+                                    }
+                                }
+                            }
+                        } else if !msg.content.is_empty() {
+                            system_parts.push(json!({"text": msg.content}));
+                        }
+                    } else if !msg.content.is_empty() {
                         system_parts.push(json!({"text": msg.content}));
                     }
                 }
                 // user 消息转换为 Gemini user 角色
                 "user" => {
+                    let parts = if let Some(ref content_parts) = msg.content_parts {
+                        if !content_parts.is_empty() {
+                            // 多模态消息：将 ContentPart 映射为 Gemini API 格式
+                            content_parts
+                                .iter()
+                                .map(|cp| match cp {
+                                    ContentPart::Text { text } => json!({"text": text}),
+                                    ContentPart::Image { mime_type, data } => json!({
+                                        "inline_data": {
+                                            "mime_type": mime_type,
+                                            "data": data
+                                        }
+                                    }),
+                                })
+                                .collect::<Vec<Value>>()
+                        } else {
+                            vec![json!({"text": msg.content})]
+                        }
+                    } else {
+                        vec![json!({"text": msg.content})]
+                    };
                     contents.push(json!({
                         "role": "user",
-                        "parts": [{"text": msg.content}]
+                        "parts": parts
                     }));
                 }
                 // assistant 消息转换为 Gemini model 角色
@@ -151,9 +191,30 @@ impl GeminiAdapter {
                 _ => {
                     // 未知角色按 user 处理
                     log::warn!("未知消息角色: {}, 按 user 处理", msg.role);
+                    let parts = if let Some(ref content_parts) = msg.content_parts {
+                        if !content_parts.is_empty() {
+                            // 多模态消息：将 ContentPart 映射为 Gemini API 格式
+                            content_parts
+                                .iter()
+                                .map(|cp| match cp {
+                                    ContentPart::Text { text } => json!({"text": text}),
+                                    ContentPart::Image { mime_type, data } => json!({
+                                        "inline_data": {
+                                            "mime_type": mime_type,
+                                            "data": data
+                                        }
+                                    }),
+                                })
+                                .collect::<Vec<Value>>()
+                        } else {
+                            vec![json!({"text": msg.content})]
+                        }
+                    } else {
+                        vec![json!({"text": msg.content})]
+                    };
                     contents.push(json!({
                         "role": "user",
-                        "parts": [{"text": msg.content}]
+                        "parts": parts
                     }));
                 }
             }
@@ -412,6 +473,7 @@ impl GeminiAdapter {
                             message: ChatMessage {
                                 role: "assistant".to_string(),
                                 content: text_content,
+                                content_parts: None,
                                 tool_calls: if tool_calls.is_empty() {
                                     None
                                 } else {
@@ -423,6 +485,7 @@ impl GeminiAdapter {
                                 } else {
                                     Some(reasoning_content)
                                 },
+                                attachments: None,
                             },
                             finish_reason,
                         })
@@ -667,9 +730,11 @@ impl LlmProvider for GeminiAdapter {
         let test_messages = vec![ChatMessage {
             role: "user".to_string(),
             content: "Hi".to_string(),
+            content_parts: None,
             tool_calls: None,
             tool_call_id: None,
             reasoning_content: None,
+            attachments: None,
         }];
         let url = self.build_url();
         let body = self.build_request_body(&test_messages, &[]);

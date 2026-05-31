@@ -1,13 +1,13 @@
 use rusqlite::Connection;
 use crate::errors::CommandError;
 
-/// 执行数据库初始化：建表、创建索引、插入版本记录
+/// 执行数据库初始化：建表、创建索引、插入种子数据
 pub fn initialize_database(conn: &Connection) -> Result<(), CommandError> {
     log::info!("开始初始化数据库结构");
 
     create_tables(conn)?;
     create_indexes(conn)?;
-    insert_initial_version(conn)?;
+    seed_builtin_templates(conn)?;
 
     log::info!("数据库结构初始化完成");
     Ok(())
@@ -15,15 +15,6 @@ pub fn initialize_database(conn: &Connection) -> Result<(), CommandError> {
 
 /// 创建所有数据表
 fn create_tables(conn: &Connection) -> Result<(), CommandError> {
-    // schema_version 元数据表
-    conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS schema_version (
-            version     INTEGER NOT NULL PRIMARY KEY,
-            description TEXT    NOT NULL,
-            applied_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-        );"
-    )?;
-
     // sessions 会话表
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS sessions (
@@ -50,6 +41,7 @@ fn create_tables(conn: &Connection) -> Result<(), CommandError> {
             tool_result       TEXT        DEFAULT NULL,
             thinking_content  TEXT        DEFAULT NULL,
             reasoning_content TEXT        DEFAULT NULL,
+            attachments       TEXT        DEFAULT NULL,
             created_at        TEXT        NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
         );"
     )?;
@@ -158,30 +150,6 @@ fn create_indexes(conn: &Connection) -> Result<(), CommandError> {
     )?;
 
     log::info!("索引创建完成");
-    Ok(())
-}
-
-/// 插入初始版本记录（仅在表为空时插入）
-fn insert_initial_version(conn: &Connection) -> Result<(), CommandError> {
-    let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM schema_version",
-        [],
-        |row| row.get(0),
-    )?;
-
-    if count == 0 {
-        conn.execute(
-            "INSERT INTO schema_version (version, description) VALUES (?1, ?2)",
-            rusqlite::params![1, "初始建表：sessions, session_messages, version_snapshots, prompt_templates"],
-        )?;
-        log::info!("已插入初始版本记录 (version=1)");
-    } else {
-        log::debug!("版本记录已存在 (count={})，跳过插入", count);
-    }
-
-    // 插入内置 Prompt 模板（仅在 prompt_templates 表为空时插入）
-    seed_builtin_templates(conn)?;
-
     Ok(())
 }
 

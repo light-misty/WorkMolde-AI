@@ -206,12 +206,20 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       const msgTimestamp = new Date(msg.createdAt).getTime();
 
       if (msg.role === "user") {
+        // 将消息附件映射为工作流节点附件格式
+        const nodeAttachments = (msg.attachments || []).map((att, idx) => ({
+          id: `att_${idx}`,
+          name: att.name,
+          path: att.path || att.absolutePath || "",
+          size: att.size,
+          mimeType: att.mimeType,
+        }));
         nodes.push({
           id: `node_${++nodeCounter}`,
           type: "user",
           status: "completed",
           timestamp: msgTimestamp,
-          data: { content: msg.content, attachments: [] },
+          data: { content: msg.content, attachments: nodeAttachments },
           isExpanded: true,
         });
       } else if (msg.role === "assistant") {

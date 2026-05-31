@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 use chrono::Utc;
 use crate::errors::CommandError;
-use crate::models::{Message, MessageRole, ToolCall};
+use crate::models::{Message, MessageRole, ToolCall, AttachmentMeta};
 
 #[allow(clippy::too_many_arguments)]
 pub fn create_message(
@@ -15,13 +15,17 @@ pub fn create_message(
     tool_result: Option<&str>,
     thinking_content: Option<&str>,
     reasoning_content: Option<&str>,
+    attachments: Option<&[AttachmentMeta]>,
 ) -> Result<(), CommandError> {
     let now = Utc::now().to_rfc3339();
+    // 附件序列化为 JSON 字符串存储
+    let attachments_json = attachments
+        .map(|atts| serde_json::to_string(atts).unwrap_or_else(|_| "[]".to_string()));
     conn.execute(
         "INSERT INTO session_messages
             (id, session_id, role, content, tool_name, tool_args, tool_result,
-             thinking_content, reasoning_content, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+             thinking_content, reasoning_content, attachments, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         rusqlite::params![
             id,
             session_id,
@@ -32,6 +36,7 @@ pub fn create_message(
             tool_result,
             thinking_content,
             reasoning_content,
+            attachments_json,
             now,
         ],
     )?;
@@ -41,7 +46,7 @@ pub fn create_message(
 pub fn list_messages(conn: &Connection, session_id: &str) -> Vec<Message> {
     let mut stmt = match conn.prepare(
         "SELECT id, session_id, role, content, tool_name, tool_args, tool_result,
-                thinking_content, reasoning_content, created_at
+                thinking_content, reasoning_content, attachments, created_at
          FROM session_messages
          WHERE session_id = ?1
          ORDER BY created_at ASC",
@@ -69,14 +74,20 @@ pub fn list_messages(conn: &Connection, session_id: &str) -> Vec<Message> {
         let tool_args: Option<String> = row.get(5).ok().flatten();
         let tool_result: Option<String> = row.get(6).ok().flatten();
         let reasoning_content: Option<String> = row.get(8).ok().flatten();
+        let attachments_json: Option<String> = row.get(9).ok().flatten();
         let msg_id: String = match row.get(0) {
             Ok(v) => v,
             Err(_) => continue,
         };
-        let created_at: String = match row.get(9) {
+        let created_at: String = match row.get(10) {
             Ok(v) => v,
             Err(_) => continue,
         };
+
+        // 反序列化附件
+        let attachments: Option<Vec<AttachmentMeta>> = attachments_json
+            .and_then(|json| serde_json::from_str(&json).ok())
+            .filter(|atts: &Vec<AttachmentMeta>| !atts.is_empty());
 
         let message_role = match role_str.as_str() {
             "user" => MessageRole::User,
@@ -147,6 +158,7 @@ pub fn list_messages(conn: &Connection, session_id: &str) -> Vec<Message> {
             content,
             tool_calls,
             reasoning_content,
+            attachments,
             created_at,
         });
     }

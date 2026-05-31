@@ -209,6 +209,7 @@ pub async fn add_provider(
             context_window: config.context_window,
             ..Default::default()
         },
+        supports_vision: config.supports_vision,
     };
 
     crate::config::llm_config::add_provider(&mut llm_config, provider).map_err(|e| {
@@ -290,6 +291,7 @@ pub async fn update_provider(
         model: config.model,
         is_default: existing.is_default,
         advanced,
+        supports_vision: config.supports_vision,
     };
 
     crate::config::llm_config::update_provider(&mut llm_config, &provider_id, provider).map_err(|e| {

@@ -21,6 +21,7 @@ import {
   type DonePayload,
 } from "../services/event";
 import { useWorkflowStore, setCurrentSessionId, type BackgroundAgentEvent } from "../stores/useWorkflowStore";
+import { useAttachmentStore } from "../stores/useAttachmentStore";
 
 export interface UseAgentReturn {
   isLoading: boolean;
@@ -301,6 +302,9 @@ export function useAgent(): UseAgentReturn {
       seenToolCallIdsRef.current.clear();
       lastToolCallIterationRef.current = null;
 
+      // 从附件 store 获取当前待发送的附件
+      const currentAttachments = useAttachmentStore.getState().attachments;
+
       try {
         let sid = sessionId;
         if (!sid) {
@@ -310,7 +314,16 @@ export function useAgent(): UseAgentReturn {
           sessionIdRef.current = sid;
         }
 
-        await tauriCmd.startAgent(sid, prompt, options);
+        // 将附件信息合并到 options 中
+        const agentOptions = {
+          ...options,
+          ...(currentAttachments.length > 0 ? { attachments: currentAttachments } : {}),
+        };
+
+        await tauriCmd.startAgent(sid, prompt, agentOptions);
+
+        // 发送成功后清空附件
+        useAttachmentStore.getState().clearAttachments();
       } catch (err) {
         setIsLoading(false);
         // 从 Tauri invoke 错误对象中提取 message，避免 `[object Object]`

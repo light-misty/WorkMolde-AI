@@ -10,7 +10,7 @@ export type IconName =
   | "refresh" | "edit" | "trash" | "stop" | "back"
   | "copy" | "eye" | "folder-plus" | "file-plus" | "external-link"
   | "chart" | "clock" | "git-compare" | "undo"
-  | "theme" | "keyboard" | "info" | "devtools";
+  | "theme" | "keyboard" | "info" | "devtools" | "image";
 
 interface IconProps extends SVGProps<SVGSVGElement> {
   name: IconName;
@@ -378,6 +378,14 @@ const paths: Record<IconName, React.JSX.Element> = {
       <line x1="3" y1="9" x2="21" y2="9" />
       <polyline points="8 14 10 16 8 18" />
       <line x1="12" y1="18" x2="16" y2="18" />
+    </g>
+  ),
+  // 图片
+  image: (
+    <g key="image">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <polyline points="21 15 16 10 5 21" />
     </g>
   ),
 };

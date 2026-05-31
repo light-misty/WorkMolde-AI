@@ -2,6 +2,26 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+/// 多模态内容部分 (ChatMessage 的 content 扩展)
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ContentPart {
+    /// 文本部分
+    Text {
+        text: String,
+    },
+    /// 图片部分 (base64)
+    Image {
+        mime_type: String,
+        data: String,
+    },
+}
+
+/// supports_vision 默认值：true（默认支持视觉）
+fn default_supports_vision() -> bool {
+    true
+}
+
 /// LLM Provider 配置
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -17,6 +37,9 @@ pub struct ProviderConfig {
     /// 上下文窗口大小 (tokens)，None 表示自动推断
     #[serde(default)]
     pub context_window: Option<usize>,
+    /// 是否支持视觉/图片多模态
+    #[serde(default = "default_supports_vision")]
+    pub supports_vision: bool,
 }
 
 /// Provider 信息
@@ -38,6 +61,8 @@ pub struct ProviderInfo {
     pub is_connected: Option<bool>,
     /// 上下文窗口大小 (tokens)，运行时计算后的最终值
     pub context_window: usize,
+    /// 是否支持视觉/图片多模态
+    pub supports_vision: bool,
 }
 
 /// 上下文窗口使用信息
@@ -102,7 +127,11 @@ pub struct ModelInfo {
 pub struct ChatMessage {
     /// "user" | "assistant" | "system" | "tool"
     pub role: String,
+    /// 纯文本内容 (向后兼容，纯文本消息时使用)
     pub content: String,
+    /// 多模态内容部分 (有附件时使用，content 为空或纯文本摘要)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_parts: Option<Vec<ContentPart>>,
     pub tool_calls: Option<Vec<LlmToolCall>>,
     /// tool 消息对应的调用 ID
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -110,6 +139,9 @@ pub struct ChatMessage {
     /// 深度思考链内容（Claude extended thinking / DeepSeek reasoning_content）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_content: Option<String>,
+    /// 附件元信息 (用于持久化，不发送给 LLM)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attachments: Option<Vec<crate::models::message::AttachmentMeta>>,
 }
 
 /// LLM 聊天请求

@@ -10,6 +10,7 @@ import { ContextWindowSection } from "./components/sidebar/ContextWindowSection"
 import { TodoSection } from "./components/sidebar/TodoSection";
 import { ToastContainer } from "./components/common/Toast";
 import { useWorkflowStore } from "./stores/useWorkflowStore";
+import { useAttachmentStore } from "./stores/useAttachmentStore";
 import { useSessionStore } from "./stores/useSessionStore";
 import { useSettingsStore } from "./stores/useSettingsStore";
 import { useWorkspaceStore } from "./stores/useWorkspaceStore";
@@ -438,7 +439,16 @@ export default function App() {
 
     lastSentTextRef.current = text;
 
-    addNode("user", { content: text, attachments: [] });
+    // 从附件 store 获取当前附件，映射为工作流节点附件格式
+    const currentAttachments = useAttachmentStore.getState().attachments;
+    const nodeAttachments = currentAttachments.map((att, idx) => ({
+      id: `att_${idx}`,
+      name: att.name,
+      path: att.path || att.absolutePath || "",
+      size: att.size,
+      mimeType: att.mimeType,
+    }));
+    addNode("user", { content: text, attachments: nodeAttachments });
     setExecutionStatus("running");
 
     // 获取当前工作区路径，传递给 Agent 以正确解析文件路径
@@ -696,7 +706,7 @@ export default function App() {
     thinkingNodeIdRef.current = null;
     confirmNodeIdRef.current = null;
 
-    addNode("user", { content: text, attachments: [] });
+    addNode("user", { content: text, attachments: [] }); // 重试时不带附件
     setExecutionStatus("running");
 
     try {

@@ -168,9 +168,36 @@ impl AnthropicAdapter {
                     }
                 }
                 "user" => {
+                    // 支持多模态消息：当 content_parts 存在且非空时，构建 Anthropic Vision API 格式的 content 数组
+                    let content_value = if let Some(parts) = &msg.content_parts {
+                        if !parts.is_empty() {
+                            let blocks: Vec<Value> = parts
+                                .iter()
+                                .map(|part| match part {
+                                    ContentPart::Text { text } => json!({
+                                        "type": "text",
+                                        "text": text,
+                                    }),
+                                    ContentPart::Image { mime_type, data } => json!({
+                                        "type": "image",
+                                        "source": {
+                                            "type": "base64",
+                                            "media_type": mime_type,
+                                            "data": data,
+                                        },
+                                    }),
+                                })
+                                .collect();
+                            json!(blocks)
+                        } else {
+                            json!(msg.content)
+                        }
+                    } else {
+                        json!(msg.content)
+                    };
                     anthropic_messages.push(json!({
                         "role": "user",
-                        "content": msg.content,
+                        "content": content_value,
                     }));
                 }
                 _ => {
@@ -438,6 +465,7 @@ impl AnthropicAdapter {
                 message: ChatMessage {
                     role: "assistant".to_string(),
                     content: text_content,
+                    content_parts: None,
                     tool_calls: if tool_calls.is_empty() {
                         None
                     } else {
@@ -445,6 +473,7 @@ impl AnthropicAdapter {
                     },
                     tool_call_id: None,
                     reasoning_content,
+                    attachments: None,
                 },
                 finish_reason,
             }],
@@ -748,9 +777,11 @@ impl LlmProvider for AnthropicAdapter {
         let test_messages = vec![ChatMessage {
             role: "user".to_string(),
             content: "Hi".to_string(),
+            content_parts: None,
             tool_calls: None,
             tool_call_id: None,
             reasoning_content: None,
+            attachments: None,
         }];
         let url = self.build_api_url();
         let body = self.build_request_body(&test_messages, &[], false);

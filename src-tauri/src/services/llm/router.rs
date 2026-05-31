@@ -31,6 +31,8 @@ struct ProviderMeta {
     created_at: String,
     /// 上下文窗口大小 (tokens)，运行时计算后的最终值
     context_window: usize,
+    /// 是否支持视觉/图片多模态
+    supports_vision: bool,
 }
 
 /// Provider 健康状态
@@ -147,6 +149,7 @@ impl LlmRouter {
                 model: provider.model.clone(),
                 created_at: String::new(),
                 context_window: provider.resolve_context_window(),
+                supports_vision: provider.supports_vision,
             });
 
             if provider.is_default {
@@ -557,6 +560,7 @@ impl LlmRouter {
                 created_at: m.map(|m| m.created_at.clone()).unwrap_or_default(),
                 is_connected: None,
                 context_window: m.map(|m| m.context_window).unwrap_or(128_000),
+                supports_vision: m.map(|m| m.supports_vision).unwrap_or(true),
             }
         }).collect()
     }

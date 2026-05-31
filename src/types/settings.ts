@@ -69,6 +69,8 @@ export interface ProviderConfig {
   extraParams?: Record<string, unknown>;
   /** 上下文窗口大小 (tokens)，undefined 表示自动推断 */
   contextWindow?: number;
+  /** 是否支持视觉/图片多模态 */
+  supportsVision: boolean;
 }
 
 export interface ProviderInfo {
@@ -83,6 +85,8 @@ export interface ProviderInfo {
   createdAt: string;
   /** 上下文窗口大小 (tokens)，运行时计算后的最终值 */
   contextWindow: number;
+  /** 是否支持视觉/图片多模态 */
+  supportsVision: boolean;
 }
 
 export interface ConnectionResult {

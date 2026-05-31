@@ -26,6 +26,9 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
   const [contextWindow, setContextWindow] = useState<string>(
     provider?.contextWindow ? String(provider.contextWindow) : ""
   );
+  const [supportsVision, setSupportsVision] = useState<boolean>(
+    provider?.supportsVision ?? true
+  );
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<ConnectionResult | null>(null);
@@ -54,6 +57,7 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
         apiKey: apiKey.trim(),
         model: model.trim(),
         contextWindow: contextWindow.trim() ? Number(contextWindow) || undefined : undefined,
+        supportsVision: supportsVision,
       };
       if (mode === "add") {
         await tauriCmd.addProvider(config);
@@ -98,6 +102,7 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
         apiKey: apiKey.trim(),
         model: model.trim(),
         contextWindow: contextWindow.trim() ? Number(contextWindow) || undefined : undefined,
+        supportsVision: supportsVision,
       };
       const providerId = mode === "edit" ? provider?.id : undefined;
       const result = await tauriCmd.testConnectionWithConfig(config, providerId);
@@ -196,6 +201,20 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
               onChange={(e) => setContextWindow(e.target.value)}
               min="4096"
             />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">
+              视觉能力 (图片理解)
+            </label>
+            <select
+              className="form-select"
+              value={supportsVision ? "yes" : "no"}
+              onChange={(e) => setSupportsVision(e.target.value === "yes")}
+            >
+              <option value="no">不支持</option>
+              <option value="yes">支持</option>
+            </select>
           </div>
 
           {testResult && (

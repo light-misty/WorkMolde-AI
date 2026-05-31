@@ -202,9 +202,41 @@ impl AgentContext {
         self.messages.push(ChatMessage {
             role: "user".to_string(),
             content: content.to_string(),
+            content_parts: None,
             tool_calls: None,
             tool_call_id: None,
             reasoning_content: None,
+            attachments: None,
+        });
+    }
+
+    /// 添加带附件的用户消息
+    pub fn add_user_message_with_attachments(
+        &mut self,
+        content: &str,
+        content_parts: Option<Vec<crate::models::llm::ContentPart>>,
+        attachments: &[crate::models::message::AttachmentMeta],
+    ) {
+        // 首条用户消息时识别任务类型
+        if self.completed_steps.is_empty() && self.task_type == TaskType::Unknown {
+            self.task_type = TaskType::from_user_message(content);
+            log::info!("识别任务类型: {:?}, 基于用户消息", self.task_type);
+        }
+        // 构建附件摘要文本，追加到 content 中
+        let attachment_summary = if !attachments.is_empty() {
+            let names: Vec<&str> = attachments.iter().map(|a| a.name.as_str()).collect();
+            format!("\n\n[附件: {}]", names.join(", "))
+        } else {
+            String::new()
+        };
+        self.messages.push(ChatMessage {
+            role: "user".to_string(),
+            content: format!("{}{}", content, attachment_summary),
+            content_parts,
+            tool_calls: None,
+            tool_call_id: None,
+            reasoning_content: None,
+            attachments: if attachments.is_empty() { None } else { Some(attachments.to_vec()) },
         });
     }
 
@@ -213,9 +245,11 @@ impl AgentContext {
         self.messages.push(ChatMessage {
             role: "assistant".to_string(),
             content: content.to_string(),
+            content_parts: None,
             tool_calls,
             tool_call_id: None,
             reasoning_content,
+            attachments: None,
         });
     }
 
@@ -224,9 +258,11 @@ impl AgentContext {
         self.messages.push(ChatMessage {
             role: "tool".to_string(),
             content: content.to_string(),
+            content_parts: None,
             tool_calls: None,
             tool_call_id: Some(call_id.to_string()),
             reasoning_content: None,
+            attachments: None,
         });
     }
 
@@ -265,9 +301,11 @@ impl AgentContext {
         let mut all = vec![ChatMessage {
             role: "system".to_string(),
             content: self.system_prompt.clone(),
+            content_parts: None,
             tool_calls: None,
             tool_call_id: None,
             reasoning_content: None,
+            attachments: None,
         }];
         all.extend(self.messages.clone());
         all
@@ -291,9 +329,11 @@ impl AgentContext {
         let mut all = vec![ChatMessage {
             role: "system".to_string(),
             content: system_content,
+            content_parts: None,
             tool_calls: None,
             tool_call_id: None,
             reasoning_content: None,
+            attachments: None,
         }];
 
         // 对话历史压缩处理
@@ -406,9 +446,11 @@ impl AgentContext {
                 result.push(ChatMessage {
                     role: "assistant".to_string(),
                     content: format!("[系统摘要: 已省略 {} 条早期对话消息]", skipped),
+                    content_parts: None,
                     tool_calls: None,
                     tool_call_id: None,
                     reasoning_content: None,
+                    attachments: None,
                 });
             }
         }
@@ -1115,16 +1157,20 @@ mod tests {
             ChatMessage {
                 role: "user".to_string(),
                 content: "帮我生成一份周报".to_string(),
+                content_parts: None,
                 tool_calls: None,
                 tool_call_id: None,
                 reasoning_content: None,
+                attachments: None,
             },
             ChatMessage {
                 role: "assistant".to_string(),
                 content: "好的，我来帮你生成周报".to_string(),
+                content_parts: None,
                 tool_calls: None,
                 tool_call_id: None,
                 reasoning_content: None,
+                attachments: None,
             },
         ];
 
@@ -1152,13 +1198,16 @@ mod tests {
             ChatMessage {
                 role: "user".to_string(),
                 content: "处理文件".to_string(),
+                content_parts: None,
                 tool_calls: None,
                 tool_call_id: None,
                 reasoning_content: None,
+                attachments: None,
             },
             ChatMessage {
                 role: "assistant".to_string(),
                 content: "".to_string(),
+                content_parts: None,
                 tool_calls: Some(vec![LlmToolCall {
                     index: 0,
                     id: "call_1".to_string(),
@@ -1167,6 +1216,7 @@ mod tests {
                 }]),
                 tool_call_id: None,
                 reasoning_content: None,
+                attachments: None,
             },
         ];
 

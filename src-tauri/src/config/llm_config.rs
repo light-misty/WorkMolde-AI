@@ -63,6 +63,11 @@ impl Default for AdvancedConfig {
     }
 }
 
+/// supports_vision 默认值：true（默认支持视觉）
+fn default_supports_vision() -> bool {
+    true
+}
+
 /// LLM Provider 配置项
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -84,6 +89,9 @@ pub struct LlmProvider {
     /// 高级配置
     #[serde(default)]
     pub advanced: AdvancedConfig,
+    /// 是否支持视觉/图片多模态
+    #[serde(default = "default_supports_vision")]
+    pub supports_vision: bool,
 }
 
 impl LlmProvider {

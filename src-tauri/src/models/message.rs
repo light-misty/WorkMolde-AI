@@ -1,5 +1,36 @@
 use serde::{Deserialize, Serialize};
 
+/// 附件类型枚举
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum AttachmentType {
+    Image,
+    Document,
+    Text,
+}
+
+/// 附件元信息 (从前端接收)
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachmentMeta {
+    /// 文件在工作区中的相对路径 (工作区内文件)
+    pub path: Option<String>,
+    /// 文件绝对路径 (工作区外文件)
+    pub absolute_path: Option<String>,
+    /// 文件名
+    pub name: String,
+    /// MIME 类型
+    pub mime_type: String,
+    /// 文件大小 (字节)
+    pub size: u64,
+    /// 附件类型
+    #[serde(rename = "type")]
+    pub attachment_type: AttachmentType,
+    /// 文件内容 base64 编码 (浏览器端读取后传入)
+    #[serde(default)]
+    pub data: Option<String>,
+}
+
 /// 消息角色枚举
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum MessageRole {
@@ -23,6 +54,9 @@ pub struct Message {
     pub tool_calls: Option<Vec<ToolCall>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_content: Option<String>,
+    /// 附件元信息列表 (JSON 序列化存储)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attachments: Option<Vec<AttachmentMeta>>,
     pub created_at: String,
 }
 
@@ -44,9 +78,11 @@ impl Message {
             MessageRole::User => Some(crate::models::llm::ChatMessage {
                 role: "user".to_string(),
                 content: self.content.clone(),
+                content_parts: None,
                 tool_calls: None,
                 tool_call_id: None,
                 reasoning_content: None,
+                attachments: None,
             }),
             MessageRole::Assistant => {
                 // 将数据库 ToolCall 转换为 LlmToolCall
@@ -74,9 +110,11 @@ impl Message {
                 Some(crate::models::llm::ChatMessage {
                     role: "assistant".to_string(),
                     content: self.content.clone(),
+                    content_parts: None,
                     tool_calls: llm_tool_calls,
                     tool_call_id: None,
                     reasoning_content: self.reasoning_content.clone(),
+                    attachments: None,
                 })
             }
             MessageRole::Tool => {
@@ -95,9 +133,11 @@ impl Message {
                 Some(crate::models::llm::ChatMessage {
                     role: "tool".to_string(),
                     content: self.content.clone(),
+                    content_parts: None,
                     tool_calls: None,
                     tool_call_id: Some(call_id),
                     reasoning_content: None,
+                    attachments: None,
                 })
             }
             MessageRole::System => {
@@ -121,6 +161,7 @@ mod tests {
             content: "帮我生成一份周报".to_string(),
             tool_calls: None,
             reasoning_content: None,
+            attachments: None,
             created_at: "2026-01-01T00:00:00Z".to_string(),
         };
 
@@ -140,6 +181,7 @@ mod tests {
             content: "好的，我来帮你生成周报".to_string(),
             tool_calls: None,
             reasoning_content: Some("思考中...".to_string()),
+            attachments: None,
             created_at: "2026-01-01T00:00:01Z".to_string(),
         };
 
@@ -166,6 +208,7 @@ mod tests {
                 },
             ]),
             reasoning_content: None,
+            attachments: None,
             created_at: "2026-01-01T00:00:02Z".to_string(),
         };
 
@@ -196,6 +239,7 @@ mod tests {
                 },
             ]),
             reasoning_content: None,
+            attachments: None,
             created_at: "2026-01-01T00:00:03Z".to_string(),
         };
 
@@ -215,6 +259,7 @@ mod tests {
             content: "你是助手".to_string(),
             tool_calls: None,
             reasoning_content: None,
+            attachments: None,
             created_at: "2026-01-01T00:00:00Z".to_string(),
         };
 
@@ -230,6 +275,7 @@ mod tests {
             content: "结果".to_string(),
             tool_calls: None,
             reasoning_content: None,
+            attachments: None,
             created_at: "2026-01-01T00:00:04Z".to_string(),
         };
 
@@ -258,6 +304,7 @@ mod tests {
                 },
             ]),
             reasoning_content: None,
+            attachments: None,
             created_at: "2026-01-01T00:00:05Z".to_string(),
         };
 

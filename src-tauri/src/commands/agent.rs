@@ -8,8 +8,10 @@ use crate::errors::{CommandError, AGENT_ALREADY_RUNNING, AGENT_NOT_RUNNING, AGEN
 use crate::events::AgentEmitter;
 use crate::events::types;
 use crate::models::llm::{ChatMessage, ToolDefinition};
+use crate::models::message::AttachmentMeta;
 use crate::services::agent::context::AgentContext;
 use crate::services::agent::executor::AgentExecutor;
+use crate::services::attachment::AttachmentService;
 use crate::services::llm::router::LlmRouter;
 use crate::AppState;
 
@@ -108,7 +110,15 @@ pub async fn start_agent(
         .unwrap_or("")
         .to_string();
 
+    // 从 options 中提取附件列表
+    let attachments: Vec<AttachmentMeta> = options
+        .as_ref()
+        .and_then(|o| o.get("attachments"))
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+
     let config = Arc::clone(&state.config);
+    let doc_service = Arc::clone(&state.doc_service);
 
     tokio::spawn(async move {
         // 清理守卫：确保 active_agents 在 panic 时也被清理
@@ -132,6 +142,7 @@ pub async fn start_agent(
         let result = run_agent(
             &sid,
             &prompt_clone,
+            &attachments,
             &router_snapshot,
             &tool_registry,
             &skill_registry,
@@ -143,6 +154,7 @@ pub async fn start_agent(
             &db,
             &confirm_channels,
             &config,
+            &doc_service,
         ).await;
 
         if let Err(e) = &result {
@@ -369,16 +381,20 @@ async fn generate_session_title(
         ChatMessage {
             role: "system".to_string(),
             content: system_prompt.to_string(),
+            content_parts: None,
             tool_calls: None,
             tool_call_id: None,
             reasoning_content: None,
+            attachments: None,
         },
         ChatMessage {
             role: "user".to_string(),
             content: format!("请为以下对话生成标题：\n\n{}", user_message),
+            content_parts: None,
             tool_calls: None,
             tool_call_id: None,
             reasoning_content: None,
+            attachments: None,
         },
     ];
 
@@ -645,6 +661,7 @@ fn persist_messages_to_db(
             tool_result_ref,
             None,
             msg.reasoning_content.as_deref(),
+            msg.attachments.as_deref(),
         )?;
     }
     Ok(())
@@ -656,6 +673,7 @@ fn persist_messages_to_db(
 async fn run_agent(
     session_id: &str,
     prompt: &str,
+    attachments: &[AttachmentMeta],
     llm_router: &Arc<crate::services::llm::router::LlmRouter>,
     tool_registry: &Arc<crate::services::tool::registry::ToolRegistry>,
     skill_registry: &Arc<tokio::sync::Mutex<crate::services::skill::registry::SkillRegistry>>,
@@ -667,6 +685,7 @@ async fn run_agent(
     db: &Arc<crate::db::Database>,
     confirm_channels: &Arc<tokio::sync::Mutex<std::collections::HashMap<String, tokio::sync::oneshot::Sender<crate::ConfirmDecision>>>>,
     config: &Arc<tokio::sync::Mutex<crate::config::ConfigManager>>,
+    doc_service: &Arc<crate::services::document::DocumentService>,
 ) -> Result<(), CommandError> {
     log::info!("run_agent 开始: session_id={}, workspace={}", session_id, workspace_path);
 
@@ -786,7 +805,48 @@ async fn run_agent(
         log::info!("已注入用户偏好到系统提示词, session_id={}", session_id);
     }
 
-    ctx.add_user_message(prompt);
+    // 解析附件为 ContentPart 列表
+    let content_parts = if !attachments.is_empty() {
+        match AttachmentService::resolve_attachments(attachments, workspace_path, doc_service).await {
+            Ok(parts) if !parts.is_empty() => Some(parts),
+            Ok(_) => None,
+            Err(e) => {
+                log::warn!("附件解析失败: {}, 将忽略附件继续执行", e.message);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    // 检查是否包含图片附件，用于幻觉防护
+    let has_image_attachments = AttachmentService::has_image_attachments(attachments);
+
+    ctx.add_user_message_with_attachments(prompt, content_parts, attachments);
+
+    // 如果有图片附件但当前 Provider 不支持视觉，注入幻觉防护提示
+    if has_image_attachments {
+        let supports_vision = {
+            let providers = llm_router.list_providers();
+            providers.iter().find(|p| p.is_default)
+                .map(|p| p.supports_vision)
+                .unwrap_or(false)
+        };
+        if !supports_vision {
+            // 注入视觉约束提示
+            ctx.system_prompt = format!(
+                "{}\n\n<vision_constraint>\n注意：当前模型不支持图片理解。虽然用户发送了图片附件，但你无法看到图片内容。请不要假装能够看到或分析图片。如果用户的问题依赖图片内容，请诚实地告知你无法查看图片，并建议用户用文字描述图片内容。\n</vision_constraint>",
+                ctx.system_prompt
+            );
+            log::warn!("当前 Provider 不支持视觉，已注入幻觉防护提示: session_id={}", session_id);
+        } else {
+            // 支持视觉时注入图片可见性提示
+            ctx.system_prompt = format!(
+                "{}\n\n<image_visibility_warning>\n用户发送了图片附件，你可以看到这些图片。请基于你实际看到的图片内容进行回答，不要对图片内容进行猜测或虚构。\n</image_visibility_warning>",
+                ctx.system_prompt
+            );
+        }
+    }
 
     // 创建增量持久化回调，每轮迭代后自动持久化新增消息
     let db_for_persist = Arc::clone(db);

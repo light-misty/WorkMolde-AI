@@ -69,9 +69,35 @@ impl OpenAiAdapter {
         let mut body = json!({
             "model": self.model,
             "messages": messages.iter().map(|m| {
+                // 构建 content 字段：支持多模态消息
+                let content_value = if let Some(parts) = &m.content_parts {
+                    if !parts.is_empty() {
+                        // 多模态消息：将 content_parts 转换为 OpenAI Vision API 格式的 JSON 数组
+                        json!(parts.iter().map(|part| {
+                            match part {
+                                ContentPart::Text { text } => json!({
+                                    "type": "text",
+                                    "text": text,
+                                }),
+                                ContentPart::Image { mime_type, data } => json!({
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": format!("data:{};base64,{}", mime_type, data),
+                                        "detail": "auto",
+                                    },
+                                }),
+                            }
+                        }).collect::<Vec<_>>())
+                    } else {
+                        json!(m.content)
+                    }
+                } else {
+                    json!(m.content)
+                };
+
                 let mut msg = json!({
                     "role": m.role,
-                    "content": m.content,
+                    "content": content_value,
                 });
 
                 if let Some(rc) = &m.reasoning_content {
@@ -257,9 +283,11 @@ impl OpenAiAdapter {
                             message: ChatMessage {
                                 role,
                                 content,
+                                content_parts: None,
                                 tool_calls,
                                 tool_call_id: None,
                                 reasoning_content: message["reasoning_content"].as_str().map(String::from),
+                                attachments: None,
                             },
                             finish_reason,
                         }
@@ -414,9 +442,11 @@ impl LlmProvider for OpenAiAdapter {
         let test_messages = vec![ChatMessage {
             role: "user".to_string(),
             content: "Hi".to_string(),
+            content_parts: None,
             tool_calls: None,
             tool_call_id: None,
             reasoning_content: None,
+            attachments: None,
         }];
         let url = format!("{}/chat/completions", self.api_base_url.trim_end_matches('/'));
         let body = self.build_request_body(&test_messages, &[], false);
@@ -483,9 +513,11 @@ mod tests {
         let messages = vec![ChatMessage {
             role: "assistant".to_string(),
             content: "这是回复内容".to_string(),
+            content_parts: None,
             tool_calls: None,
             tool_call_id: None,
             reasoning_content: Some("这是思考过程".to_string()),
+            attachments: None,
         }];
 
         let body = adapter.build_request_body(&messages, &[], false);
@@ -509,9 +541,11 @@ mod tests {
         let messages = vec![ChatMessage {
             role: "assistant".to_string(),
             content: "这是回复内容".to_string(),
+            content_parts: None,
             tool_calls: None,
             tool_call_id: None,
             reasoning_content: Some("这是思考过程".to_string()),
+            attachments: None,
         }];
 
         let body = adapter.build_request_body(&messages, &[], false);
@@ -531,9 +565,11 @@ mod tests {
         let messages = vec![ChatMessage {
             role: "user".to_string(),
             content: "你好".to_string(),
+            content_parts: None,
             tool_calls: None,
             tool_call_id: None,
             reasoning_content: None,
+            attachments: None,
         }];
 
         let body = adapter.build_request_body(&messages, &[], false);
