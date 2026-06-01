@@ -90,8 +90,7 @@ cargo clean
 │  │  ├─ preview/        文档预览浮层: PreviewOverlay, MarkdownPreview, PdfCanvasViewer (pdfjs-dist canvas 渲染)
 │  │  ├─ settings/       设置弹窗: SettingsDialog + 8 个标签页 (LLMConfig, WorkspaceTab, SkillsTab,
 │  │  │                      TemplatesTab, AppearanceTab, ShortcutsTab, GeneralTab, HelpTab)
-│  │  │                      + 子弹窗 (ProviderFormDialog, AddWorkspaceDialog, TemplateEditDialog,
-│  │  │                        CustomSkillDialog)
+│  │  │                      + 子弹窗 (ProviderFormDialog, AddWorkspaceDialog, TemplateEditDialog)
 │  │  ├─ session/        历史会话面板: HistoryPanel
 │  │  └─ common/         通用组件: Button, Icon, ContextMenu, DeleteConfirmDialog, ErrorBoundary,
 │  │                        ToastContainer, TemplatePicker
@@ -112,7 +111,7 @@ cargo clean
 │  │  │  │  └─ prompts/   System Prompt: document_design, prompt_loader, task_type, token_budget
 │  │  │  ├─ llm/         LLM多Provider适配: router, provider (trait),
 │  │  │  │                  openai_adapter, anthropic_adapter, gemini_adapter
-│  │  │  ├─ skill/       Skill引擎: registry (注册表+禁用管理), builtin, custom (自定义Skill加载器)
+│  │  │  ├─ skill/       Skill引擎: registry (注册表+禁用管理), builtin
 │  │  │  ├─ tool/        Tool引擎: registry, builtin, trait_def (文件系统操作，始终启用)
 │  │  │  ├─ document/    Python Sidecar进程管理 (自动重启、超时、重试)
 │  │  │  └─ fs_watcher.rs 文件系统监听 (notify crate, 递归监听+事件发射)
@@ -176,8 +175,7 @@ cargo clean
   - `convert_format`: 格式转换（docx/pdf/md/txt/csv/html 等互转）
   - `analyze_document`: 分析文档结构和统计信息
   - `batch_process`: 批量处理（批量转换/修改/分析）
-- Skill 可禁用/启用，前端 SkillsTab 管理；自定义 Skill 通过 JSON 文件加载
-- 自定义 Skill 本质是 Prompt 模板（支持 `{{param_name}}` 占位符），LLM 调用时参数替换后渲染文本返回给 LLM
+- Skill 可禁用/启用，前端 SkillsTab 管理
 
 ### Tool 系统（文件系统操作，始终启用）
 - Tool 是轻量级、始终启用的基础文件系统操作，与 Skill 平行但不可禁用
@@ -205,7 +203,6 @@ AppState {
     llm_router: Arc<RwLock<Arc<LlmRouter>>>,
     tool_registry: Arc<ToolRegistry>,                    // 工具（始终启用，不加 Mutex）
     skill_registry: Arc<Mutex<SkillRegistry>>,           // 技能（可禁用，需 Mutex）
-    custom_skill_loader: Arc<CustomSkillLoader>,
     fs_watcher: Arc<FsWatcherService>,
 }
 ```
@@ -279,7 +276,7 @@ AppState {
 
 ### 数据存储
 - SQLite: 会话、消息、版本快照、Prompt 模板
-- JSON 文件: LLM Provider 配置、应用设置、工作区配置、自定义 Skill 配置 (`config/custom_skills/`)
+- JSON 文件: LLM Provider 配置、应用设置、工作区配置
 - 文件系统: 工作区文档和 Sidecar 日志 (`log/docagent.log`)
 - 应用数据目录: `<app_data_dir>/docagent.db` + `config/` 目录
 
@@ -318,7 +315,7 @@ AppState {
 `docs/` 目录包含详细的开发规范文档，在实现相关功能前应优先查阅:
 - `tech_architecture.md` — 完整技术架构与技术选型理由
 - `tauri_commands.md` — 所有 Tauri 命令、事件、错误码的完整接口规范
-- `skill_development.md` — Skill 接口规范与自定义 Skill 开发指南
+- `skill_development.md` — Skill 接口规范与开发指南
 - `database_design.md` — 数据库表结构与迁移策略
 - `component_design.md` — 前端组件层级与交互设计
 - `task_breakdown.md` — 阶段任务分解与进度
@@ -347,5 +344,5 @@ AppState {
 - Skill/Tool 的 `workspace_root` 由 executor 注入，不信任 LLM 提供的值，防止路径遍历攻击
 - 文档预览: 普通文件返回文本 `PreviewContent`，PDF 文件通过 `get_pdf_data` 返回 base64 数据由前端 `PdfCanvasViewer` 渲染
 - 所有文件操作（创建/删除/重命名）通过 Tauri 命令在 Rust 端执行，前端不直接操作文件系统
-- 应用初始化顺序: 应用数据目录 → 日志系统 → 数据库（含损坏检测+自动重建） → 配置管理器 → LLM Config → LLM Router → Sidecar → Skill 注册表 + builtin skills → Tool 注册表 + builtin tools → Custom Skill 加载器 → AppState 注册 → FS 监听器 → 后台健康检查任务（LLM 每5分钟、Sidecar 每3分钟）
+- 应用初始化顺序: 应用数据目录 → 日志系统 → 数据库（含损坏检测+自动重建） → 配置管理器 → LLM Config → LLM Router → Sidecar → Skill 注册表 + builtin skills → Tool 注册表 + builtin tools → AppState 注册 → FS 监听器 → 后台健康检查任务（LLM 每5分钟、Sidecar 每3分钟）
 - 应用安装了自定义 panic hook，将 panic 信息记录到日志文件并尝试发射 `runtime:error` 事件到前端

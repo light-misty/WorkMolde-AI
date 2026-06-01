@@ -390,10 +390,10 @@ pub fn register_builtin_skills(
     doc_service: Arc<DocumentService>,
 ) {
     log::info!("开始注册内置技能");
-    registry.register_builtin(Box::new(DocxSkill::new(doc_service.clone())));
-    registry.register_builtin(Box::new(XlsxSkill::new(doc_service.clone())));
-    registry.register_builtin(Box::new(PptxSkill::new(doc_service.clone())));
-    registry.register_builtin(Box::new(PdfSkill::new(doc_service)));
+    registry.register(Box::new(DocxSkill::new(doc_service.clone())));
+    registry.register(Box::new(XlsxSkill::new(doc_service.clone())));
+    registry.register(Box::new(PptxSkill::new(doc_service.clone())));
+    registry.register(Box::new(PdfSkill::new(doc_service)));
     log::info!("内置技能注册完成, 共注册 4 个技能");
 }
 

@@ -31,7 +31,6 @@ pub struct AppState {
     pub llm_router: Arc<tokio::sync::RwLock<Arc<crate::services::llm::router::LlmRouter>>>,
     pub tool_registry: Arc<crate::services::tool::registry::ToolRegistry>,
     pub skill_registry: Arc<tokio::sync::Mutex<crate::services::skill::registry::SkillRegistry>>,
-    pub custom_skill_loader: Arc<crate::services::skill::custom::CustomSkillLoader>,
     pub fs_watcher: Arc<crate::services::fs_watcher::FsWatcherService<tauri::Wry>>,
 }
 
@@ -191,12 +190,8 @@ pub fn run() {
             let mut tool_registry = crate::services::tool::registry::ToolRegistry::new();
             crate::services::tool::builtin::register_builtin_tools(&mut tool_registry);
 
-            // 初始化自定义 Skill 加载器并加载自定义 Skill
-            let custom_skill_loader = crate::services::skill::custom::CustomSkillLoader::new(&app_data_dir);
-            custom_skill_loader.register_all(&mut skill_registry);
-
             // 从配置加载已禁用 Skill 列表
-            // 过滤掉内置 Skill 的 ID，仅保留自定义 Skill 的禁用状态
+            // 过滤掉内置 Skill 的 ID，确保内置 Skill 不被意外禁用
             let app_settings = config_manager.load_app_settings().unwrap_or_default();
             let builtin_skill_ids: Vec<&str> = vec![
                 "docx_skill", "xlsx_skill", "pptx_skill", "pdf_skill",
@@ -221,7 +216,6 @@ pub fn run() {
                 llm_router: Arc::new(tokio::sync::RwLock::new(Arc::new(llm_router))),
                 tool_registry: Arc::new(tool_registry),
                 skill_registry: Arc::new(tokio::sync::Mutex::new(skill_registry)),
-                custom_skill_loader: Arc::new(custom_skill_loader),
                 fs_watcher: Arc::new(fs_watcher),
             };
 
@@ -322,11 +316,6 @@ pub fn run() {
             // Skill 命令
             commands::skill::list_tools,
             commands::skill::list_skills,
-            commands::skill::list_custom_skills,
-            commands::skill::toggle_skill,
-            commands::skill::add_custom_skill,
-            commands::skill::update_custom_skill,
-            commands::skill::delete_custom_skill,
             // 设置命令
             commands::settings::get_settings,
             commands::settings::update_settings,

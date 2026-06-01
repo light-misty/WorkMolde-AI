@@ -65,19 +65,11 @@ impl SkillRegistry {
     }
 
     /// 注册内置技能
-    pub fn register_builtin(&mut self, skill: Box<dyn Skill>) {
+    pub fn register(&mut self, skill: Box<dyn Skill>) {
         let name = skill.skill_name().to_string();
-        log::info!("注册内置技能: {}", name);
+        log::info!("注册技能: {}", name);
         self.skills.insert(name.clone(), Arc::from(skill));
-        log::debug!("内置技能注册完成: {}, 当前注册总数: {}", name, self.skills.len());
-    }
-
-    /// 注册自定义技能
-    pub fn register_custom(&mut self, skill: Box<dyn Skill>) {
-        let name = skill.skill_name().to_string();
-        log::info!("注册自定义技能: {}", name);
-        self.skills.insert(name.clone(), Arc::from(skill));
-        log::debug!("自定义技能注册完成: {}, 当前注册总数: {}", name, self.skills.len());
+        log::debug!("技能注册完成: {}, 当前注册总数: {}", name, self.skills.len());
     }
 
     /// 获取技能的 Arc 引用（可在锁外使用）
@@ -161,39 +153,6 @@ impl SkillRegistry {
             }
         }).collect()
     }
-
-    /// 切换自定义技能启用/禁用状态，返回更新后的禁用列表
-    /// 对内置 Skill 调用时返回错误，内置 Skill 不可禁用
-    pub fn toggle_skill(&mut self, skill_id: &str, enabled: bool) -> Result<Vec<String>, String> {
-        // 检查是否为内置 Skill
-        if let Some(skill) = self.skills.get(skill_id) {
-            if skill.is_builtin() {
-                return Err(format!("内置 Skill '{}' 不可禁用", skill_id));
-            }
-        }
-
-        if enabled {
-            self.disabled_skills.remove(skill_id);
-            log::info!("技能已启用: {}", skill_id);
-        } else {
-            self.disabled_skills.insert(skill_id.to_string());
-            log::info!("技能已禁用: {}", skill_id);
-        }
-        Ok(self.disabled_skills.iter().cloned().collect())
-    }
-
-    /// 注销技能（从注册表中移除）
-    /// 用于删除自定义 Skill 时彻底移除
-    pub fn unregister(&mut self, skill_id: &str) -> bool {
-        self.disabled_skills.remove(skill_id);
-        if self.skills.remove(skill_id).is_some() {
-            log::info!("技能已注销: {}", skill_id);
-            true
-        } else {
-            log::warn!("注销技能失败，技能不存在: {}", skill_id);
-            false
-        }
-    }
 }
 
 #[cfg(test)]
@@ -220,78 +179,23 @@ mod tests {
     }
 
     #[test]
-    fn test_register_custom_and_list() {
+    fn test_register_and_list() {
         let mut registry = SkillRegistry::new();
-        registry.register_custom(Box::new(MockSkill::new("custom_test")));
+        registry.register(Box::new(MockSkill::new("test_skill")));
         let skills = registry.list_skills();
         assert_eq!(skills.len(), 1);
-        assert_eq!(skills[0].id, "custom_test");
+        assert_eq!(skills[0].id, "test_skill");
         assert!(!skills[0].is_builtin);
-    }
-
-    #[test]
-    fn test_toggle_skill() {
-        let mut registry = SkillRegistry::new();
-        registry.register_custom(Box::new(MockSkill::new("custom_toggle")));
-
-        let disabled = registry.toggle_skill("custom_toggle", false).unwrap();
-        assert!(disabled.contains(&"custom_toggle".to_string()));
-
-        let disabled = registry.toggle_skill("custom_toggle", true).unwrap();
-        assert!(!disabled.contains(&"custom_toggle".to_string()));
-    }
-
-    #[test]
-    fn test_toggle_builtin_skill_rejected() {
-        struct BuiltinMockSkill { name: String }
-        impl BuiltinMockSkill {
-            fn new(name: &str) -> Self { Self { name: name.to_string() } }
-        }
-        #[async_trait]
-        impl Skill for BuiltinMockSkill {
-            fn skill_name(&self) -> &str { &self.name }
-            fn description(&self) -> &str { "builtin mock" }
-            fn parameters(&self) -> Value { json!({"type": "object"}) }
-            fn is_builtin(&self) -> bool { true }
-            async fn execute(&self, _params: Value) -> crate::models::skill::SkillResult {
-                crate::models::skill::SkillResult {
-                    success: true, output: None, error: None, duration_ms: 0,
-                }
-            }
-        }
-
-        let mut registry = SkillRegistry::new();
-        registry.register_builtin(Box::new(BuiltinMockSkill::new("builtin_test")));
-
-        // 内置 Skill 禁用应返回错误
-        let result = registry.toggle_skill("builtin_test", false);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("不可禁用"));
     }
 
     #[test]
     fn test_disabled_skills_filtered_in_tool_definitions() {
         let mut registry = SkillRegistry::new();
-        registry.register_custom(Box::new(MockSkill::new("custom_filter")));
+        registry.register(Box::new(MockSkill::new("filter_test")));
 
-        // 禁用后不应出现在工具定义中
-        registry.toggle_skill("custom_filter", false).unwrap();
+        // 使用 with_disabled_skills 禁用后不应出现在工具定义中
+        let registry = registry.with_disabled_skills(vec!["filter_test".to_string()]);
         let defs = registry.tool_definitions();
         assert_eq!(defs.len(), 0);
-
-        // 启用后应出现
-        registry.toggle_skill("custom_filter", true).unwrap();
-        let defs = registry.tool_definitions();
-        assert_eq!(defs.len(), 1);
-    }
-
-    #[test]
-    fn test_unregister() {
-        let mut registry = SkillRegistry::new();
-        registry.register_custom(Box::new(MockSkill::new("custom_remove")));
-
-        assert!(registry.unregister("custom_remove"));
-        assert!(!registry.unregister("custom_remove"));
-        assert_eq!(registry.list_skills().len(), 0);
     }
 }

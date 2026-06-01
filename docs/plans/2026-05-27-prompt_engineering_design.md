@@ -146,26 +146,6 @@ start_agent 命令 (lib.rs)
 | 历史消息管理 | 全量保留，无摘要/淘汰机制 | 长对话有Token溢出风险 |
 | 工具结果格式 | 成功时JSON序列化output，失败时"错误: {error}" | 缺乏结构化指导 |
 
-#### 1.3.3 自定义Skill提示词机制
-
-```rust
-// PromptBasedSkill 的执行流程
-fn execute(&self, params: Value) -> SkillResult {
-    let rendered = self.render_template(&params);  // {{param}} 替换
-    SkillResult {
-        success: true,
-        output: Some(json!({
-            "prompt": rendered,        // 渲染后的文本作为工具结果
-            "skill_name": ...,
-            "skill_id": ...,
-        })),
-        ...
-    }
-}
-```
-
-自定义Skill本质是"提示词模板"：LLM调用后，模板渲染的文本作为tool_result返回，LLM据此指导后续行为。这是一种间接的提示词注入方式。
-
 ### 1.4 现有提示词有效性评估
 
 #### 1.4.1 有效性方面

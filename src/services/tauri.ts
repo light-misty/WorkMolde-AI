@@ -24,7 +24,6 @@ import type {
   VersionInfo,
   SkillInfo,
   ToolInfo,
-  CustomSkillConfig,
   AppSettings,
   PromptTemplate,
   CreateTemplateParams,
@@ -313,39 +312,6 @@ export async function listSkills(): Promise<SkillInfo[]> {
   const result = await safeInvoke(() => invoke<SkillInfo[]>("list_skills"), { context: "listSkills" });
   if (!result.ok) throw result.error.raw;
   return result.data;
-}
-
-/** 列出所有自定义 Skill 配置 */
-export async function listCustomSkills(): Promise<CustomSkillConfig[]> {
-  const result = await safeInvoke(() => invoke<CustomSkillConfig[]>("list_custom_skills"), { context: "listCustomSkills" });
-  if (!result.ok) throw result.error.raw;
-  return result.data;
-}
-
-/** 切换 Skill 启用/禁用 */
-export async function toggleSkill(skillId: string, enabled: boolean): Promise<void> {
-  const result = await safeInvoke(() => invoke("toggle_skill", { skillId, enabled }), { context: "toggleSkill" });
-  if (!result.ok) throw result.error.raw;
-}
-
-/** 添加自定义 Skill */
-export async function addCustomSkill(config: CustomSkillConfig): Promise<CustomSkillConfig> {
-  const result = await safeInvoke(() => invoke<CustomSkillConfig>("add_custom_skill", { config }), { context: "addCustomSkill" });
-  if (!result.ok) throw result.error.raw;
-  return result.data;
-}
-
-/** 更新自定义 Skill */
-export async function updateCustomSkill(config: CustomSkillConfig): Promise<CustomSkillConfig> {
-  const result = await safeInvoke(() => invoke<CustomSkillConfig>("update_custom_skill", { config }), { context: "updateCustomSkill" });
-  if (!result.ok) throw result.error.raw;
-  return result.data;
-}
-
-/** 删除自定义 Skill */
-export async function deleteCustomSkill(skillId: string): Promise<void> {
-  const result = await safeInvoke(() => invoke("delete_custom_skill", { skillId }), { context: "deleteCustomSkill" });
-  if (!result.ok) throw result.error.raw;
 }
 
 // ================================================================

@@ -94,7 +94,6 @@ interface SettingsState {
   openSettings: (tab?: SettingsTab) => void;
   closeSettings: () => void;
   setActiveTab: (tab: SettingsTab) => void;
-  toggleSkill: (id: string) => Promise<void>;
   loadSettings: () => Promise<void>;
   loadProviders: () => Promise<void>;
   loadSkills: () => Promise<void>;
@@ -160,22 +159,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   // 切换设置标签页
   setActiveTab: (tab) => {
     set({ activeSettingsTab: tab });
-  },
-
-  // 切换 Skill 启用/禁用，调用后端 API
-  toggleSkill: async (id) => {
-    const skill = get().skills.find((s) => s.id === id);
-    if (!skill) return;
-    try {
-      await tauriCmd.toggleSkill(id, !skill.enabled);
-      set((state) => ({
-        skills: state.skills.map((s) =>
-          s.id === id ? { ...s, enabled: !s.enabled } : s
-        ),
-      }));
-    } catch (error) {
-      console.error("[SettingsStore] 切换 Skill 失败:", error);
-    }
   },
 
   // 从后端加载设置、Provider 列表和 Skill 列表
