@@ -335,8 +335,6 @@ pub fn run() {
             commands::template::delete_template,
             // 日志命令
             commands::log::get_error_log,
-            // 开发人员工具命令
-            commands::devtools::toggle_devtools,
             // 更新命令
             #[cfg(desktop)]
             commands::update::check_update,

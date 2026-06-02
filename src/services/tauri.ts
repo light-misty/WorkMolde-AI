@@ -445,14 +445,3 @@ export async function getErrorLog(): Promise<string> {
   if (!result.ok) throw result.error.raw;
   return result.data;
 }
-
-// ================================================================
-// 开发人员工具命令
-// ================================================================
-
-/** 切换开发人员工具（DevTools）的显示状态 */
-export async function toggleDevtools(): Promise<boolean> {
-  const result = await safeInvoke(() => invoke<boolean>("toggle_devtools"), { context: "toggleDevtools" });
-  if (!result.ok) throw result.error.raw;
-  return result.data;
-}
