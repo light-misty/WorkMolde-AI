@@ -303,6 +303,7 @@ pub async fn get_context_usage(
         tool_count,
         skill_count,
         &budget,
+        None,
     );
     let system_prompt_tokens = TokenBudgetManager::estimate_tokens(&system_prompt);
 
@@ -703,6 +704,25 @@ async fn run_agent(
 
     let system_prompt = crate::services::agent::context::AgentContext::build_system_prompt(workspace_path);
 
+    // 从配置中解析作者信息（工作区覆盖优先于全局设置）
+    let author_info = {
+        let cfg = tokio::task::block_in_place(|| config.blocking_lock());
+        let app_settings = cfg.load_app_settings().ok();
+        let ws_config = cfg.load_workspaces().ok();
+        app_settings.and_then(|settings| {
+            let ws_entry = ws_config
+                .as_ref()
+                .and_then(|wc| wc.workspaces.iter().find(|w| w.id == workspace_id));
+            let info = crate::services::agent::context::AuthorInfo::resolve(&settings, ws_entry);
+            if info.has_any() {
+                log::info!("已解析作者信息: name={}, email={}, company={}", info.name, info.email, info.company);
+                Some(info)
+            } else {
+                None
+            }
+        })
+    };
+
     // 从当前活跃 Provider 解析上下文窗口大小
     let context_window = {
         let cfg = tokio::task::block_in_place(|| config.blocking_lock());
@@ -745,6 +765,7 @@ async fn run_agent(
         tool_count,
         skill_count,
         ctx.token_budget(),
+        author_info.as_ref(),
     );
     ctx.system_prompt = dynamic_prompt;
     log::info!("任务类型: {:?}, 系统提示词已动态构建", task_type);

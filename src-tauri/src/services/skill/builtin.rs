@@ -500,6 +500,10 @@ impl Skill for DocxSkill {
                     "type": "string",
                     "description": "[generate] 模板文件路径（可选）"
                 },
+                "author": {
+                    "type": "string",
+                    "description": "[generate] 文档作者名，将写入文档元数据的 Author 属性"
+                },
                 "validate": {
                     "type": "boolean",
                     "description": "[generate] 生成后是否执行文档质量验证，默认 false",
@@ -723,6 +727,10 @@ impl Skill for XlsxSkill {
                     "type": "string",
                     "description": "[generate] 模板文件路径（可选）"
                 },
+                "author": {
+                    "type": "string",
+                    "description": "[generate] 文档作者名，将写入文档元数据的 Creator 属性"
+                },
                 "validate": {
                     "type": "boolean",
                     "description": "[generate] 生成后是否执行文档质量验证，默认 false",
@@ -924,6 +932,10 @@ impl Skill for PptxSkill {
                     "type": "string",
                     "description": "[generate] 模板文件路径（可选）"
                 },
+                "author": {
+                    "type": "string",
+                    "description": "[generate] 文档作者名，将写入文档元数据的 Author 属性"
+                },
                 "validate": {
                     "type": "boolean",
                     "description": "[generate] 生成后是否执行文档质量验证，默认 false",
@@ -1116,6 +1128,10 @@ impl Skill for PdfSkill {
                 "template": {
                     "type": "string",
                     "description": "[generate] 模板文件路径（可选）"
+                },
+                "author": {
+                    "type": "string",
+                    "description": "[generate] 文档作者名，将写入文档元数据的 Author 属性"
                 },
                 "validate": {
                     "type": "boolean",

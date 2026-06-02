@@ -84,6 +84,7 @@ class ExcelHandler:
         sheets = params.get("sheets", [])
         content = params.get("content", "")
         title = params.get("title", "")
+        author = params.get("author", "")
         use_formulas = params.get("useFormulas", True)
         number_formats = params.get("numberFormats", [])
         color_coding = params.get("colorCoding", True)
@@ -116,6 +117,12 @@ class ExcelHandler:
         default_sheet = wb.active
         if default_sheet:
             wb.remove(default_sheet)
+
+        # 设置文档作者属性
+        if author:
+            wb.properties.creator = author
+        if title:
+            wb.properties.title = title
 
         for sheet_info in sheets:
             sheet_name = sheet_info.get("name", "Sheet1")

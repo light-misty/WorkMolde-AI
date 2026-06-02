@@ -3,6 +3,46 @@ use super::prompts::document_design::get_design_guide_by_type;
 use super::prompts::task_type::TaskType;
 use super::prompts::token_budget::{TokenBudgetManager, HistoryCompressionConfig};
 
+/// 文档作者信息，从应用设置和工作区配置中解析
+pub struct AuthorInfo {
+    /// 作者名（优先使用工作区覆盖，否则使用全局设置）
+    pub name: String,
+    /// 作者邮箱
+    pub email: String,
+    /// 作者公司/组织
+    pub company: String,
+}
+
+impl AuthorInfo {
+    /// 从应用设置和工作区配置中解析作者信息
+    /// 工作区的 author_name_override 优先于全局 author_name
+    pub fn resolve(
+        app_settings: &crate::config::app_settings::AppSettings,
+        workspace: Option<&crate::config::workspace_config::WorkspaceEntry>,
+    ) -> Self {
+        let name = workspace
+            .and_then(|ws| {
+                if ws.author_name_override.is_empty() {
+                    None
+                } else {
+                    Some(ws.author_name_override.clone())
+                }
+            })
+            .unwrap_or_else(|| app_settings.general.author_name.clone());
+
+        Self {
+            name,
+            email: app_settings.general.author_email.clone(),
+            company: app_settings.general.author_company.clone(),
+        }
+    }
+
+    /// 是否有任何作者信息已配置
+    pub fn has_any(&self) -> bool {
+        !self.name.is_empty() || !self.email.is_empty() || !self.company.is_empty()
+    }
+}
+
 /// reasoning_content 压缩阈值（字符数），超过此长度的早期思考内容将被截断
 const REASONING_COMPRESS_THRESHOLD: usize = 500;
 /// 压缩后保留的字符数
@@ -605,7 +645,7 @@ impl AgentContext {
     /// 构建系统提示词（分层架构）
     /// 根据 workspace_path 和可选的 user_message 动态组装
     pub fn build_system_prompt(workspace_path: &str) -> String {
-        Self::build_system_prompt_with_task(workspace_path, &TaskType::Unknown, 0, 0, &TokenBudgetManager::default_context())
+        Self::build_system_prompt_with_task(workspace_path, &TaskType::Unknown, 0, 0, &TokenBudgetManager::default_context(), None)
     }
 
     /// 构建系统提示词（带任务类型识别和 Token 预算控制）
@@ -614,17 +654,19 @@ impl AgentContext {
     /// tool_count: 可用基础工具数量
     /// skill_count: 可用高级技能数量
     /// token_budget: Token 预算管理器，用于决定是否注入规范层
+    /// author_info: 可选的作者信息，注入到上下文层中指导 LLM 在生成文档时使用
     pub fn build_system_prompt_with_task(
         workspace_path: &str,
         task_type: &TaskType,
         tool_count: usize,
         skill_count: usize,
         token_budget: &TokenBudgetManager,
+        author_info: Option<&AuthorInfo>,
     ) -> String {
         let mut parts = vec![
             Self::layer_identity(),
             Self::layer_rules(),
-            Self::layer_context(workspace_path, tool_count, skill_count),
+            Self::layer_context(workspace_path, tool_count, skill_count, author_info),
             Self::layer_tool_strategy(),
             Self::layer_anti_hallucination(),
             Self::layer_error_handling(),
@@ -709,11 +751,30 @@ impl AgentContext {
     }
 
     /// Layer 2: 上下文层
-    fn layer_context(workspace_path: &str, tool_count: usize, skill_count: usize) -> String {
-        format!(
-            "<context>\n当前工作区路径: {}\n当前会话ID: 将在运行时注入\n可用工具数量: {}个基础工具 + {}个高级技能\n</context>",
+    fn layer_context(workspace_path: &str, tool_count: usize, skill_count: usize, author_info: Option<&AuthorInfo>) -> String {
+        let mut context = format!(
+            "<context>\n当前工作区路径: {}\n当前会话ID: 将在运行时注入\n可用工具数量: {}个基础工具 + {}个高级技能",
             workspace_path, tool_count, skill_count
-        )
+        );
+
+        // 注入作者信息，指导 LLM 在生成文档时使用
+        if let Some(info) = author_info {
+            if info.has_any() {
+                context.push_str("\n\n文档作者信息（生成文档时必须使用这些信息作为文档元数据）:");
+                if !info.name.is_empty() {
+                    context.push_str(&format!("\n- 作者名: {}（在调用文档生成 Skill 时，必须将此值作为 author 参数传递）", info.name));
+                }
+                if !info.email.is_empty() {
+                    context.push_str(&format!("\n- 作者邮箱: {}", info.email));
+                }
+                if !info.company.is_empty() {
+                    context.push_str(&format!("\n- 作者公司/组织: {}", info.company));
+                }
+            }
+        }
+
+        context.push_str("\n</context>");
+        context
     }
 
     /// Layer 3: 策略层
@@ -1010,6 +1071,90 @@ mod tests {
         assert!(prompt.contains("/my/workspace"));
     }
 
+    /// 测试作者信息注入到系统提示词
+    #[test]
+    fn test_build_system_prompt_with_author_info() {
+        let budget = TokenBudgetManager::default_context();
+        let author = AuthorInfo {
+            name: "张三".to_string(),
+            email: "zhangsan@example.com".to_string(),
+            company: "测试公司".to_string(),
+        };
+        let prompt = AgentContext::build_system_prompt_with_task(
+            "/workspace",
+            &TaskType::Docx,
+            8,
+            4,
+            &budget,
+            Some(&author),
+        );
+        // 验证作者信息被注入
+        assert!(prompt.contains("文档作者信息"));
+        assert!(prompt.contains("作者名: 张三"));
+        assert!(prompt.contains("作者邮箱: zhangsan@example.com"));
+        assert!(prompt.contains("作者公司/组织: 测试公司"));
+        assert!(prompt.contains("author 参数"));
+    }
+
+    /// 测试无作者信息时不注入作者相关内容
+    #[test]
+    fn test_build_system_prompt_without_author_info() {
+        let budget = TokenBudgetManager::default_context();
+        let prompt = AgentContext::build_system_prompt_with_task(
+            "/workspace",
+            &TaskType::Docx,
+            8,
+            4,
+            &budget,
+            None,
+        );
+        // 不应包含作者信息
+        assert!(!prompt.contains("文档作者信息"));
+    }
+
+    /// 测试作者信息只有部分字段时只注入非空字段
+    #[test]
+    fn test_build_system_prompt_with_partial_author_info() {
+        let budget = TokenBudgetManager::default_context();
+        let author = AuthorInfo {
+            name: "李四".to_string(),
+            email: String::new(),
+            company: String::new(),
+        };
+        let prompt = AgentContext::build_system_prompt_with_task(
+            "/workspace",
+            &TaskType::Docx,
+            8,
+            4,
+            &budget,
+            Some(&author),
+        );
+        assert!(prompt.contains("作者名: 李四"));
+        assert!(!prompt.contains("作者邮箱"));
+        assert!(!prompt.contains("作者公司"));
+    }
+
+    /// 测试 AuthorInfo::resolve 工作区覆盖优先
+    #[test]
+    fn test_author_info_resolve_workspace_override() {
+        let app_settings = crate::config::app_settings::AppSettings::default();
+        let mut ws = crate::config::workspace_config::WorkspaceEntry {
+            id: "ws1".to_string(),
+            name: "test".to_string(),
+            path: "/test".to_string(),
+            author_name_override: "工作区作者".to_string(),
+            created_at: String::new(),
+        };
+        // 工作区覆盖优先
+        let info = AuthorInfo::resolve(&app_settings, Some(&ws));
+        assert_eq!(info.name, "工作区作者");
+
+        // 工作区覆盖为空时使用全局设置
+        ws.author_name_override = String::new();
+        let info2 = AuthorInfo::resolve(&app_settings, Some(&ws));
+        assert_eq!(info2.name, app_settings.general.author_name);
+    }
+
     /// 测试按任务类型构建系统提示词 - 生成Word时注入Word规范
     #[test]
     fn test_build_system_prompt_with_task_generate_docx() {
@@ -1020,6 +1165,7 @@ mod tests {
             8,
             4,
             &budget,
+            None,
         );
 
         // 应包含 Word 规范
@@ -1042,6 +1188,7 @@ mod tests {
             8,
             4,
             &budget,
+            None,
         );
 
         // 不应包含任何设计规范
@@ -1060,6 +1207,7 @@ mod tests {
             8,
             4,
             &budget,
+            None,
         );
 
         // 未知类型默认注入 Word 规范
@@ -1419,6 +1567,7 @@ mod tests {
             8,
             4,
             &budget,
+            None,
         );
         // 小上下文窗口应跳过规范层和示例层
         assert!(!prompt.contains("<guide"));
@@ -1435,6 +1584,7 @@ mod tests {
             8,
             4,
             &budget,
+            None,
         );
         // 大上下文窗口应注入规范层和示例层
         assert!(prompt.contains("<guide type=\"docx\">"));

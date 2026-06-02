@@ -98,6 +98,12 @@ class PptHandler:
         scheme = self.COLOR_SCHEMES.get(color_scheme, self.COLOR_SCHEMES["ocean"])
         sw, sh = prs.slide_width, prs.slide_height
 
+        # 设置文档作者属性
+        if author:
+            prs.core_properties.author = author
+        if title:
+            prs.core_properties.title = title
+
         ml, mr, mt, mb = Inches(0.6), Inches(0.6), Inches(0.6), Inches(0.8)
         tw = sw - ml - mr
 
