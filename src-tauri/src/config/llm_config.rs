@@ -5,6 +5,31 @@ use serde::{Deserialize, Serialize};
 
 use crate::errors::{CommandError, CONFIG_PROVIDER_NOT_FOUND, CONFIG_DEFAULT_PROVIDER_REQUIRED};
 
+/// 内置 Provider 的固定 ID
+pub const BUILTIN_PROVIDER_ID: &str = "builtin_deepseek";
+
+/// 内置 Provider 配置文件名
+const BUILTIN_PROVIDER_FILENAME: &str = "builtin_provider.json";
+
+/// 内置 Provider 配置（从 JSON 文件加载）
+#[derive(Deserialize)]
+struct BuiltinProviderConfig {
+    name: String,
+    provider_type: String,
+    api_base_url: String,
+    api_key: String,
+    model: String,
+    #[serde(default)]
+    context_window: Option<usize>,
+    #[serde(default = "default_supports_vision_builtin")]
+    supports_vision: bool,
+}
+
+/// 内置配置的 supports_vision 默认值
+fn default_supports_vision_builtin() -> bool {
+    false
+}
+
 /// LLM Provider 类型
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum ProviderType {
@@ -270,4 +295,73 @@ pub fn set_default_provider(config: &mut LlmConfig, id: &str) -> Result<(), Comm
     }
     log::info!("已设置默认 Provider: {}", id);
     Ok(())
+}
+
+/// 从配置文件加载内置 Provider 并注入到 LLM 配置中
+/// 仅当内置 Provider 不存在时才注入，已存在时不覆盖（保留用户修改）
+/// project_root: 项目根目录，builtin_provider.json 所在位置
+pub fn inject_builtin_provider(config: &mut LlmConfig, project_root: &Path) {
+    let builtin_path = project_root.join(BUILTIN_PROVIDER_FILENAME);
+
+    // 配置文件不存在时静默跳过（生产环境可能没有此文件）
+    if !builtin_path.exists() {
+        log::info!("内置 Provider 配置文件不存在: {}", builtin_path.display());
+        return;
+    }
+
+    // 如果已存在内置 Provider，跳过注入（保留用户可能的修改）
+    if config.providers.iter().any(|p| p.id == BUILTIN_PROVIDER_ID) {
+        log::info!("内置 Provider 已存在，跳过注入");
+        return;
+    }
+
+    // 读取并解析配置文件
+    let content = match std::fs::read_to_string(&builtin_path) {
+        Ok(c) => c,
+        Err(e) => {
+            log::error!("读取内置 Provider 配置文件失败: {}", e);
+            return;
+        }
+    };
+
+    let builtin: BuiltinProviderConfig = match serde_json::from_str(&content) {
+        Ok(c) => c,
+        Err(e) => {
+            log::error!("解析内置 Provider 配置文件失败: {}", e);
+            return;
+        }
+    };
+
+    // 解析 Provider 类型
+    let provider_type = match builtin.provider_type.as_str() {
+        "openai" => ProviderType::OpenAI,
+        "anthropic" => ProviderType::Anthropic,
+        "ollama" => ProviderType::Ollama,
+        "gemini" => ProviderType::Gemini,
+        _ => ProviderType::Custom,
+    };
+
+    // 如果是第一个 Provider，自动设为默认
+    let is_default = config.providers.is_empty();
+
+    let provider = LlmProvider {
+        id: BUILTIN_PROVIDER_ID.to_string(),
+        provider_type,
+        name: builtin.name,
+        api_base_url: builtin.api_base_url,
+        api_key_encrypted: builtin.api_key,
+        model: builtin.model,
+        is_default,
+        advanced: AdvancedConfig {
+            context_window: builtin.context_window,
+            ..Default::default()
+        },
+        supports_vision: builtin.supports_vision,
+    };
+
+    log::info!(
+        "注入内置 Provider: id={}, name={}, model={}, is_default={}",
+        provider.id, provider.name, provider.model, provider.is_default
+    );
+    config.providers.push(provider);
 }

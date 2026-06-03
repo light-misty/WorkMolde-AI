@@ -29,6 +29,9 @@ lerna-debug.log*
 .env.*.local
 *.local
 
+# 内置 Provider 配置（含 API Key，不纳入版本控制）
+builtin_provider.json
+
 # Python
 __pycache__/
 *.pyc
