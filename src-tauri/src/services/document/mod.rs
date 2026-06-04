@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, Command};
+use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::Mutex;
 
 use crate::errors::CommandError;
@@ -21,10 +21,22 @@ const DEFAULT_REQUEST_TIMEOUT_SECS: u64 = 120;
 /// Sidecar 健康检查请求超时（秒）
 const HEALTH_CHECK_TIMEOUT_SECS: u64 = 10;
 
+/// Sidecar 运行状态（进程 + I/O 管道）
+/// 将 stdin 和 BufReader<stdout> 持久化存储，避免每次请求重新创建 BufReader
+/// 导致缓冲区数据丢失的问题
+struct SidecarRunning {
+    /// 子进程（仅用于检查运行状态和终止）
+    process: Child,
+    /// stdin 管道（持久化，避免每次请求重新获取）
+    stdin: ChildStdin,
+    /// stdout 的 BufReader（持久化，避免缓冲区数据丢失）
+    stdout_reader: BufReader<ChildStdout>,
+}
+
 /// Sidecar 进程管理器
 pub struct SidecarManager {
-    /// Sidecar 进程
-    process: Arc<Mutex<Option<Child>>>,
+    /// Sidecar 运行状态（包含进程和 I/O 管道，统一锁保护）
+    running: Arc<Mutex<Option<SidecarRunning>>>,
     /// Python 可执行文件路径
     python_path: String,
     /// Sidecar 脚本路径
@@ -38,7 +50,7 @@ pub struct SidecarManager {
 impl SidecarManager {
     pub fn new(python_path: String, script_path: String) -> Self {
         Self {
-            process: Arc::new(Mutex::new(None)),
+            running: Arc::new(Mutex::new(None)),
             python_path,
             script_path,
             request_timeout: Duration::from_secs(DEFAULT_REQUEST_TIMEOUT_SECS),
@@ -46,10 +58,10 @@ impl SidecarManager {
         }
     }
 
-    /// 启动 Sidecar 进程
+    /// 启动 Sidecar 进程并进行就绪检查
     pub async fn start(&self) -> Result<(), CommandError> {
         log::info!("启动 Sidecar 进程: python={}, script={}", self.python_path, self.script_path);
-        let mut guard = self.process.lock().await;
+        let mut guard = self.running.lock().await;
         if guard.is_some() {
             log::warn!("Sidecar 进程已在运行, 跳过启动");
             return Ok(());
@@ -84,18 +96,94 @@ impl SidecarManager {
             });
         }
 
-        *guard = Some(child);
-        log::info!("Sidecar 进程启动成功");
-        Ok(())
+        // 取出 stdin 和 stdout，持久化存储
+        let mut stdin = child.stdin.take().ok_or_else(|| {
+            log::error!("无法获取 Sidecar stdin");
+            CommandError::doc(3010, "无法获取 Sidecar stdin".to_string())
+        })?;
+
+        let stdout = child.stdout.take().ok_or_else(|| {
+            log::error!("无法获取 Sidecar stdout");
+            CommandError::doc(3010, "无法获取 Sidecar stdout".to_string())
+        })?;
+
+        let mut stdout_reader = BufReader::new(stdout);
+
+        // 就绪检查：发送 ping 请求验证 Sidecar 是否可以正常处理请求
+        // 这能检测 Python 进程启动后立即崩溃的情况（如缺少依赖包、脚本路径错误等）
+        log::info!("Sidecar 进程已启动，进行就绪检查...");
+        let ping_request = json!({
+            "id": uuid::Uuid::new_v4().to_string(),
+            "action": "ping",
+            "type": "health",
+            "params": {},
+        });
+
+        let ping_str = serde_json::to_string(&ping_request).unwrap_or_default();
+        let readiness_result = tokio::time::timeout(
+            Duration::from_secs(HEALTH_CHECK_TIMEOUT_SECS),
+            async {
+                stdin.write_all(format!("{}\n", ping_str).as_bytes()).await?;
+                stdin.flush().await?;
+
+                let mut response_line = String::new();
+                let bytes_read = stdout_reader.read_line(&mut response_line).await?;
+
+                // EOF 检查：read_line 返回 0 表示流已关闭
+                if bytes_read == 0 {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::UnexpectedEof,
+                        "Sidecar 进程已退出，未返回响应",
+                    ));
+                }
+
+                let trimmed = response_line.trim();
+                let trimmed = trimmed.strip_prefix('\u{feff}').unwrap_or(trimmed);
+                let _response: Value = serde_json::from_str(trimmed)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+
+                Ok(())
+            },
+        ).await;
+
+        match readiness_result {
+            Ok(Ok(())) => {
+                log::info!("Sidecar 就绪检查通过");
+                // 存储运行状态
+                *guard = Some(SidecarRunning {
+                    process: child,
+                    stdin,
+                    stdout_reader,
+                });
+                Ok(())
+            }
+            Ok(Err(e)) => {
+                log::error!("Sidecar 就绪检查失败: {}，清理进程", e);
+                // 就绪检查失败，终止进程
+                let _ = child.kill().await;
+                Err(CommandError::doc(3010, format!(
+                    "Sidecar 启动后就绪检查失败（可能 Python 环境缺失或脚本路径错误）: {}", e
+                )))
+            }
+            Err(_) => {
+                log::error!("Sidecar 就绪检查超时，清理进程");
+                // 就绪检查超时，终止进程
+                let _ = child.kill().await;
+                Err(CommandError::doc(3010, format!(
+                    "Sidecar 启动后就绪检查超时（{}秒）（可能 Python 环境缺失或脚本路径错误）",
+                    HEALTH_CHECK_TIMEOUT_SECS
+                )))
+            }
+        }
     }
 
     /// 停止 Sidecar 进程
     pub async fn stop(&self) -> Result<(), CommandError> {
         log::info!("停止 Sidecar 进程");
-        let mut guard = self.process.lock().await;
-        if let Some(ref mut child) = *guard {
-            // 尝试终止进程，即使失败也要清理进程对象，避免残留导致 start() 跳过启动
-            if let Err(e) = child.kill().await {
+        let mut guard = self.running.lock().await;
+        if let Some(ref mut running) = *guard {
+            // 尝试终止进程，即使失败也要清理运行状态，避免残留导致 start() 跳过启动
+            if let Err(e) = running.process.kill().await {
                 log::warn!("终止 Sidecar 进程失败（可能已退出）: {}", e);
             } else {
                 log::info!("Sidecar 进程已停止");
@@ -103,18 +191,18 @@ impl SidecarManager {
         } else {
             log::debug!("Sidecar 进程未运行, 无需停止");
         }
-        // 始终清理进程对象，确保后续 start() 能正常启动新进程
+        // 始终清理运行状态（包括 stdin 和 stdout_reader），确保后续 start() 能正常启动新进程
         *guard = None;
         Ok(())
     }
 
     /// 检查 Sidecar 进程是否仍在运行
     async fn is_running(&self) -> bool {
-        let mut guard = self.process.lock().await;
-        if let Some(ref mut child) = *guard {
-            match child.try_wait() {
+        let mut guard = self.running.lock().await;
+        if let Some(ref mut running) = *guard {
+            match running.process.try_wait() {
                 Ok(Some(_status)) => {
-                    // 进程已退出
+                    // 进程已退出，清理整个运行状态（包括 stdin 和 stdout_reader）
                     log::warn!("Sidecar 进程已退出");
                     *guard = None;
                     false
@@ -136,7 +224,7 @@ impl SidecarManager {
             return Ok(());
         }
         log::info!("Sidecar 未运行，正在重启...");
-        // 先清理可能残留的旧进程对象，避免 start() 检测到 is_some() 而跳过启动
+        // 先清理可能残留的旧运行状态，避免 start() 检测到 is_some() 而跳过启动
         let _ = self.stop().await;
         self.start().await
     }
@@ -161,8 +249,16 @@ impl SidecarManager {
                 log::warn!("Sidecar 请求失败，尝试重启: {}", e.message);
                 let _ = self.stop().await;
                 if self.start().await.is_ok() {
-                    // 重启成功后重试一次
-                    self.send_request_inner(request).await
+                    // 重启成功后重试一次（带超时保护）
+                    tokio::time::timeout(
+                        self.request_timeout,
+                        self.send_request_inner(request),
+                    ).await.map_err(|_| {
+                        log::error!("Sidecar 重试请求超时（{}秒）", self.request_timeout.as_secs());
+                        CommandError::doc(3010, format!(
+                            "Sidecar 重试请求超时（{}秒）", self.request_timeout.as_secs()
+                        ))
+                    })?
                 } else {
                     Err(e)
                 }
@@ -181,42 +277,37 @@ impl SidecarManager {
 
     /// 内部发送请求实现（无超时、无重试）
     pub async fn send_request_inner(&self, request: Value) -> Result<Value, CommandError> {
-        let mut guard = self.process.lock().await;
+        let mut guard = self.running.lock().await;
 
-        let child = guard.as_mut().ok_or_else(|| {
+        let running = guard.as_mut().ok_or_else(|| {
             log::error!("Sidecar 未启动, 无法发送请求");
             CommandError::doc(3010, "Sidecar 未启动".to_string())
         })?;
 
         // 写入请求
-        let stdin = child.stdin.as_mut().ok_or_else(|| {
-            log::error!("无法写入 Sidecar stdin");
-            CommandError::doc(3010, "无法写入 Sidecar stdin".to_string())
-        })?;
-
         let request_str = serde_json::to_string(&request).unwrap_or_default();
-        stdin.write_all(format!("{}\n", request_str).as_bytes()).await.map_err(|e| {
+        running.stdin.write_all(format!("{}\n", request_str).as_bytes()).await.map_err(|e| {
             log::error!("写入 Sidecar 失败: {}", e);
             CommandError::doc(3010, format!("写入 Sidecar 失败: {}", e))
         })?;
-        stdin.flush().await.map_err(|e| {
+        running.stdin.flush().await.map_err(|e| {
             log::error!("刷新 Sidecar stdin 失败: {}", e);
             CommandError::doc(3010, format!("刷新 Sidecar stdin 失败: {}", e))
         })?;
         log::debug!("请求已写入 Sidecar");
 
         // 读取响应
-        let stdout = child.stdout.as_mut().ok_or_else(|| {
-            log::error!("无法读取 Sidecar stdout");
-            CommandError::doc(3010, "无法读取 Sidecar stdout".to_string())
-        })?;
-
-        let mut reader = BufReader::new(stdout);
         let mut response_line = String::new();
-        reader.read_line(&mut response_line).await.map_err(|e| {
+        let bytes_read = running.stdout_reader.read_line(&mut response_line).await.map_err(|e| {
             log::error!("读取 Sidecar 响应失败: {}", e);
             CommandError::doc(3010, format!("读取 Sidecar 响应失败: {}", e))
         })?;
+
+        // EOF 检查：read_line 返回 0 表示流已关闭（Sidecar 进程已退出）
+        if bytes_read == 0 {
+            log::error!("Sidecar 进程已退出，未返回响应（可能运行时崩溃）");
+            return Err(CommandError::doc(3010, "Sidecar 进程已退出，未返回响应（可能运行时崩溃）".to_string()));
+        }
 
         let trimmed = response_line.trim();
         // 去除 UTF-8 BOM（Python Sidecar 输出可能包含 BOM，trim() 不会移除）
