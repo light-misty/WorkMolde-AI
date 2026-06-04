@@ -10,6 +10,8 @@
 [![Rust](https://img.shields.io/badge/Rust-1.80+-000000?logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
+[中文](./README.md) | [English](./README_en.md)
+
 </div>
 
 ---
