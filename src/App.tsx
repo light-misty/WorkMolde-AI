@@ -144,10 +144,12 @@ export default function App() {
     };
   }, [updateSessionTitleLocal]);
 
-  // 应用启动后自动检查更新（延迟5秒，避免启动时阻塞）
+  // 应用启动后自动检查更新（延迟5秒，避免启动时阻塞；开发环境下跳过自动检查）
   useEffect(() => {
     const timer = setTimeout(async () => {
       if (!settings.update.autoCheck) return;
+      // 开发环境下跳过自动检查更新
+      if (import.meta.env.DEV) return;
       try {
         const { check } = await import("@tauri-apps/plugin-updater");
         const result = await check();
