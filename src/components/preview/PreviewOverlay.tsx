@@ -82,7 +82,8 @@ export function PreviewOverlay({
           <DiffView oldContent={diffData.oldContent} newContent={diffData.newContent} />
         ) : fileType?.toLowerCase() === "pdf" && pdfBase64Data ? (
           // PDF 真实渲染模式：PdfCanvasViewer 自带滚动和工具栏，不需要外层滚动包裹
-          <div className="flex-1 overflow-hidden">
+          // 必须设置 flex flex-col，否则 PdfCanvasViewer 的 flex-1 不生效，导致高度为0
+          <div className="flex-1 overflow-hidden flex flex-col">
             <ContentRenderer content={content} fileType={fileType} pdfBase64Data={pdfBase64Data} />
           </div>
         ) : (

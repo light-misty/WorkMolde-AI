@@ -40,6 +40,57 @@ export function PdfCanvasViewer({ base64Data }: PdfCanvasViewerProps) {
   // 观察器引用
   const observerRef = useRef<IntersectionObserver | null>(null);
 
+  // 渲染单页 PDF 到 canvas
+  const renderPage = useCallback(async (pageNum: number) => {
+    const pdf = pdfDocRef.current;
+    if (!pdf) return;
+
+    const canvas = pageCanvasRefs.current.get(pageNum);
+    if (!canvas) return;
+
+    // 如果该页已有渲染任务，先取消
+    const existingTask = renderTasksRef.current.get(pageNum);
+    if (existingTask) {
+      try { existingTask.cancel(); } catch { /* 忽略 */ }
+    }
+
+    try {
+      const page = await pdf.getPage(pageNum);
+      const viewport = page.getViewport({ scale });
+
+      // 设置 canvas 尺寸：考虑设备像素比以确保高清渲染
+      const outputScale = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(viewport.width * outputScale);
+      canvas.height = Math.floor(viewport.height * outputScale);
+      canvas.style.width = `${Math.floor(viewport.width)}px`;
+      canvas.style.height = `${Math.floor(viewport.height)}px`;
+
+      // v4 API：必须传 canvasContext，手动处理 devicePixelRatio 缩放
+      const context = canvas.getContext("2d");
+      if (!context) return;
+
+      // 先重置变换矩阵，再应用设备像素比缩放
+      context.setTransform(outputScale, 0, 0, outputScale, 0, 0);
+
+      const renderTask = page.render({
+        canvasContext: context,
+        viewport,
+      });
+
+      renderTasksRef.current.set(pageNum, renderTask);
+
+      await renderTask.promise;
+      renderedPagesRef.current.add(pageNum);
+      renderTasksRef.current.delete(pageNum);
+    } catch (err: unknown) {
+      // 取消渲染不算错误
+      if (err instanceof Error && err.name === "RenderingCancelledException") {
+        return;
+      }
+      console.error(`[PdfCanvasViewer] 渲染第 ${pageNum} 页失败:`, err);
+    }
+  }, [scale]);
+
   // 加载 PDF 文档
   useEffect(() => {
     let cancelled = false;
@@ -91,60 +142,10 @@ export function PdfCanvasViewer({ base64Data }: PdfCanvasViewerProps) {
       pdfDocRef.current?.destroy();
       pdfDocRef.current = null;
     };
-  }, [base64Data]);
+  }, [base64Data, t]);
 
-  // 渲染单页 PDF 到 canvas
-  const renderPage = useCallback(async (pageNum: number) => {
-    const pdf = pdfDocRef.current;
-    if (!pdf) return;
-
-    const canvas = pageCanvasRefs.current.get(pageNum);
-    if (!canvas) return;
-
-    // 如果该页已有渲染任务，先取消
-    const existingTask = renderTasksRef.current.get(pageNum);
-    if (existingTask) {
-      try { existingTask.cancel(); } catch { /* 忽略 */ }
-    }
-
-    try {
-      const page = await pdf.getPage(pageNum);
-      const viewport = page.getViewport({ scale });
-
-      // 设置 canvas 尺寸
-      const outputScale = window.devicePixelRatio || 1;
-      canvas.width = Math.floor(viewport.width * outputScale);
-      canvas.height = Math.floor(viewport.height * outputScale);
-      canvas.style.width = `${Math.floor(viewport.width)}px`;
-      canvas.style.height = `${Math.floor(viewport.height)}px`;
-
-      const context = canvas.getContext("2d");
-      if (!context) return;
-
-      // 根据设备像素比缩放渲染，确保高清显示
-      context.scale(outputScale, outputScale);
-
-      const renderTask = page.render({
-        canvas,
-        canvasContext: context,
-        viewport,
-      });
-
-      renderTasksRef.current.set(pageNum, renderTask);
-
-      await renderTask.promise;
-      renderedPagesRef.current.add(pageNum);
-      renderTasksRef.current.delete(pageNum);
-    } catch (err: unknown) {
-      // 取消渲染不算错误
-      if (err instanceof Error && err.name === "RenderingCancelledException") {
-        return;
-      }
-      console.error(`[PdfCanvasViewer] 渲染第 ${pageNum} 页失败:`, err);
-    }
-  }, [scale]);
-
-  // 使用 IntersectionObserver 实现页面懒渲染
+  // PDF 加载完成后，渲染可见页面
+  // 使用 IntersectionObserver 实现懒渲染 + 直接渲染兜底
   useEffect(() => {
     if (!pdfDocRef.current || loading) return;
 
@@ -168,7 +169,6 @@ export function PdfCanvasViewer({ base64Data }: PdfCanvasViewerProps) {
           if (!pageNum) return;
 
           if (entry.isIntersecting) {
-            // 页面进入可视区域，触发渲染
             renderPage(pageNum);
           }
         });
@@ -187,7 +187,18 @@ export function PdfCanvasViewer({ base64Data }: PdfCanvasViewerProps) {
       observer.observe(el);
     });
 
+    // 兜底：延迟后直接渲染前几页，防止 IntersectionObserver 未触发
+    const fallbackTimer = setTimeout(() => {
+      const pagesToRender = Math.min(totalPages, 3);
+      for (let i = 1; i <= pagesToRender; i++) {
+        if (!renderedPagesRef.current.has(i)) {
+          renderPage(i);
+        }
+      }
+    }, 500);
+
     return () => {
+      clearTimeout(fallbackTimer);
       observer.disconnect();
       observerRef.current = null;
     };
@@ -241,7 +252,6 @@ export function PdfCanvasViewer({ base64Data }: PdfCanvasViewerProps) {
     try {
       const page = await pdf.getPage(1);
       const viewport = page.getViewport({ scale: 1.0 });
-      // 容器宽度减去内边距
       const containerWidth = scrollArea.clientWidth - 48;
       const newScale = containerWidth / viewport.width;
       setScale(Math.max(SCALE_MIN, Math.min(newScale, SCALE_MAX)));
@@ -318,7 +328,7 @@ export function PdfCanvasViewer({ base64Data }: PdfCanvasViewerProps) {
   // 加载状态
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full text-text-tertiary text-[14px]">
+      <div className="flex items-center justify-center flex-1 min-h-0 text-text-tertiary text-[14px]">
         <svg className="animate-spin w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -331,7 +341,7 @@ export function PdfCanvasViewer({ base64Data }: PdfCanvasViewerProps) {
   // 错误状态
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-text-tertiary text-[14px] gap-3">
+      <div className="flex flex-col items-center justify-center flex-1 min-h-0 text-text-tertiary text-[14px] gap-3">
         <div className="w-12 h-12 rounded-[var(--radius-md)] bg-error/10 flex items-center justify-center text-error text-[20px]">
           !
         </div>
@@ -342,7 +352,7 @@ export function PdfCanvasViewer({ base64Data }: PdfCanvasViewerProps) {
   }
 
   return (
-    <div className="flex flex-col flex-1 overflow-hidden">
+    <div className="flex flex-col flex-1 min-h-0">
       {/* 工具栏 */}
       <div className="flex items-center gap-2 px-5 py-2 border-b border-border bg-bg-sub flex-shrink-0">
         {/* 页码导航 */}
@@ -405,7 +415,7 @@ export function PdfCanvasViewer({ base64Data }: PdfCanvasViewerProps) {
       {/* PDF 内容区 */}
       <div
         ref={scrollAreaRef}
-        className="flex-1 overflow-y-auto bg-bg-sub"
+        className="flex-1 overflow-y-auto bg-bg-sub min-h-0"
       >
         <div ref={containerRef} className="py-4 px-6 flex flex-col items-center gap-4">
           {totalPages > 0 && Array.from({ length: totalPages }, (_, i) => {
