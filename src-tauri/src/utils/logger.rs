@@ -1,6 +1,6 @@
 use std::fs::{self, File};
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use log::{Level, LevelFilter, Log, Metadata, Record, SetLoggerError};
@@ -65,9 +65,32 @@ fn format_level(level: Level) -> &'static str {
     }
 }
 
+/// 计算日志文件目录路径
+///
+/// 开发模式：使用项目根目录下的 `log/` 子目录，与 Python Sidecar 保持一致
+/// 生产模式：使用 Tauri 推荐的系统日志目录（Windows: %LOCALAPPDATA%\<identifier>\logs\）
+///
+/// - `app_log_dir`: Tauri 的 `app.path().app_log_dir()` 返回值（Ok 时为系统日志目录）
+/// - `app_data_dir`: Tauri 的 `app.path().app_data_dir()` 返回值（作为降级备选）
+pub fn resolve_log_dir(app_log_dir: Option<PathBuf>, app_data_dir: Option<PathBuf>) -> PathBuf {
+    if cfg!(debug_assertions) {
+        // 开发模式：基于 CARGO_MANIFEST_DIR 推导项目根目录，使用其 log/ 子目录
+        // CARGO_MANIFEST_DIR 在编译期指向 src-tauri/ 目录，其上一级即为项目根目录
+        let project_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap_or_else(|| Path::new("."));
+        project_root.join("log")
+    } else {
+        // 生产模式：使用 Tauri 推荐的系统日志目录
+        app_log_dir
+            .or_else(|| app_data_dir.map(|d| d.join("log")))
+            .unwrap_or_else(|| PathBuf::from("log"))
+    }
+}
+
 /// 初始化日志系统
 ///
-/// - `log_dir`: 日志文件目录路径（相对于 CWD）
+/// - `log_dir`: 日志文件目录路径
 /// - 每次启动会覆盖上一次的日志文件（使用 Create + Truncate 模式）
 /// - 开发模式(debug)日志级别为 DEBUG，发布模式(release)为 INFO
 /// - 同时输出到控制台(stderr)和日志文件

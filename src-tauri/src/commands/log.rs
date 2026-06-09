@@ -16,14 +16,11 @@ pub struct LogPathInfo {
 /// 返回日志源文件路径和浏览器下载目录路径，供前端展示
 #[tauri::command]
 pub async fn get_log_path(app_handle: tauri::AppHandle) -> Result<LogPathInfo, CommandError> {
-    // 日志文件路径：使用 Tauri 推荐的日志目录
-    // 与 lib.rs 中日志初始化使用相同的目录
-    let log_dir = app_handle
-        .path()
-        .app_log_dir()
-        .unwrap_or_else(|_| {
-            app_handle.path().app_data_dir().unwrap_or_else(|_| std::path::PathBuf::from("log")).join("log")
-        });
+    // 日志文件路径：与 lib.rs 中日志初始化使用相同的目录计算逻辑
+    let log_dir = crate::utils::logger::resolve_log_dir(
+        app_handle.path().app_log_dir().ok(),
+        app_handle.path().app_data_dir().ok(),
+    );
     let log_path = log_dir.join("docagent.log");
 
     // 浏览器下载目录：使用系统默认下载目录
@@ -39,19 +36,16 @@ pub async fn get_log_path(app_handle: tauri::AppHandle) -> Result<LogPathInfo, C
 }
 
 /// 获取错误日志文件内容
-/// 读取 Tauri 推荐日志目录下的 docagent.log 文件并返回其内容
+/// 读取日志目录下的 docagent.log 文件并返回其内容
 #[tauri::command]
 pub async fn get_error_log(app_handle: tauri::AppHandle) -> Result<String, CommandError> {
     log::info!("获取错误日志");
 
-    // 日志文件路径：使用 Tauri 推荐的日志目录
-    // 与 lib.rs 中日志初始化使用相同的目录
-    let log_dir = app_handle
-        .path()
-        .app_log_dir()
-        .unwrap_or_else(|_| {
-            app_handle.path().app_data_dir().unwrap_or_else(|_| std::path::PathBuf::from("log")).join("log")
-        });
+    // 日志文件路径：与 lib.rs 中日志初始化使用相同的目录计算逻辑
+    let log_dir = crate::utils::logger::resolve_log_dir(
+        app_handle.path().app_log_dir().ok(),
+        app_handle.path().app_data_dir().ok(),
+    );
     let log_path = log_dir.join("docagent.log");
 
     if !log_path.exists() {

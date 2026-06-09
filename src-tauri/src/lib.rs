@@ -81,17 +81,15 @@ pub fn run() {
                 .map_err(|e| format!("无法创建应用数据目录: {}", e))?;
 
             // 初始化日志系统（必须在数据库和配置初始化之前，确保关键操作的错误能被记录）
-            // 使用 Tauri 推荐的日志目录，确保生产环境也能正常写入日志
-            // Windows: %LOCALAPPDATA%\<bundle_identifier>\logs
-            // macOS: ~/Library/Logs/<bundle_identifier>
-            // Linux: ~/.local/share/<bundle_identifier>/logs
-            let log_dir = app
-                .path()
-                .app_log_dir()
-                .unwrap_or_else(|_| {
-                    // 降级：如果无法获取系统日志目录，使用应用数据目录下的 log 子目录
-                    app.path().app_data_dir().unwrap_or_else(|_| std::path::PathBuf::from("log")).join("log")
-                });
+            // 开发模式：使用项目根目录的 log/ 子目录，与 Python Sidecar 保持一致
+            // 生产模式：使用 Tauri 推荐的系统日志目录
+            // Windows 生产模式: %LOCALAPPDATA%\<bundle_identifier>\logs
+            // macOS 生产模式: ~/Library/Logs/<bundle_identifier>
+            // Linux 生产模式: ~/.local/share/<bundle_identifier>/logs
+            let log_dir = crate::utils::logger::resolve_log_dir(
+                app.path().app_log_dir().ok(),
+                app.path().app_data_dir().ok(),
+            );
             crate::utils::logger::init(&log_dir)
                 .map_err(|e| format!("日志系统初始化失败: {}", e))?;
 
