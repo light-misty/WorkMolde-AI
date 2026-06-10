@@ -58,7 +58,7 @@
         "https://github.com/XuMingKe-06/DocAgent/releases/latest/download/latest.json"
       ],
       "windows": {
-        "installMode": "passive"
+        "installMode": "quiet"
       }
     }
   }

@@ -561,7 +561,7 @@
     "updateFailed": "更新失败",
     "agentRunning": "智能体正在工作中，无法立即重启",
     "agentRunningDesc": "请等待智能体完成工作后再重启，或选择稍后重启",
-    "restartLaterDesc": "更新将在下次关闭程序时自动安装"
+    "restartLaterDesc": "关闭程序时将自动安装更新，但不会重新启动应用"
   },
   "deleteConfirm": {
     "title": "确认删除",

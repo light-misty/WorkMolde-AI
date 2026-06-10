@@ -245,12 +245,6 @@ export function UpdateNotification({ open, onClose }: UpdateNotificationProps) {
       {/* 下载完成，等待用户选择重启时机 */}
       {state === "downloaded" && updateInfo && (
         <div className="update-body">
-          <div className="update-icon update-icon-success">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <circle cx="10" cy="10" r="9" stroke="currentColor" strokeWidth="1.5" />
-              <path d="M6 10.5L8.5 13L14 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
           <div className="update-title">{t("update.installComplete")}</div>
           <div className="update-desc">{t("update.needRestart")}</div>
           {/* 智能体正在工作时显示提示 */}

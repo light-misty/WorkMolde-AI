@@ -561,7 +561,7 @@
     "updateFailed": "Update Failed",
     "agentRunning": "Agent is working, cannot restart now",
     "agentRunningDesc": "Please wait for the agent to finish or restart later",
-    "restartLaterDesc": "Update will be installed when you close the app"
+    "restartLaterDesc": "Update will be installed when you close the app, but the app will not restart"
   },
   "deleteConfirm": {
     "title": "Confirm Delete",
