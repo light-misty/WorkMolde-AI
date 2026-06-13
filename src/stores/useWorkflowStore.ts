@@ -33,6 +33,8 @@ export interface SessionCacheEntry {
   bgStreamingNodeId: string | null;
   /** 后台流式状态：当前 thinking 节点 ID */
   bgThinkingNodeId: string | null;
+  /** 后台流式状态：被 tool_call 关闭的 streaming 节点 ID（用于修复内容截断） */
+  bgLastClosedStreamingNodeId: string | null;
   /** 最后访问时间，用于 LRU 淘汰 */
   lastAccessedAt: number;
 }
@@ -347,6 +349,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       backgroundNodeCounter: cache.get(sessionId)?.backgroundNodeCounter ?? 0,
       bgStreamingNodeId: cache.get(sessionId)?.bgStreamingNodeId ?? null,
       bgThinkingNodeId: cache.get(sessionId)?.bgThinkingNodeId ?? null,
+      bgLastClosedStreamingNodeId: cache.get(sessionId)?.bgLastClosedStreamingNodeId ?? null,
       lastAccessedAt: Date.now(),
     });
 
@@ -409,6 +412,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     let bgNodeCounter = entry.backgroundNodeCounter;
     let bgStreamingNodeId = entry.bgStreamingNodeId;
     let bgThinkingNodeId = entry.bgThinkingNodeId;
+    let bgLastClosedStreamingNodeId = entry.bgLastClosedStreamingNodeId;
     let deepThinkingContent = entry.deepThinkingContent;
     let lastDeepThinkingStep = entry.lastDeepThinkingStep;
     let seenToolCallIds = [...entry.seenToolCallIds];
@@ -481,17 +485,29 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         }
         if (!bgStreamingNodeId) {
           if (event.content) {
-            const nodeId = `bg_node_${++bgNodeCounter}`;
-            nodes.push({
-              id: nodeId,
-              type: "content",
-              status: "running",
-              timestamp: now,
-              data: { content: event.content, isStreaming: event.isStreaming },
-              isExpanded: true,
-              iteration: event.iteration,
-            });
-            bgStreamingNodeId = nodeId;
+            // 后端在流式结束后发射 is_streaming=false 的完整内容事件，
+            // 用于更新被 tool_call 关闭的 content 节点（修复 LLM 在 tool_use 块后
+            // 继续输出文本内容导致的截断问题）
+            if (!event.isStreaming && bgLastClosedStreamingNodeId) {
+              nodes = nodes.map((n) =>
+                n.id === bgLastClosedStreamingNodeId
+                  ? { ...n, data: { content: event.content, isStreaming: false } }
+                  : n
+              );
+              bgLastClosedStreamingNodeId = null;
+            } else {
+              const nodeId = `bg_node_${++bgNodeCounter}`;
+              nodes.push({
+                id: nodeId,
+                type: "content",
+                status: "running",
+                timestamp: now,
+                data: { content: event.content, isStreaming: event.isStreaming },
+                isExpanded: true,
+                iteration: event.iteration,
+              });
+              bgStreamingNodeId = nodeId;
+            }
           }
         } else {
           nodes = nodes.map((n) =>
@@ -522,6 +538,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           bgThinkingNodeId = null;
         }
         if (bgStreamingNodeId) {
+          // 保存被关闭的 streaming 节点 ID，用于后续最终内容事件更新（修复截断）
+          bgLastClosedStreamingNodeId = bgStreamingNodeId;
           nodes = nodes.map((n) =>
             n.id === bgStreamingNodeId
               ? { ...n, status: "completed" as NodeStatus, data: { ...n.data, isStreaming: false } }
@@ -632,6 +650,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           });
         }
         executionStatus = "completed";
+        bgLastClosedStreamingNodeId = null;
         break;
       }
       case "error": {
@@ -666,6 +685,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           isExpanded: true,
         });
         executionStatus = "failed";
+        bgLastClosedStreamingNodeId = null;
         break;
       }
       case "stopped": {
@@ -686,6 +706,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           bgStreamingNodeId = null;
         }
         executionStatus = "cancelled";
+        bgLastClosedStreamingNodeId = null;
         break;
       }
     }
@@ -699,6 +720,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       backgroundNodeCounter: bgNodeCounter,
       bgStreamingNodeId,
       bgThinkingNodeId,
+      bgLastClosedStreamingNodeId,
       deepThinkingContent,
       lastDeepThinkingStep,
       seenToolCallIds,

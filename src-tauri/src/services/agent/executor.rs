@@ -719,11 +719,13 @@ impl<R: Runtime> AgentExecutor<R> {
             }
 
             // 发送流式结束事件，携带清理后的完整内容
-            // 当存在 tool_calls 时不发射此事件，因为：
-            // 1. 流式阶段已通过增量 content 事件将文本内容展示给用户
-            // 2. 此时再发射 is_streaming=false 的完整内容会触发前端创建新的内容节点，导致重复显示
+            // 无论是否存在 tool_calls，只要有内容就发射此事件：
+            // 1. 流式阶段可能因 early_announced_tool_indices 而未发射部分 content delta
+            //    （LLM 可能在 tool_use 块之后继续输出文本内容块），导致前端显示截断
+            // 2. 前端通过 is_streaming=false + iteration 定位已有 content 节点进行更新，
+            //    不会创建重复节点
             // 3. 无 tool_calls 时仍需发射，以便前端清除之前流式显示的 XML 标签片段
-            if !has_tool_calls {
+            if !assistant_content.is_empty() {
                 self.emitter.emit_content(ContentPayload {
                     session_id: ctx.session_id.clone(),
                     message_id: message_id.clone(),

@@ -153,11 +153,13 @@ export function useAgent(): UseAgentReturn {
           // 当 tool_call 事件已到达（前端已关闭 streaming 节点），
           // 但流式阶段还有残余的 content chunk 到达时，这些 chunk 属于已结束的迭代，
           // 不应创建新的 content 节点（否则会出现重复内容节点）
-          // 同时过滤 isStreaming=false 的残余事件（后端有 tool_calls 时不应该发射，
-          // 但作为防御性编程仍然过滤）
+          // 但 is_streaming=false 的最终内容事件需要放行：
+          // 后端在流式结束后会发射完整内容（修复 LLM 在 tool_use 块后继续输出文本导致的截断），
+          // 前端需要用完整内容更新已有的 content 节点
           if (lastToolCallIterationRef.current !== null
             && payload.iteration !== undefined
-            && payload.iteration <= lastToolCallIterationRef.current) {
+            && payload.iteration <= lastToolCallIterationRef.current
+            && payload.isStreaming) {
             return;
           }
           if (contentEpochRef.current !== lastContentEpochRef.current) {
