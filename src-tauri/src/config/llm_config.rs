@@ -82,7 +82,7 @@ impl Default for AdvancedConfig {
         Self {
             temperature: 0.7,
             top_p: 1.0,
-            max_tokens: 4096,
+            max_tokens: 16384,
             timeout_seconds: 60,
             max_retries: 3,
             extra_headers: HashMap::new(),

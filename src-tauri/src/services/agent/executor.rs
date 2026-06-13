@@ -759,24 +759,33 @@ impl<R: Runtime> AgentExecutor<R> {
                     let params_result = serde_json::from_str::<serde_json::Value>(&tool_call.arguments);
 
                     // 截断响应时参数解析失败：跳过执行，反馈给LLM重新生成
+                    // 必须发射 tool_result 事件关闭前端加载状态，同时发射 thinking 事件提示重试
                     if is_truncated && params_result.is_err() {
                         log::warn!(
                             "截断响应的 tool_call 参数解析失败, 跳过执行, session_id={}, tool={}, arguments长度={}",
                             ctx.session_id, tool_call.name, tool_call.arguments.len()
                         );
-                        let skip_msg = format!(
-                            "工具调用 {} 的参数因响应被截断而不完整，请重新生成完整的代码。确保代码参数完整且不要过长。",
+                        let retry_msg = format!(
+                            "上一次 {} 调用的参数因响应被截断而不完整，请重新生成完整的代码。注意控制代码长度，确保参数完整。",
                             tool_call.name
                         );
+                        // 发射思考事件，让用户看到重试提示
+                        self.emitter.emit_thinking(ThinkingPayload {
+                            session_id: ctx.session_id.clone(),
+                            step: total_steps,
+                            thought: "代码较长导致响应被截断，正在重新生成...".to_string(),
+                        }).ok();
+                        // 必须发射 tool_result 事件，否则前端对应节点永远显示加载动画
                         self.emitter.emit_tool_result(ToolResultPayload {
                             session_id: ctx.session_id.clone(),
                             call_id: tool_call.id.clone(),
                             success: false,
                             result: json!(null),
-                            error: Some(skip_msg.clone()),
+                            error: Some("响应被截断，正在重新生成代码...".to_string()),
                             duration_ms: 0,
                         }).ok();
-                        ctx.add_tool_result(&tool_call.id, &skip_msg);
+                        // 将截断信息作为 tool_result 添加到对话上下文
+                        ctx.add_tool_result(&tool_call.id, &retry_msg);
                         continue;
                     }
 
@@ -791,16 +800,23 @@ impl<R: Runtime> AgentExecutor<R> {
                                 "截断响应的 code_interpreter_skill 参数中 code 为空, 跳过执行, session_id={}",
                                 ctx.session_id
                             );
-                            let skip_msg = "代码内容因响应被截断而缺失，请重新生成完整的代码。确保代码参数完整且不要过长。".to_string();
+                            // 发射思考事件，让用户看到重试提示
+                            self.emitter.emit_thinking(ThinkingPayload {
+                                session_id: ctx.session_id.clone(),
+                                step: total_steps,
+                                thought: "代码内容因响应被截断而缺失，正在重新生成...".to_string(),
+                            }).ok();
+                            // 必须发射 tool_result 事件，否则前端对应节点永远显示加载动画
                             self.emitter.emit_tool_result(ToolResultPayload {
                                 session_id: ctx.session_id.clone(),
                                 call_id: tool_call.id.clone(),
                                 success: false,
                                 result: json!(null),
-                                error: Some(skip_msg.clone()),
+                                error: Some("代码内容因响应被截断而缺失，正在重新生成...".to_string()),
                                 duration_ms: 0,
                             }).ok();
-                            ctx.add_tool_result(&tool_call.id, &skip_msg);
+                            let retry_msg = "代码内容因响应被截断而缺失，请重新生成完整的代码。注意控制代码长度，确保参数完整。".to_string();
+                            ctx.add_tool_result(&tool_call.id, &retry_msg);
                             continue;
                         }
                     }
