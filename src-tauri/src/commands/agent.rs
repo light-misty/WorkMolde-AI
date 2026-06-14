@@ -85,7 +85,7 @@ pub async fn start_agent(
 
     let llm_router = Arc::clone(&state.llm_router);
     let tool_registry = Arc::clone(&state.tool_registry);
-    let skill_registry = Arc::clone(&state.skill_registry);
+    let handler_registry = Arc::clone(&state.handler_registry);
     let active_agents = Arc::clone(&state.active_agents);
     let db = Arc::clone(&state.db);
     let confirm_channels = Arc::clone(&state.confirm_channels);
@@ -162,7 +162,7 @@ pub async fn start_agent(
             &attachments,
             &router_snapshot,
             &tool_registry,
-            &skill_registry,
+            &handler_registry,
             &emitter,
             max_iterations,
             &workspace_path,
@@ -309,8 +309,8 @@ pub async fn get_context_usage(
 
     // 使用与 Agent 运行时相同的方法构建系统提示词并估算 Token 数
     let tool_count = state.tool_registry.tool_definitions().len();
-    let skill_count = {
-        let reg = state.skill_registry.lock().await;
+    let handler_count = {
+        let reg = state.handler_registry.lock().await;
         reg.tool_definitions().len()
     };
     let budget = TokenBudgetManager::new(context_window);
@@ -318,7 +318,7 @@ pub async fn get_context_usage(
         &workspace_path,
         &TaskType::Unknown,
         tool_count,
-        skill_count,
+        handler_count,
         &budget,
         None,
     );
@@ -327,11 +327,11 @@ pub async fn get_context_usage(
     // 估算工具定义 Token 数（与 executor 中的计算方式一致）
     let function_definitions_tokens = {
         let tool_defs = state.tool_registry.tool_definitions();
-        let skill_defs = {
-            let reg = state.skill_registry.lock().await;
+        let handler_defs = {
+            let reg = state.handler_registry.lock().await;
             reg.tool_definitions()
         };
-        let all_defs = [tool_defs, skill_defs].concat();
+        let all_defs = [tool_defs, handler_defs].concat();
         let defs_str = all_defs.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(" ");
         TokenBudgetManager::estimate_tokens(&defs_str)
     };
@@ -517,13 +517,13 @@ fn extract_and_persist_preferences(
         if let Some(tool_calls) = &msg.tool_calls {
             for tc in tool_calls {
                 if let Ok(params) = serde_json::from_str::<serde_json::Value>(&tc.arguments) {
-                    // 从文档 Skill 的参数提取文档格式偏好
-                    if tc.name == "docx_skill" || tc.name == "xlsx_skill"
-                        || tc.name == "pptx_skill" || tc.name == "pdf_skill"
+                    // 从文档 Handler 的参数提取文档格式偏好
+                    if tc.name == "docx_handler" || tc.name == "xlsx_handler"
+                        || tc.name == "pptx_handler" || tc.name == "pdf_handler"
                     {
                         if let Some(action) = params["action"].as_str() {
                             let pref_id = format!("pref_{}", uuid::Uuid::new_v4());
-                            let format_name = tc.name.replace("_skill", "");
+                            let format_name = tc.name.replace("_handler", "");
                             crate::db::user_preference_repo::upsert_preference(
                                 &conn,
                                 &pref_id,
@@ -705,7 +705,7 @@ async fn run_agent(
     attachments: &[AttachmentMeta],
     llm_router: &Arc<crate::services::llm::router::LlmRouter>,
     tool_registry: &Arc<crate::services::tool::registry::ToolRegistry>,
-    skill_registry: &Arc<tokio::sync::Mutex<crate::services::skill::registry::SkillRegistry>>,
+    handler_registry: &Arc<tokio::sync::Mutex<crate::services::handler::registry::HandlerRegistry>>,
     emitter: &AgentEmitter<tauri::Wry>,
     max_iterations: u32,
     workspace_path: &str,
@@ -792,15 +792,15 @@ async fn run_agent(
     // 根据用户首条消息识别任务类型，动态重建系统提示词
     let task_type = crate::services::agent::prompts::task_type::TaskType::from_user_message(prompt);
     let tool_count = tool_registry.list_tools().len();
-    let skill_count = {
-        let reg = skill_registry.lock().await;
-        reg.list_skills().len()
+    let handler_count = {
+        let reg = handler_registry.lock().await;
+        reg.list_handlers().len()
     };
     let dynamic_prompt = AgentContext::build_system_prompt_with_task(
         workspace_path,
         &task_type,
         tool_count,
-        skill_count,
+        handler_count,
         ctx.token_budget(),
         author_info.as_ref(),
     );
@@ -993,7 +993,7 @@ async fn run_agent(
     let executor = AgentExecutor::new(
         Arc::clone(llm_router),
         Arc::clone(tool_registry),
-        Arc::clone(skill_registry),
+        Arc::clone(handler_registry),
         emitter.clone(),
         Arc::clone(confirm_channels),
     )

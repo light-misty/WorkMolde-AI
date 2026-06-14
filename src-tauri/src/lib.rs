@@ -31,7 +31,7 @@ pub struct AppState {
     pub doc_service: Arc<crate::services::document::DocumentService>,
     pub llm_router: Arc<tokio::sync::RwLock<Arc<crate::services::llm::router::LlmRouter>>>,
     pub tool_registry: Arc<crate::services::tool::registry::ToolRegistry>,
-    pub skill_registry: Arc<tokio::sync::Mutex<crate::services::skill::registry::SkillRegistry>>,
+    pub handler_registry: Arc<tokio::sync::Mutex<crate::services::handler::registry::HandlerRegistry>>,
     pub fs_watcher: Arc<crate::services::fs_watcher::FsWatcherService<tauri::Wry>>,
     pub network_monitor: Arc<crate::services::network_monitor::NetworkMonitor<tauri::Wry>>,
 }
@@ -231,11 +231,11 @@ pub fn run() {
             );
             let doc_service = crate::services::document::DocumentService::new(sidecar_manager);
 
-            let mut skill_registry = crate::services::skill::registry::SkillRegistry::new();
-            let doc_service_for_skills = Arc::new(doc_service);
-            crate::services::skill::builtin::register_builtin_skills(
-                &mut skill_registry,
-                Arc::clone(&doc_service_for_skills),
+            let mut handler_registry = crate::services::handler::registry::HandlerRegistry::new();
+            let doc_service_for_handlers = Arc::new(doc_service);
+            crate::services::handler::builtin::register_builtin_handlers(
+                &mut handler_registry,
+                Arc::clone(&doc_service_for_handlers),
             );
 
             // 初始化 Tool 注册表并注册内置工具
@@ -258,10 +258,10 @@ pub fn run() {
                 config: Arc::new(tokio::sync::Mutex::new(config_manager)),
                 active_agents: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
                 confirm_channels: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
-                doc_service: doc_service_for_skills,
+                doc_service: doc_service_for_handlers,
                 llm_router: llm_router_arc,
                 tool_registry: Arc::new(tool_registry),
-                skill_registry: Arc::new(tokio::sync::Mutex::new(skill_registry)),
+                handler_registry: Arc::new(tokio::sync::Mutex::new(handler_registry)),
                 fs_watcher: Arc::new(fs_watcher),
                 network_monitor: Arc::new(network_monitor),
             };
@@ -408,9 +408,9 @@ pub fn run() {
             commands::document::delete_file,
             commands::document::show_in_file_manager,
             commands::document::get_pdf_data,
-            // Skill 命令
-            commands::skill::list_tools,
-            commands::skill::list_skills,
+            // Handler 命令
+            commands::handler::list_tools,
+            commands::handler::list_handlers,
             // 设置命令
             commands::settings::get_settings,
             commands::settings::update_settings,

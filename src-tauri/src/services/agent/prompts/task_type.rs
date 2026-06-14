@@ -4,7 +4,7 @@
 //! 新体系按文档格式划分，不再区分操作类型（生成/读取/修改等）
 
 /// 任务类型枚举
-/// 按文档格式划分，每种格式对应一个 Skill（docx_skill/xlsx_skill/pptx_skill/pdf_skill）
+/// 按文档格式划分，每种格式对应一个 Handler（docx_handler/xlsx_handler/pptx_handler/pdf_handler）
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TaskType {
     /// Word 文档（.docx）
@@ -98,14 +98,14 @@ impl TaskType {
         TaskType::Unknown
     }
 
-    /// 根据已调用的工具/Skill 名称推断任务类型
+    /// 根据已调用的工具/Handler 名称推断任务类型
     /// 用于后续迭代中修正任务类型判断
     pub fn from_tool_name(tool_name: &str) -> Self {
         match tool_name {
-            "docx_skill" => TaskType::Docx,
-            "xlsx_skill" => TaskType::Xlsx,
-            "pptx_skill" => TaskType::Pptx,
-            "pdf_skill" => TaskType::Pdf,
+            "docx_handler" => TaskType::Docx,
+            "xlsx_handler" => TaskType::Xlsx,
+            "pptx_handler" => TaskType::Pptx,
+            "pdf_handler" => TaskType::Pdf,
             "list_directory" | "search_files" | "read_file" | "file_info"
             | "file_exists" | "delete_file" | "create_directory" | "write_text_file" => TaskType::FileSystem,
             _ => TaskType::Unknown,
@@ -201,10 +201,10 @@ mod tests {
 
     #[test]
     fn test_from_tool_name() {
-        assert_eq!(TaskType::from_tool_name("docx_skill"), TaskType::Docx);
-        assert_eq!(TaskType::from_tool_name("xlsx_skill"), TaskType::Xlsx);
-        assert_eq!(TaskType::from_tool_name("pptx_skill"), TaskType::Pptx);
-        assert_eq!(TaskType::from_tool_name("pdf_skill"), TaskType::Pdf);
+        assert_eq!(TaskType::from_tool_name("docx_handler"), TaskType::Docx);
+        assert_eq!(TaskType::from_tool_name("xlsx_handler"), TaskType::Xlsx);
+        assert_eq!(TaskType::from_tool_name("pptx_handler"), TaskType::Pptx);
+        assert_eq!(TaskType::from_tool_name("pdf_handler"), TaskType::Pdf);
         assert_eq!(TaskType::from_tool_name("list_directory"), TaskType::FileSystem);
         assert_eq!(TaskType::from_tool_name("unknown_tool"), TaskType::Unknown);
     }

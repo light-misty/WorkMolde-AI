@@ -1,5 +1,7 @@
 # DocAgent 提示词工程方案设计文档
 
+> **注意**: 本文档中提到的 "Skill" 已重命名为 "Handler"，相关工具名如 `docx_skill` 已更改为 `docx_handler`。
+
 > 版本: 1.0.0
 > 日期: 2026-05-27
 > 作者: Agent 全栈开发工程师
@@ -40,7 +42,7 @@
                                      │
 [executor.rs]                        ▼
   tool_definitions() ──────> LLM chat_stream()
-  skill_definitions() ─────> (messages + tools)
+  handler_definitions() ─────> (messages + tools)
                                      │
                                      ▼
                             ┌─────────────────┐
@@ -51,10 +53,10 @@
                                      │
                               ┌──────┴──────┐
                               ▼             ▼
-                         [Tool 执行]   [Skill 执行]
+                         [Tool 执行]   [Handler 执行]
                               │             │
                               ▼             ▼
-                         [tool_result]  [skill_result]
+                         [tool_result]  [handler_result]
                               │             │
                               └──────┬──────┘
                                      ▼
@@ -67,11 +69,11 @@
 |------|------|-------------|
 | `context.rs` | AgentContext 定义，`build_system_prompt()` 构建系统提示词 | 核心 |
 | `document_design.rs` | 4 份文档设计规范常量（Word/Excel/PPT/PDF） | 核心 |
-| `executor.rs` | Agent 执行循环，合并 Tool+Skill 定义，调用 LLM | 间接 |
-| `builtin.rs` (skill) | 6 个内置 Skill 的 description 和 parameters | 间接 |
+| `executor.rs` | Agent 执行循环，合并 Tool+Handler 定义，调用 LLM | 间接 |
+| `builtin.rs` (handler) | 6 个内置 Handler 的 description 和 parameters | 间接 |
 | `builtin.rs` (tool) | 8 个内置 Tool 的 description 和 parameters | 间接 |
-| `custom.rs` | 自定义 Skill 的提示词模板加载与渲染 | 核心 |
-| `registry.rs` (skill/tool) | 生成 OpenAI function calling 格式的工具定义 | 间接 |
+| `custom.rs` | 自定义 Handler 的提示词模板加载与渲染 | 核心 |
+| `registry.rs` (handler/tool) | 生成 OpenAI function calling 格式的工具定义 | 间接 |
 
 ### 1.2 系统提示词结构分析
 
@@ -86,7 +88,7 @@ DocAgent 系统提示词（约 2000-2500 Token）
 
 [第2段] 工具分类列表（约20行）
   - Tools（基础工具，始终可用）：8项列表
-  - Skills（高级技能，依赖文档处理引擎）：6项列表
+  - Handlers（高级处理器，依赖文档处理引擎）：6项列表
 
 [第3段] 使用建议（3条）
   - 读取纯文本文件时优先使用 read_file
@@ -131,7 +133,7 @@ start_agent 命令 (lib.rs)
     └─> AgentExecutor::execute(ctx)
             │
             ├─> tool_registry.tool_definitions()  // 8个Tool定义
-            ├─> skill_registry.tool_definitions()  // 6个Skill定义（过滤禁用）
+            ├─> handler_registry.tool_definitions()  // 6个Handler定义（过滤禁用）
             │
             └─> router.chat_stream(messages, tools)  // 发送给LLM
 ```
@@ -355,14 +357,14 @@ start_agent 命令 (lib.rs)
 
 **改进建议**: 建立提示词版本管理机制。
 
-#### 问题2.6.3: 自定义Skill模板能力有限
+#### 问题2.6.3: 自定义Handler模板能力有限
 
-**现状**: 自定义Skill仅支持 `{{param}}` 简单字符串替换。
+**现状**: 自定义Handler仅支持 `{{param}}` 简单字符串替换。
 
 **影响**:
 - 无法实现条件逻辑（如"如果参数A存在则包含某段文本"）
 - 无法实现循环（如"对列表中每个元素生成一段"）
-- 无法引用系统上下文（如当前工作区路径、已启用Skill列表）
+- 无法引用系统上下文（如当前工作区路径、已启用Handler列表）
 
 **改进建议**: 增强模板引擎能力，支持条件、循环、上下文引用。
 
@@ -451,7 +453,7 @@ Layer 4: 示例层 (Examples)        -- 按任务类型匹配的示例
 <context>
 当前工作区路径: {workspace_path}
 当前会话ID: {session_id}
-可用工具数量: {tool_count}个基础工具 + {skill_count}个高级技能
+可用工具数量: {tool_count}个基础工具 + {handler_count}个高级处理器
 </context>
 
 <tool_strategy>
@@ -906,7 +908,7 @@ text = """
 
 注意:
   - 后端执行逻辑仍可复用同一个 DocumentService
-  - 仅在工具定义层面拆分，Skill trait 实现可共享
+  - 仅在工具定义层面拆分，Handler trait 实现可共享
 ```
 
 ---
@@ -980,12 +982,12 @@ Phase 4: 工具定义优化 (优先级: 中, 预计: 2-3天)
   Step 4.1: 拆分 generate_document 工具定义
     - 按文档类型拆分为5个独立工具
     - 后端执行逻辑复用
-    - 修改文件: builtin.rs (skill)
+    - 修改文件: builtin.rs (handler)
 
   Step 4.2: 丰富工具描述
     - 为每个工具增加使用场景说明
     - 增加参数使用注意事项
-    - 修改文件: builtin.rs (tool + skill)
+    - 修改文件: builtin.rs (tool + handler)
 
 Phase 5: 示例与测试 (优先级: 中, 预计: 2天)
 ═══════════════════════════════════════════════
@@ -1010,7 +1012,7 @@ Phase 5: 示例与测试 (优先级: 中, 预计: 2天)
 
 - 用户输入的内容必须通过XML标签隔离，防止提示词注入攻击
 - 在 `<context>` 标签中明确声明工作区路径，LLM不应信任工具参数中的路径
-- 自定义Skill的模板渲染结果应标记为数据而非指令
+- 自定义Handler的模板渲染结果应标记为数据而非指令
 
 #### 4.2.3 多Provider适配
 

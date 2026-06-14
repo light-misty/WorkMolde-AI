@@ -12,7 +12,7 @@ use crate::events::emitter::AgentEmitter;
 use crate::events::types::*;
 use crate::models::llm::{ChatMessage, LlmToolCall};
 use crate::services::llm::router::LlmRouter;
-use crate::services::skill::registry::SkillRegistry;
+use crate::services::handler::registry::HandlerRegistry;
 use crate::services::tool::registry::ToolRegistry;
 use crate::ConfirmDecision;
 use super::context::AgentContext;
@@ -21,8 +21,8 @@ const MAX_LLM_RETRIES: u32 = 2;
 const RETRY_DELAY_SECONDS: u64 = 2;
 /// 确认操作超时时间（秒）
 const CONFIRM_TIMEOUT_SECS: u64 = 300;
-/// 始终需要确认的高风险 Skill 列表
-const HIGH_RISK_SKILLS: &[&str] = &["delete_file", "code_interpreter_skill"];
+/// 始终需要确认的高风险 Handler 列表
+const HIGH_RISK_HANDLERS: &[&str] = &["delete_file", "code_interpreter_handler"];
 /// 截断重试最大次数（每次翻倍 max_tokens）
 const MAX_TRUNCATION_RETRIES: u32 = 2;
 /// 截断重试时 max_tokens 的最大上限
@@ -64,7 +64,7 @@ type SnapshotFn = Arc<dyn Fn(&str, &str, &str, &str) -> Result<(), CommandError>
 pub struct AgentExecutor<R: Runtime> {
     router: Arc<LlmRouter>,
     tool_registry: Arc<ToolRegistry>,
-    registry: Arc<tokio::sync::Mutex<SkillRegistry>>,
+    registry: Arc<tokio::sync::Mutex<HandlerRegistry>>,
     emitter: AgentEmitter<R>,
     confirm_channels: Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<ConfirmDecision>>>>,
     max_iterations: u32,
@@ -83,7 +83,7 @@ impl<R: Runtime> AgentExecutor<R> {
     pub fn new(
         router: Arc<LlmRouter>,
         tool_registry: Arc<ToolRegistry>,
-        registry: Arc<tokio::sync::Mutex<SkillRegistry>>,
+        registry: Arc<tokio::sync::Mutex<HandlerRegistry>>,
         emitter: AgentEmitter<R>,
         confirm_channels: Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<ConfirmDecision>>>>,
     ) -> Self {
@@ -181,14 +181,14 @@ impl<R: Runtime> AgentExecutor<R> {
     /// 根据确认级别决定哪些操作需要用户确认：
     /// - Never: 任何操作都不需要确认
     /// - EditOnly: 仅高风险操作需要确认
-    /// - Always: 所有 Skill/Tool 调用都需要确认
+    /// - Always: 所有 Handler/Tool 调用都需要确认
     fn needs_confirmation(&self, name: &str, _params: &serde_json::Value) -> bool {
         match self.confirmation_level {
             ConfirmationLevel::Never => false,
             ConfirmationLevel::EditOnly => {
                 // 仅编辑/删除操作需要确认
                 // 1. delete_file 始终为高风险
-                if HIGH_RISK_SKILLS.contains(&name) {
+                if HIGH_RISK_HANDLERS.contains(&name) {
                     return true;
                 }
                 false
@@ -197,19 +197,19 @@ impl<R: Runtime> AgentExecutor<R> {
         }
     }
 
-    /// 从 Skill 参数中提取需要创建快照的文件路径列表
+    /// 从 Handler 参数中提取需要创建快照的文件路径列表
     /// delete_file: 单文件路径
-    /// 文档 Skill（docx_skill/xlsx_skill/pptx_skill/pdf_skill）: 精简后不再有 modify 操作，无需快照
-    fn extract_snapshot_paths(&self, skill_name: &str, params: &serde_json::Value) -> Vec<String> {
-        match skill_name {
+    /// 文档 Handler（docx_handler/xlsx_handler/pptx_handler/pdf_handler）: 精简后不再有 modify 操作，无需快照
+    fn extract_snapshot_paths(&self, handler_name: &str, params: &serde_json::Value) -> Vec<String> {
+        match handler_name {
             "delete_file" => {
                 vec![params["path"].as_str().unwrap_or("").to_string()]
             }
-            "docx_skill" | "xlsx_skill" | "pptx_skill" | "pdf_skill" => {
-                // 文档 Skill 精简后不再有 modify 操作，无需创建快照
+            "docx_handler" | "xlsx_handler" | "pptx_handler" | "pdf_handler" => {
+                // 文档 Handler 精简后不再有 modify 操作，无需创建快照
                 Vec::new()
             }
-            "code_interpreter_skill" => {
+            "code_interpreter_handler" => {
                 // Code Interpreter 可能修改多个文件，提取预期文件列表
                 // 1. 优先从 expected_files 参数提取（LLM 声明的预期输出文件）
                 // 2. 如果没有 expected_files，则不创建快照（因为无法预知文件路径）
@@ -250,7 +250,7 @@ impl<R: Runtime> AgentExecutor<R> {
                 // 全部需确认模式下，根据操作类型区分风险等级
                 if tool_name == "delete_file" {
                     "critical"
-                } else if tool_name == "code_interpreter_skill" {
+                } else if tool_name == "code_interpreter_handler" {
                     "high"  // 代码执行始终为高风险
                 } else {
                     "normal"
@@ -267,12 +267,12 @@ impl<R: Runtime> AgentExecutor<R> {
 
         let description = match tool_name {
             "delete_file" => format!("删除文件: {}", arguments["path"].as_str().unwrap_or("未知")),
-            "docx_skill" | "xlsx_skill" | "pptx_skill" | "pdf_skill" => {
+            "docx_handler" | "xlsx_handler" | "pptx_handler" | "pdf_handler" => {
                 let action = arguments["action"].as_str().unwrap_or("操作");
                 let path = arguments["path"].as_str().unwrap_or("未知文件");
                 format!("{} - {}: {}", tool_name, action, path)
             }
-            "code_interpreter_skill" => {
+            "code_interpreter_handler" => {
                 // 展示代码描述和代码摘要
                 let desc = arguments["description"].as_str().unwrap_or("执行代码");
                 // 安全截取：按字符边界切片，避免在多字节UTF-8字符中间切割导致panic
@@ -400,14 +400,14 @@ impl<R: Runtime> AgentExecutor<R> {
 
         log::info!("Agent 开始执行, session_id={}", ctx.session_id);
 
-        // 合并 Tool + Skill 的工具定义
+        // 合并 Tool + Handler 的工具定义
         let tool_defs_json = {
             let tool_defs = self.tool_registry.tool_definitions();
-            let skill_defs = {
+            let handler_defs = {
                 let reg = self.registry.lock().await;
                 reg.tool_definitions()
             };
-            [tool_defs, skill_defs].concat()
+            [tool_defs, handler_defs].concat()
         };
         let tools: Vec<crate::models::llm::ToolDefinition> = tool_defs_json
             .iter()
@@ -764,13 +764,13 @@ impl<R: Runtime> AgentExecutor<R> {
                             );
                             break;
                         }
-                        // 检查 code_interpreter_skill 的 code 字段是否为空
+                        // 检查 code_interpreter_handler 的 code 字段是否为空
                         let params = params_result.unwrap_or(json!({}));
-                        if tool_call.name == "code_interpreter_skill"
+                        if tool_call.name == "code_interpreter_handler"
                             && params["code"].as_str().unwrap_or("").is_empty() {
                                 has_empty_code = true;
                                 log::warn!(
-                                    "截断响应的 code_interpreter_skill 参数中 code 为空, session_id={}",
+                                    "截断响应的 code_interpreter_handler 参数中 code 为空, session_id={}",
                                     ctx.session_id
                                 );
                                 break;
@@ -922,7 +922,7 @@ impl<R: Runtime> AgentExecutor<R> {
                                                 break;
                                             }
                                             let p = pr.unwrap_or(json!({}));
-                                            if tc.name == "code_interpreter_skill"
+                                            if tc.name == "code_interpreter_handler"
                                                 && p["code"].as_str().unwrap_or("").is_empty() {
                                                     retry_empty_code = true;
                                                     break;
@@ -1030,12 +1030,12 @@ impl<R: Runtime> AgentExecutor<R> {
 
                     let params = params_result.unwrap_or(json!({}));
 
-                    // 截断重试耗尽后 code_interpreter_skill 的 code 字段仍为空的降级处理
-                    if is_truncated && tool_call.name == "code_interpreter_skill" {
+                    // 截断重试耗尽后 code_interpreter_handler 的 code 字段仍为空的降级处理
+                    if is_truncated && tool_call.name == "code_interpreter_handler" {
                         let code_content = params["code"].as_str().unwrap_or("");
                         if code_content.is_empty() {
                             log::warn!(
-                                "截断响应的 code_interpreter_skill 参数中 code 为空（重试耗尽）, 跳过执行, session_id={}",
+                                "截断响应的 code_interpreter_handler 参数中 code 为空（重试耗尽）, 跳过执行, session_id={}",
                                 ctx.session_id
                             );
                             // 发射思考事件，让用户看到重试提示
@@ -1112,23 +1112,23 @@ impl<R: Runtime> AgentExecutor<R> {
 
                     let tool_start = std::time::Instant::now();
 
-                    // 先查 ToolRegistry（基础操作优先），再查 SkillRegistry（高级技能）
+                    // 先查 ToolRegistry（基础操作优先），再查 HandlerRegistry（文档处理器）
                     let tool_arc = self.tool_registry.get_arc(&tool_call.name);
-                    let skill_arc = if tool_arc.is_none() {
+                    let handler_arc = if tool_arc.is_none() {
                         let reg = self.registry.lock().await;
                         reg.get_arc(&tool_call.name)
                     } else {
                         None
                     };
 
-                    // 对需要路径安全校验的 Tool/Skill，注入工作区根目录
+                    // 对需要路径安全校验的 Tool/Handler，注入工作区根目录
                     let mut safe_params = params;
                     let needs_workspace_root = matches!(
                         tool_call.name.as_str(),
                         "list_directory" | "search_files" | "read_file" | "file_info"
                         | "file_exists" | "delete_file" | "create_directory" | "write_text_file"
-                        | "docx_skill" | "xlsx_skill" | "pptx_skill" | "pdf_skill"
-                        | "code_interpreter_skill"  // 需要workspace_root作为working_dir
+                        | "docx_handler" | "xlsx_handler" | "pptx_handler" | "pdf_handler"
+                        | "code_interpreter_handler"  // 需要workspace_root作为working_dir
                     );
                     if needs_workspace_root && !ctx.workspace_path.is_empty() {
                         safe_params["workspace_root"] = json!(ctx.workspace_path);
@@ -1141,8 +1141,8 @@ impl<R: Runtime> AgentExecutor<R> {
                             if !file_path.is_empty() {
                                 let operation = match tool_call.name.as_str() {
                                     "delete_file" => "delete",
-                                    "docx_skill" | "xlsx_skill" | "pptx_skill" | "pdf_skill" => "read",
-                                    "code_interpreter_skill" => "code_execute",
+                                    "docx_handler" | "xlsx_handler" | "pptx_handler" | "pdf_handler" => "read",
+                                    "code_interpreter_handler" => "code_execute",
                                     _ => "unknown",
                                 };
                                 match snapshot_fn(&ctx.workspace_id, &ctx.session_id, file_path, operation) {
@@ -1157,12 +1157,12 @@ impl<R: Runtime> AgentExecutor<R> {
                         }
                     }
 
-                    // 执行 Tool 或 Skill
+                    // 执行 Tool 或 Handler
                     let result = if let Some(tool) = tool_arc {
                         // 执行 Tool
                         let fut = std::panic::AssertUnwindSafe(tool.execute(safe_params));
                         match fut.catch_unwind().await {
-                            Ok(r) => crate::models::skill::SkillResult {
+                            Ok(r) => crate::models::handler::HandlerResult {
                                 success: r.success,
                                 output: r.output,
                                 error: r.error,
@@ -1170,7 +1170,7 @@ impl<R: Runtime> AgentExecutor<R> {
                             },
                             Err(_) => {
                                 log::error!("Tool 执行发生 panic: tool={}", tool_call.name);
-                                crate::models::skill::SkillResult {
+                                crate::models::handler::HandlerResult {
                                     success: false,
                                     output: None,
                                     error: Some(format!("工具执行发生内部错误: {}", tool_call.name)),
@@ -1178,26 +1178,26 @@ impl<R: Runtime> AgentExecutor<R> {
                                 }
                             }
                         }
-                    } else if let Some(skill) = skill_arc {
-                        // 执行 Skill
-                        let fut = std::panic::AssertUnwindSafe(skill.execute(safe_params));
+                    } else if let Some(handler) = handler_arc {
+                        // 执行 Handler
+                        let fut = std::panic::AssertUnwindSafe(handler.execute(safe_params));
                         match fut.catch_unwind().await {
                             Ok(r) => r,
                             Err(_) => {
-                                log::error!("Skill 执行发生 panic: tool={}", tool_call.name);
-                                crate::models::skill::SkillResult {
+                                log::error!("Handler 执行发生 panic: tool={}", tool_call.name);
+                                crate::models::handler::HandlerResult {
                                     success: false,
                                     output: None,
-                                    error: Some(format!("技能执行发生内部错误: {}", tool_call.name)),
+                                    error: Some(format!("处理器执行发生内部错误: {}", tool_call.name)),
                                     duration_ms: 0,
                                 }
                             }
                         }
                     } else {
-                        crate::models::skill::SkillResult {
+                        crate::models::handler::HandlerResult {
                             success: false,
                             output: None,
-                            error: Some(format!("工具或技能不存在: {}", tool_call.name)),
+                            error: Some(format!("工具或处理器不存在: {}", tool_call.name)),
                             duration_ms: 0,
                         }
                     };

@@ -151,7 +151,7 @@
 
 **预期结果**:
 - 工作流时间线按顺序显示所有节点
-- Agent 自动选择 generate_document 技能
+- Agent 自动选择 generate_document 处理器
 - 文档在工作区目录中生成
 - Agent 回复确认文档已生成
 - Token 统计数字递增
@@ -215,7 +215,7 @@
 7. 等待 Agent 执行完成
 
 **预期结果**:
-- Agent 调用 read_document 技能
+- Agent 调用 read_document 处理器
 - 返回文档的段落、表格、属性信息
 - Agent 将内容整理后回复给用户
 
@@ -237,7 +237,7 @@
 3. 重新读取文档验证修改结果
 
 **预期结果**:
-- Agent 调用 modify_document 技能
+- Agent 调用 modify_document 处理器
 - 由于 modify_document 是高风险操作，弹出确认对话框
 - 用户确认后执行修改
 - 修改结果正确反映在文档中
@@ -324,43 +324,43 @@
 
 ---
 
-### E2E-11: Skill 管理（含自定义 Skill）
+### E2E-11: Handler 管理（含自定义 Handler）
 
-**目标**: 验证 Skill 的启用/禁用功能和自定义 Skill 管理
+**目标**: 验证 Handler 的启用/禁用功能和自定义 Handler 管理
 
 **步骤**:
-1. 打开设置弹窗，切换到 Skills 标签页
-2. 查看已注册的 9 个内置 Skill 列表
-3. 禁用 `generate_document` Skill
+1. 打开设置弹窗，切换到 Handlers 标签页
+2. 查看已注册的 9 个内置 Handler 列表
+3. 禁用 `generate_document` Handler
 4. 保存设置
 5. 尝试让 Agent 生成文档
-6. 重新启用该 Skill
-7. 点击"添加自定义 Skill"按钮
-8. 填写自定义 Skill 表单:
+6. 重新启用该 Handler
+7. 点击"添加自定义 Handler"按钮
+8. 填写自定义 Handler 表单:
    - 名称: `合同生成器`
    - 描述: `根据参数生成合同文档`
    - 分类: `文档处理`
    - 支持的文档类型: `docx`
    - 提示词模板: `你是一位专业的{{domain}}专家。请根据以下要求生成一份{{docType}}文档：主题：{{topic}}`
-9. 保存自定义 Skill
-10. 验证自定义 Skill 出现在列表中
-11. 编辑自定义 Skill，修改描述
-12. 删除自定义 Skill
+9. 保存自定义 Handler
+10. 验证自定义 Handler 出现在列表中
+11. 编辑自定义 Handler，修改描述
+12. 删除自定义 Handler
 
 **预期结果**:
-- Skill 列表正确显示 9 个内置技能
-- 禁用后 Agent 无法调用该技能
+- Handler 列表正确显示 9 个内置处理器
+- 禁用后 Agent 无法调用该处理器
 - 重新启用后恢复正常
-- 自定义 Skill 创建成功并显示在列表中
-- 编辑和删除自定义 Skill 正常
+- 自定义 Handler 创建成功并显示在列表中
+- 编辑和删除自定义 Handler 正常
 
 **验证点**:
 - [ ] 禁用状态持久化到 `app_settings.json`
-- [ ] 禁用的 Skill 不出现在 LLM 的 tool_definitions 中
+- [ ] 禁用的 Handler 不出现在 LLM 的 tool_definitions 中
 - [ ] 应用重启后禁用状态保持
-- [ ] 自定义 Skill 配置文件保存在 `<app_data_dir>/config/custom_skills/` 目录
-- [ ] 自定义 Skill 的 `{{param}}` 占位符参数自动识别
-- [ ] 删除自定义 Skill 后配置文件同步删除
+- [ ] 自定义 Handler 配置文件保存在 `<app_data_dir>/config/custom_handlers/` 目录
+- [ ] 自定义 Handler 的 `{{param}}` 占位符参数自动识别
+- [ ] 删除自定义 Handler 后配置文件同步删除
 
 ---
 
@@ -369,7 +369,7 @@
 **目标**: 验证应用设置的所有标签页功能
 
 **步骤**:
-1. 打开设置弹窗，验证 9 个标签页均存在: LLM 配置、工作区管理、Skills 管理、Prompt 模板、Token 用量、外观设置、快捷键、通用设置、帮助
+1. 打开设置弹窗，验证 9 个标签页均存在: LLM 配置、工作区管理、Handlers 管理、Prompt 模板、Token 用量、外观设置、快捷键、通用设置、帮助
 2. 切换到通用设置标签页
 3. 修改作者名称为 `测试用户`
 4. 修改确认级别为 `Always`
@@ -412,7 +412,7 @@
 3. 验证返回结果包含文件名、路径、大小等信息
 
 **预期结果**:
-- Agent 调用 search_documents 技能
+- Agent 调用 search_documents 处理器
 - 返回匹配的文件列表
 - 结果按相关性排序
 
@@ -587,7 +587,7 @@
 4. 验证所有 .docx 文件都已转换为 PDF
 
 **预期结果**:
-- Agent 调用 batch_process 技能
+- Agent 调用 batch_process 处理器
 - 批量转换成功完成
 - 每个文件的处理结果都有反馈
 
@@ -747,19 +747,19 @@
 1. 打开设置弹窗，切换到帮助标签页
 2. 验证快速入门步骤显示
 3. 验证快捷键列表显示
-4. 验证内置 Skill 列表显示（9 个）
+4. 验证内置 Handler 列表显示（9 个）
 5. 验证常见问题列表显示
 
 **预期结果**:
 - 帮助面板内容完整
 - 快捷键列表与实际功能一致
-- 内置 Skill 列表正确
+- 内置 Handler 列表正确
 - 常见问题内容有帮助
 
 **验证点**:
 - [ ] 快速入门包含 3 个步骤
 - [ ] 快捷键列表包含 8 个快捷键
-- [ ] 内置 Skill 列表包含 9 个技能
+- [ ] 内置 Handler 列表包含 9 个处理器
 - [ ] 常见问题包含 8 个问题
 
 ---
@@ -822,21 +822,21 @@
 | E2E-02 | LLM Provider 配置（含多类型） | LLM | |
 | E2E-03 | 工作区管理 | 工作区 | |
 | E2E-04 | Agent 对话交互 | Agent | |
-| E2E-05 | 文档生成（多格式） | Skill/Sidecar | |
-| E2E-06 | 文档读取 | Skill/Sidecar | |
-| E2E-07 | 文档修改 | Skill/Sidecar | |
+| E2E-05 | 文档生成（多格式） | Handler/Sidecar | |
+| E2E-06 | 文档读取 | Handler/Sidecar | |
+| E2E-07 | 文档修改 | Handler/Sidecar | |
 | E2E-08 | 操作确认机制 | Agent | |
 | E2E-09 | 会话管理 | 会话 | |
 | E2E-10 | Agent 停止 | Agent | |
-| E2E-11 | Skill 管理（含自定义 Skill） | Skill | |
+| E2E-11 | Handler 管理（含自定义 Handler） | Handler | |
 | E2E-12 | 应用设置（完整 9 个标签页） | 设置 | |
-| E2E-13 | 文档搜索 | Skill | |
-| E2E-14 | 文档分析 | Skill | |
+| E2E-13 | 文档搜索 | Handler | |
+| E2E-14 | 文档分析 | Handler | |
 | E2E-15 | 错误处理与自动恢复 | 全局 | |
 | E2E-16 | 文档预览 | 预览 | |
 | E2E-17 | 版本历史管理 | 版本 | |
-| E2E-18 | 格式转换 | Skill/Sidecar | |
-| E2E-19 | 批量处理 | Skill | |
+| E2E-18 | 格式转换 | Handler/Sidecar | |
+| E2E-19 | 批量处理 | Handler | |
 | E2E-20 | Prompt 模板管理 | 模板 | |
 | E2E-21 | Token 用量统计 | Token | |
 | E2E-22 | 文件树操作 | 文件系统 | |
@@ -854,7 +854,7 @@
 - Tauri 2 + React + TypeScript 项目结构完整
 - 无边框窗口 + 自定义窗口控件
 - SQLite 数据库初始化（6 张表 + 索引 + 版本记录）
-- JSON 配置管理（app_settings / llm_config / workspaces / custom_skills）
+- JSON 配置管理（app_settings / llm_config / workspaces / custom_handlers）
 - 双输出日志系统（控制台 + 文件）
 - 数据库损坏检测和自动恢复
 
@@ -871,15 +871,15 @@
 - 增量持久化回调防止崩溃丢失消息
 - Tauri 事件系统完整（9 个 Agent 事件 + 系统事件）
 - useAgent Hook 封装完整（事件监听、状态管理、组件卸载清理）
-- 操作确认机制（高风险 Skill 触发确认、oneshot channel 同步等待、5 分钟超时）
+- 操作确认机制（高风险 Handler 触发确认、oneshot channel 同步等待、超时处理、5 分钟超时）
 - Agent 停止功能（should_stop 闭包检查、stopping 状态转换）
 - 错误节点与自动恢复（ErrorNode 组件、可恢复标记、重试按钮）
 
-### Skill 系统 (100%)
-- Skill trait 定义完整（skill_name / description / parameters / execute）
-- SkillRegistry 支持注册、查询、启用/禁用、工具定义生成
-- 9 个内置 Skill 全部实现（generate / read / modify / delete / convert / search / analyze / list_workspace / batch_process）
-- 自定义 Skill 系统（CustomSkillLoader、JSON 配置文件、Prompt 模板、{{param}} 占位符）
+### Handler 系统 (100%)
+- Handler trait 定义完整（handler_name / description / parameters / execute）
+- HandlerRegistry 支持注册、查询、启用/禁用、工具定义生成
+- 9 个内置 Handler 全部实现（generate / read / modify / delete / convert / search / analyze / list_workspace / batch_process）
+- 自定义 Handler 系统（CustomHandlerLoader、JSON 配置文件、Prompt 模板、{{param}} 占位符）
 - Python Sidecar 进程管理器（启动/停止/自动重启/超时/重试）
 - Sidecar stdin/stdout JSON 行协议完整
 - 5 种文档处理器完整（Word / Excel / PPT / PDF / Markdown，各支持 generate / read / modify / convert / analyze）
@@ -890,14 +890,14 @@
 - WorkflowTimeline + 8 种节点类型（User / Thinking / Tool / Result / Reply / Confirm / Error / WorkflowNode）
 - InputArea 输入框（自动高度、快捷键、模板标签）
 - 右侧栏四个分区（FileTree / AgentInfo / Todo / Token）
-- SettingsDialog 设置弹窗（9 个标签页: LLM / 工作区 / Skills / 模板 / Token / 外观 / 快捷键 / 通用 / 帮助）
+- SettingsDialog 设置弹窗（9 个标签页: LLM / 工作区 / Handlers / 模板 / Token / 外观 / 快捷键 / 通用 / 帮助）
 
 ### 会话与确认 (100%)
 - 会话 CRUD（create / list / get / delete / update_title / clear_all）
 - 会话事件发射（session:updated）
 - 版本快照仓库（create / list / delete / get_content / rollback）
 - 历史会话面板（左侧滑出、会话切换、删除当前会话后自动切换）
-- 操作确认机制（高风险 Skill 触发确认、oneshot channel 同步等待、超时处理）
+- 操作确认机制（高风险 Handler 触发确认、oneshot channel 同步等待、超时处理、超时处理）
 - ConfirmNode 组件（确认/取消按钮、状态展示）
 
 ### 文档预览 (100%)
@@ -917,13 +917,13 @@
 ### 设置系统 (100%)
 - LLMConfig: Provider 增删改查、连接测试、默认设置、健康检查
 - WorkspaceTab: 工作区增删切换
-- SkillsTab: 内置 Skill 启用/禁用、自定义 Skill 增删改
+- HandlersTab: 内置 Handler 启用/禁用、自定义 Handler 增删改
 - TemplatesTab: Prompt 模板增删改查
 - TokenUsageTab: 用量趋势、Provider 分组、概览
 - AppearanceTab: 主题模式（浅色/深色/跟随系统）、字体缩放（80%-140%）
 - ShortcutsTab: 快捷键自定义、捕获、恢复默认
 - GeneralTab: 作者名、确认级别、版本快照策略、配置导入导出
-- HelpTab: 快速入门、快捷键列表、内置 Skill 列表、常见问题
+- HelpTab: 快速入门、快捷键列表、内置 Handler 列表、常见问题
 
 ### 更新系统 (100%)
 - tauri-plugin-updater 集成

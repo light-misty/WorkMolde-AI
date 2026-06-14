@@ -24,12 +24,12 @@ export function HelpTab() {
     { q: t('settings.help.faqQ6'), a: t('settings.help.faqA6') },
   ];
 
-  // 内置 Skill 列表
-  const builtinSkills = [
-    { name: "docx_skill", desc: t('settings.help.skillDocx') },
-    { name: "xlsx_skill", desc: t('settings.help.skillXlsx') },
-    { name: "pptx_skill", desc: t('settings.help.skillPptx') },
-    { name: "pdf_skill", desc: t('settings.help.skillPdf') },
+  // 内置 Handler 列表
+  const builtinHandlers = [
+    { name: "docx_handler", desc: t('settings.help.handlerDocx') },
+    { name: "xlsx_handler", desc: t('settings.help.handlerXlsx') },
+    { name: "pptx_handler", desc: t('settings.help.handlerPptx') },
+    { name: "pdf_handler", desc: t('settings.help.handlerPdf') },
   ];
 
   // 从设置中动态生成可配置快捷键列表
@@ -96,16 +96,16 @@ export function HelpTab() {
         </div>
       </div>
 
-      {/* 内置 Skill 列表 */}
+      {/* 内置 Handler 列表 */}
       <div className="settings-section">
         <div className="section-header">
-          <span className="section-title">{t('settings.help.builtinSkillList')}</span>
+          <span className="section-title">{t('settings.help.builtinHandlerList')}</span>
         </div>
-        <div className="help-skill-list">
-          {builtinSkills.map((skill) => (
-            <div key={skill.name} className="help-skill-row">
-              <span className="help-skill-name">{skill.name}</span>
-              <span className="help-skill-desc">{skill.desc}</span>
+        <div className="help-handler-list">
+          {builtinHandlers.map((handler) => (
+            <div key={handler.name} className="help-handler-row">
+              <span className="help-handler-name">{handler.name}</span>
+              <span className="help-handler-desc">{handler.desc}</span>
             </div>
           ))}
         </div>
@@ -195,27 +195,27 @@ export function HelpTab() {
           font-family: var(--font-mono);
           color: var(--color-text-secondary);
         }
-        .help-skill-list {
+        .help-handler-list {
           display: flex;
           flex-direction: column;
         }
-        .help-skill-row {
+        .help-handler-row {
           display: flex;
           align-items: center;
           padding: 8px 12px;
           border-bottom: 1px solid var(--color-border-light);
           gap: 12px;
         }
-        .help-skill-row:last-child {
+        .help-handler-row:last-child {
           border-bottom: none;
         }
-        .help-skill-name {
+        .help-handler-name {
           font-size: 12px;
           font-family: var(--font-mono);
           color: var(--color-accent);
           min-width: 160px;
         }
-        .help-skill-desc {
+        .help-handler-desc {
           font-size: 12px;
           color: var(--color-text-tertiary);
         }

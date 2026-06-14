@@ -3,11 +3,11 @@
 
 /// Code Interpreter 使用指导（将集成到 tool_strategy 层）
 pub const CODE_INTERPRETER_GUIDE: &str = r#"
-### 文档生成与修改 -> code_interpreter_skill
+### 文档生成与修改 -> code_interpreter_handler
 
-所有文档的**生成**和**修改**操作都通过 `code_interpreter_skill` 完成，编写 Python 代码执行。
+所有文档的**生成**和**修改**操作都通过 `code_interpreter_handler` 完成，编写 Python 代码执行。
 
-#### 何时使用 code_interpreter_skill
+#### 何时使用 code_interpreter_handler
 - 生成任何文档（Word/Excel/PPT/PDF）
 - 修改任何文档（调整样式、添加内容、替换文本等）
 - 需要图表（matplotlib）
@@ -15,7 +15,7 @@ pub const CODE_INTERPRETER_GUIDE: &str = r#"
 - 需要自定义排版
 - 需要计算后生成报告
 
-#### 何时使用文档 Skill（docx_skill/xlsx_skill/pptx_skill/pdf_skill）
+#### 何时使用文档 Handler（docx_handler/xlsx_handler/pptx_handler/pdf_handler）
 - 读取文档内容 -> action="read"
 - 格式转换 -> action="convert"
 - 文档分析统计 -> action="analyze"

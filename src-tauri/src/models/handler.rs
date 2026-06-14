@@ -1,15 +1,15 @@
 use serde::{Deserialize, Serialize};
 
-/// Skill 信息
+/// Handler 信息
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct SkillInfo {
+pub struct HandlerInfo {
     pub id: String,
     pub name: String,
     pub description: String,
     /// "document" | "data" | "format"
     pub category: String,
-    /// 是否为内置 Skill
+    /// 是否为内置 Handler
     pub is_builtin: bool,
     /// 是否已启用
     pub enabled: bool,
@@ -20,17 +20,17 @@ pub struct SkillInfo {
     pub supported_types: Vec<String>,
 }
 
-/// Skill 执行结果
+/// Handler 执行结果
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct SkillResult {
+pub struct HandlerResult {
     pub success: bool,
     pub output: Option<serde_json::Value>,
     pub error: Option<String>,
     pub duration_ms: u64,
 }
 
-/// Skill 展示信息
+/// Handler 展示信息
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DisplayInfo {

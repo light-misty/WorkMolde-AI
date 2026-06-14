@@ -4,9 +4,9 @@ use std::time::Instant;
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
-use crate::models::skill::SkillResult;
+use crate::models::handler::HandlerResult;
 use crate::services::document::DocumentService;
-use super::registry::Skill;
+use super::registry::Handler;
 
 /// 将相对路径解析为绝对路径
 fn resolve_path(path: &str, workspace_root: &str) -> String {
@@ -26,7 +26,7 @@ async fn execute_read(
     doc_service: &DocumentService,
     doc_type: &str,
     params: Value,
-) -> SkillResult {
+) -> HandlerResult {
     let start = Instant::now();
     let file_path = params["path"].as_str().unwrap_or("");
     let workspace_root = params["workspace_root"].as_str().unwrap_or("");
@@ -50,13 +50,13 @@ async fn execute_read(
     }
 
     match doc_service.process("read", doc_type, sidecar_params).await {
-        Ok(data) => SkillResult {
+        Ok(data) => HandlerResult {
             success: true,
             output: Some(data),
             error: None,
             duration_ms: start.elapsed().as_millis() as u64,
         },
-        Err(e) => SkillResult {
+        Err(e) => HandlerResult {
             success: false,
             output: None,
             error: Some(e.message),
@@ -70,7 +70,7 @@ async fn execute_convert(
     doc_service: &DocumentService,
     doc_type: &str,
     params: Value,
-) -> SkillResult {
+) -> HandlerResult {
     let start = Instant::now();
     let file_path = params["path"].as_str().unwrap_or("");
     let target_format = params["target_format"].as_str().unwrap_or("pdf");
@@ -107,13 +107,13 @@ async fn execute_convert(
     }
 
     match doc_service.process("convert", doc_type, sidecar_params).await {
-        Ok(data) => SkillResult {
+        Ok(data) => HandlerResult {
             success: true,
             output: Some(data),
             error: None,
             duration_ms: start.elapsed().as_millis() as u64,
         },
-        Err(e) => SkillResult {
+        Err(e) => HandlerResult {
             success: false,
             output: None,
             error: Some(e.message),
@@ -127,7 +127,7 @@ async fn execute_analyze(
     doc_service: &DocumentService,
     doc_type: &str,
     params: Value,
-) -> SkillResult {
+) -> HandlerResult {
     let start = Instant::now();
     let file_path = params["path"].as_str().unwrap_or("");
     let workspace_root = params["workspace_root"].as_str().unwrap_or("");
@@ -138,13 +138,13 @@ async fn execute_analyze(
     });
 
     match doc_service.process("analyze", doc_type, sidecar_params).await {
-        Ok(data) => SkillResult {
+        Ok(data) => HandlerResult {
             success: true,
             output: Some(data),
             error: None,
             duration_ms: start.elapsed().as_millis() as u64,
         },
-        Err(e) => SkillResult {
+        Err(e) => HandlerResult {
             success: false,
             output: None,
             error: Some(e.message),
@@ -153,41 +153,41 @@ async fn execute_analyze(
     }
 }
 
-/// 注册所有内置技能
-pub fn register_builtin_skills(
-    registry: &mut super::registry::SkillRegistry,
+/// 注册所有内置处理器
+pub fn register_builtin_handlers(
+    registry: &mut super::registry::HandlerRegistry,
     doc_service: Arc<DocumentService>,
 ) {
-    log::info!("开始注册内置技能");
-    registry.register(Box::new(DocxSkill::new(doc_service.clone())));
-    registry.register(Box::new(XlsxSkill::new(doc_service.clone())));
-    registry.register(Box::new(PptxSkill::new(doc_service.clone())));
-    registry.register(Box::new(PdfSkill::new(doc_service.clone())));
-    registry.register(Box::new(CodeInterpreterSkill::new(doc_service)));
-    log::info!("内置技能注册完成, 共注册 5 个技能");
+    log::info!("开始注册内置处理器");
+    registry.register(Box::new(DocxHandler::new(doc_service.clone())));
+    registry.register(Box::new(XlsxHandler::new(doc_service.clone())));
+    registry.register(Box::new(PptxHandler::new(doc_service.clone())));
+    registry.register(Box::new(PdfHandler::new(doc_service.clone())));
+    registry.register(Box::new(CodeInterpreterHandler::new(doc_service)));
+    log::info!("内置处理器注册完成, 共注册 5 个处理器");
 }
 
 // ============================================================================
-// DocxSkill - Word 文档技能
+// DocxHandler - Word 文档处理器
 // ============================================================================
 
-/// Word 文档技能
+/// Word 文档处理器
 /// 聚合 read/convert/analyze 三种操作
-struct DocxSkill {
+struct DocxHandler {
     doc_service: Arc<DocumentService>,
 }
 
-impl DocxSkill {
+impl DocxHandler {
     fn new(doc_service: Arc<DocumentService>) -> Self {
         Self { doc_service }
     }
 }
 
 #[async_trait]
-impl Skill for DocxSkill {
-    fn skill_name(&self) -> &str { "docx_skill" }
+impl Handler for DocxHandler {
+    fn handler_name(&self) -> &str { "docx_handler" }
     fn description(&self) -> &str {
-        "Word文档(.docx)处理技能，支持读取、格式转换、分析三种操作。转换支持docx/pdf/md/txt/html等格式。"
+        "Word文档(.docx)处理器，支持读取、格式转换、分析三种操作。转换支持docx/pdf/md/txt/html等格式。"
     }
     fn category(&self) -> &str { "document" }
     fn is_builtin(&self) -> bool { true }
@@ -225,16 +225,16 @@ impl Skill for DocxSkill {
             "required": ["action", "path"]
         })
     }
-    async fn execute(&self, params: Value) -> SkillResult {
+    async fn execute(&self, params: Value) -> HandlerResult {
         let action = params["action"].as_str().unwrap_or("");
         match action {
             "read" => execute_read(&self.doc_service, "docx", params).await,
             "convert" => execute_convert(&self.doc_service, "docx", params).await,
             "analyze" => execute_analyze(&self.doc_service, "docx", params).await,
-            _ => SkillResult {
+            _ => HandlerResult {
                 success: false,
                 output: None,
-                error: Some(format!("DocxSkill 不支持的操作类型: {}", action)),
+                error: Some(format!("DocxHandler 不支持的操作类型: {}", action)),
                 duration_ms: 0,
             },
         }
@@ -242,26 +242,26 @@ impl Skill for DocxSkill {
 }
 
 // ============================================================================
-// XlsxSkill - Excel 文档技能
+// XlsxHandler - Excel 文档处理器
 // ============================================================================
 
-/// Excel 文档技能
+/// Excel 文档处理器
 /// 聚合 read/convert/analyze 三种操作
-struct XlsxSkill {
+struct XlsxHandler {
     doc_service: Arc<DocumentService>,
 }
 
-impl XlsxSkill {
+impl XlsxHandler {
     fn new(doc_service: Arc<DocumentService>) -> Self {
         Self { doc_service }
     }
 }
 
 #[async_trait]
-impl Skill for XlsxSkill {
-    fn skill_name(&self) -> &str { "xlsx_skill" }
+impl Handler for XlsxHandler {
+    fn handler_name(&self) -> &str { "xlsx_handler" }
     fn description(&self) -> &str {
-        "Excel文档(.xlsx)处理技能，支持读取、格式转换、分析三种操作。转换支持xlsx/pdf/csv/html等格式。"
+        "Excel文档(.xlsx)处理器，支持读取、格式转换、分析三种操作。转换支持xlsx/pdf/csv/html等格式。"
     }
     fn category(&self) -> &str { "document" }
     fn is_builtin(&self) -> bool { true }
@@ -307,16 +307,16 @@ impl Skill for XlsxSkill {
             "required": ["action", "path"]
         })
     }
-    async fn execute(&self, params: Value) -> SkillResult {
+    async fn execute(&self, params: Value) -> HandlerResult {
         let action = params["action"].as_str().unwrap_or("");
         match action {
             "read" => execute_read(&self.doc_service, "xlsx", params).await,
             "convert" => execute_convert(&self.doc_service, "xlsx", params).await,
             "analyze" => execute_analyze(&self.doc_service, "xlsx", params).await,
-            _ => SkillResult {
+            _ => HandlerResult {
                 success: false,
                 output: None,
-                error: Some(format!("XlsxSkill 不支持的操作类型: {}", action)),
+                error: Some(format!("XlsxHandler 不支持的操作类型: {}", action)),
                 duration_ms: 0,
             },
         }
@@ -324,26 +324,26 @@ impl Skill for XlsxSkill {
 }
 
 // ============================================================================
-// PptxSkill - PPT 文档技能
+// PptxHandler - PPT 文档处理器
 // ============================================================================
 
-/// PPT 文档技能
+/// PPT 文档处理器
 /// 聚合 read/convert/analyze 三种操作
-struct PptxSkill {
+struct PptxHandler {
     doc_service: Arc<DocumentService>,
 }
 
-impl PptxSkill {
+impl PptxHandler {
     fn new(doc_service: Arc<DocumentService>) -> Self {
         Self { doc_service }
     }
 }
 
 #[async_trait]
-impl Skill for PptxSkill {
-    fn skill_name(&self) -> &str { "pptx_skill" }
+impl Handler for PptxHandler {
+    fn handler_name(&self) -> &str { "pptx_handler" }
     fn description(&self) -> &str {
-        "PPT演示文稿(.pptx)处理技能，支持读取、格式转换、分析三种操作。转换支持pptx/pdf等格式。"
+        "PPT演示文稿(.pptx)处理器，支持读取、格式转换、分析三种操作。转换支持pptx/pdf等格式。"
     }
     fn category(&self) -> &str { "document" }
     fn is_builtin(&self) -> bool { true }
@@ -376,16 +376,16 @@ impl Skill for PptxSkill {
             "required": ["action", "path"]
         })
     }
-    async fn execute(&self, params: Value) -> SkillResult {
+    async fn execute(&self, params: Value) -> HandlerResult {
         let action = params["action"].as_str().unwrap_or("");
         match action {
             "read" => execute_read(&self.doc_service, "pptx", params).await,
             "convert" => execute_convert(&self.doc_service, "pptx", params).await,
             "analyze" => execute_analyze(&self.doc_service, "pptx", params).await,
-            _ => SkillResult {
+            _ => HandlerResult {
                 success: false,
                 output: None,
-                error: Some(format!("PptxSkill 不支持的操作类型: {}", action)),
+                error: Some(format!("PptxHandler 不支持的操作类型: {}", action)),
                 duration_ms: 0,
             },
         }
@@ -393,26 +393,26 @@ impl Skill for PptxSkill {
 }
 
 // ============================================================================
-// PdfSkill - PDF 文档技能
+// PdfHandler - PDF 文档处理器
 // ============================================================================
 
-/// PDF 文档技能
+/// PDF 文档处理器
 /// 聚合 read/convert/analyze 三种操作
-struct PdfSkill {
+struct PdfHandler {
     doc_service: Arc<DocumentService>,
 }
 
-impl PdfSkill {
+impl PdfHandler {
     fn new(doc_service: Arc<DocumentService>) -> Self {
         Self { doc_service }
     }
 }
 
 #[async_trait]
-impl Skill for PdfSkill {
-    fn skill_name(&self) -> &str { "pdf_skill" }
+impl Handler for PdfHandler {
+    fn handler_name(&self) -> &str { "pdf_handler" }
     fn description(&self) -> &str {
-        "PDF文档(.pdf)处理技能，支持读取、格式转换、分析三种操作。转换支持pdf/txt/md/html等格式。"
+        "PDF文档(.pdf)处理器，支持读取、格式转换、分析三种操作。转换支持pdf/txt/md/html等格式。"
     }
     fn category(&self) -> &str { "document" }
     fn is_builtin(&self) -> bool { true }
@@ -445,16 +445,16 @@ impl Skill for PdfSkill {
             "required": ["action", "path"]
         })
     }
-    async fn execute(&self, params: Value) -> SkillResult {
+    async fn execute(&self, params: Value) -> HandlerResult {
         let action = params["action"].as_str().unwrap_or("");
         match action {
             "read" => execute_read(&self.doc_service, "pdf", params).await,
             "convert" => execute_convert(&self.doc_service, "pdf", params).await,
             "analyze" => execute_analyze(&self.doc_service, "pdf", params).await,
-            _ => SkillResult {
+            _ => HandlerResult {
                 success: false,
                 output: None,
-                error: Some(format!("PdfSkill 不支持的操作类型: {}", action)),
+                error: Some(format!("PdfHandler 不支持的操作类型: {}", action)),
                 duration_ms: 0,
             },
         }
@@ -462,27 +462,27 @@ impl Skill for PdfSkill {
 }
 
 // ============================================================================
-// CodeInterpreterSkill - 代码解释器技能
+// CodeInterpreterHandler - 代码解释器处理器
 // ============================================================================
 
-/// 代码解释器技能
+/// 代码解释器处理器
 /// 让 Agent 自由编写 Python 代码生成/修改文档
 /// 承担原有 generate 和 modify 操作的全部职责
-struct CodeInterpreterSkill {
+struct CodeInterpreterHandler {
     doc_service: Arc<DocumentService>,
 }
 
-impl CodeInterpreterSkill {
+impl CodeInterpreterHandler {
     fn new(doc_service: Arc<DocumentService>) -> Self {
         Self { doc_service }
     }
 }
 
 #[async_trait]
-impl Skill for CodeInterpreterSkill {
-    fn skill_name(&self) -> &str { "code_interpreter_skill" }
+impl Handler for CodeInterpreterHandler {
+    fn handler_name(&self) -> &str { "code_interpreter_handler" }
     fn description(&self) -> &str {
-        "代码解释器，通过编写和执行 Python 代码生成和修改文档。所有文档生成和修改操作都通过此技能完成。可用库: python-docx, openpyxl, python-pptx, reportlab, matplotlib, pandas, numpy, Pillow。可用 helper: create_word_doc(), save_word_doc() 等。"
+        "代码解释器，通过编写和执行 Python 代码生成和修改文档。所有文档生成和修改操作都通过此处理器完成。可用库: python-docx, openpyxl, python-pptx, reportlab, matplotlib, pandas, numpy, Pillow。可用 helper: create_word_doc(), save_word_doc() 等。"
     }
     fn category(&self) -> &str { "document" }
     fn is_builtin(&self) -> bool { true }
@@ -515,7 +515,7 @@ impl Skill for CodeInterpreterSkill {
             "required": ["code", "description"]
         })
     }
-    async fn execute(&self, params: Value) -> SkillResult {
+    async fn execute(&self, params: Value) -> HandlerResult {
         let start = Instant::now();
         let code = params["code"].as_str().unwrap_or("");
         let description = params["description"].as_str().unwrap_or("");
@@ -523,7 +523,7 @@ impl Skill for CodeInterpreterSkill {
         let workspace_root = params["workspace_root"].as_str().unwrap_or("");
 
         if code.is_empty() {
-            return SkillResult {
+            return HandlerResult {
                 success: false,
                 output: None,
                 error: Some("缺少代码内容".to_string()),
@@ -544,14 +544,14 @@ impl Skill for CodeInterpreterSkill {
             Ok(data) => {
                 let mut output = data;
                 output["description"] = json!(description);
-                SkillResult {
+                HandlerResult {
                     success: true,
                     output: Some(output),
                     error: None,
                     duration_ms: start.elapsed().as_millis() as u64,
                 }
             }
-            Err(e) => SkillResult {
+            Err(e) => HandlerResult {
                 success: false,
                 output: None,
                 error: Some(e.message),

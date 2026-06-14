@@ -44,7 +44,7 @@ docagent/
 │   │   │   ├── workspace.rs      # 工作区相关命令
 │   │   │   ├── document.rs       # 文档操作命令
 │   │   │   ├── session.rs        # 会话管理命令
-│   │   │   ├── skill.rs          # Skill管理命令
+│   │   │   ├── handler.rs          # Handler管理命令
 │   │   │   ├── settings.rs       # 设置相关命令
 │   │   │   └── version.rs        # 版本快照命令
 │   │   ├── services/             # 业务逻辑层
@@ -61,11 +61,11 @@ docagent/
 │   │   │   │   ├── executor.rs   # Agent执行器
 │   │   │   │   ├── tool_call.rs  # Tool Calling处理
 │   │   │   │   └── context.rs    # 上下文管理
-│   │   │   ├── skill/            # Skill执行引擎
+│   │   │   ├── handler/            # Handler执行引擎
 │   │   │   │   ├── mod.rs
-│   │   │   │   ├── registry.rs   # Skill注册表
-│   │   │   │   ├── runner.rs     # Skill执行器
-│   │   │   │   └── builtin/      # 内置Skill实现
+│   │   │   │   ├── registry.rs   # Handler注册表
+│   │   │   │   ├── runner.rs     # Handler执行器
+│   │   │   │   └── builtin/      # 内置Handler实现
 │   │   │   │       ├── mod.rs
 │   │   │   │       ├── generate.rs
 │   │   │   │       ├── modify.rs
@@ -139,7 +139,7 @@ docagent/
 │   │   │   ├── SettingsDialog.tsx
 │   │   │   ├── LLMConfig.tsx
 │   │   │   ├── WorkspaceManager.tsx
-│   │   │   ├── SkillManager.tsx
+│   │   │   ├── HandlerManager.tsx
 │   │   │   ├── TemplateManager.tsx
 │   │   │   └── GeneralSettings.tsx
 │   │   ├── session/              # 会话组件
@@ -166,8 +166,7 @@ docagent/
 │   │   ├── llm.ts
 │   │   ├── workflow.ts
 │   │   ├── session.ts
-│   │   ├── workspace.ts
-│   │   ├── skill.ts
+│   │   ├── workspace.ts│   │   │   ├── handler.ts
 │   │   ├── document.ts
 │   │   └── settings.ts
 │   ├── utils/                    # 工具函数
@@ -207,13 +206,13 @@ docagent/
 │                       ▼                                   │
 │  ┌────────────────────────────────────────────────────┐  │
 │  │              Tauri Commands (Rust)                  │  │
-│  │  llm | workspace | document | session | skill | .. │  │
+│  │  llm | workspace | document | session | handler | .. │  │
 │  └────────────────────┬───────────────────────────────┘  │
 │                       │                                   │
 │  ┌────────────────────┴───────────────────────────────┐  │
 │  │              Services (Rust)                        │  │
 │  │  ┌─────────┐ ┌─────────┐ ┌──────────┐             │  │
-│  │  │  Agent   │ │   LLM   │ │  Skill   │             │  │
+│  │  │  Agent   │ │   LLM   │ │ Handler  │             │  │
 │  │  │ Engine   │ │ Adapter │ │ Engine   │             │  │
 │  │  └────┬────┘ └────┬────┘ └─────┬────┘             │  │
 │  │       │           │            │                    │  │
@@ -249,7 +248,7 @@ docagent/
 |------|------|---------|
 | **LLM Adapter** | 统一多LLM Provider的API调用，处理流式响应和Tool Calling | `LLMProvider` trait |
 | **Agent Engine** | Agent调度核心，管理Tool Calling循环和上下文 | `execute_agent()` |
-| **Skill Engine** | Skill注册、发现、执行，管理内置和自定义Skill | `SkillRegistry`, `SkillRunner` |
+| **Handler Engine** | Handler注册、发现、执行，管理内置和自定义Handler | `HandlerRegistry`, `HandlerRunner` |
 | **Document Service** | 管理Python Sidecar生命周期，调度文档处理任务 | `process_document()` |
 | **Version Service** | 文档版本快照的创建、查询、回滚、清理 | `create_snapshot()`, `rollback()` |
 | **Config Manager** | JSON配置文件的读写、验证、热更新 | `load_config()`, `save_config()` |
@@ -273,7 +272,7 @@ docagent/
   ▼
 Agent Engine
   │
-  ├─→ 构建上下文（历史消息 + System Prompt + Skill描述）
+  ├─→ 构建上下文（历史消息 + System Prompt + Handler描述）
   │
   ▼
 LLM Adapter → HTTP请求 → LLM API
@@ -282,13 +281,13 @@ LLM Adapter → HTTP请求 → LLM API
   │
   ├─→ thinking内容 → emit("agent:thinking", chunk)
   ├─→ content内容 → emit("agent:content", chunk)
-  ├─→ tool_call → Skill Engine
+  ├─→ tool_call → Handler Engine
   │                    │
-  │                    ├─→ 内置Skill → 直接执行
-  │                    ├─→ 自定义Skill → Sidecar执行
+  │                    ├─→ 内置Handler → 直接执行
+  │                    ├─→ 自定义Handler → Sidecar执行
   │                    │
   │                    ▼
-  │               Skill执行结果
+  │               Handler执行结果
   │                    │
   │                    ├─→ 版本快照（如需修改文档）
   │                    ├─→ emit("agent:tool_result", result)
@@ -324,7 +323,7 @@ Agent执行过程中，Rust后端通过Tauri Event向前端推送事件：
 ### 4.3 文档处理流程
 
 ```
-Skill调用 → Document Service
+Handler调用 → Document Service
   │
   ├─→ 判断操作类型
   │    ├─ 生成文档 → 构建参数 → Sidecar执行
@@ -384,7 +383,7 @@ Sidecar管理器
 
 - Tauri Scope限制：仅允许访问用户指定的工作区目录和应用数据目录
 - Python Sidecar：通过Tauri的scope控制文件访问范围
-- 自定义Skill：在UI中明确提示安全风险
+- 自定义Handler：在UI中明确提示安全风险
 
 ### 6.3 网络安全
 

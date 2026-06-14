@@ -14,7 +14,7 @@ export function ToolNode({ node }: ToolNodeProps) {
   // 判断工具是否正在执行中
   const isRunning = node.status === "running";
   // 判断是否为代码解释器工具
-  const isCodeInterpreter = data.toolName === "code_interpreter_skill";
+  const isCodeInterpreter = data.toolName === "code_interpreter_handler";
   const [errorExpanded, setErrorExpanded] = useState(false);
 
   // 代码解释器错误：截断显示，可展开

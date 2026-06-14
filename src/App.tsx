@@ -503,7 +503,7 @@ export default function App() {
 
   useEffect(() => {
     if (pendingConfirmation) {
-      // 从 details 中提取代码（仅 code_interpreter_skill 操作时存在）
+      // 从 details 中提取代码（仅 code_interpreter_handler 操作时存在）
       const details = pendingConfirmation.details as Record<string, unknown> | undefined;
       const code = details?.code as string | undefined;
       // 当有代码预览时，description 中已包含代码摘要，需要分离出纯描述

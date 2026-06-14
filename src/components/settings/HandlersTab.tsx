@@ -1,9 +1,9 @@
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 
-export function SkillsTab() {
+export function HandlersTab() {
   const { t } = useTranslation();
-  const { skills, tools } = useSettingsStore();
+  const { handlers, tools } = useSettingsStore();
 
   return (
     <div>
@@ -13,53 +13,53 @@ export function SkillsTab() {
         <span className="section-badge">{tools.length}</span>
       </div>
 
-      <div className="skills-list">
+      <div className="handlers-list">
         {tools.map((tool) => (
-          <div key={tool.id} className="skill-item">
-            <div className="skill-item-info">
-              <div className="skill-name-row">
-                <span className="skill-name">{tool.name}</span>
-                <span className="skill-tool-badge">{t('settings.skills.toolBadge')}</span>
+          <div key={tool.id} className="handler-item">
+            <div className="handler-item-info">
+              <div className="handler-name-row">
+                <span className="handler-name">{tool.name}</span>
+                <span className="handler-tool-badge">{t('settings.handlers.toolBadge')}</span>
               </div>
-              <div className="skill-desc">{tool.description}</div>
+              <div className="handler-desc">{tool.description}</div>
             </div>
-            <div className="skill-always-on">
-              {t('settings.skills.alwaysEnabled')}
+            <div className="handler-always-on">
+              {t('settings.handlers.alwaysEnabled')}
             </div>
           </div>
         ))}
       </div>
 
-      {/* 内置 Skills（始终启用） */}
+      {/* 内置 Handlers（始终启用） */}
       <div className="section-header" style={{ marginTop: 24 }}>
-        <span className="section-title">{t('settings.skills.builtinSkills')}</span>
-        <span className="section-badge">{skills.length}</span>
+        <span className="section-title">{t('settings.handlers.builtinHandlers')}</span>
+        <span className="section-badge">{handlers.length}</span>
       </div>
 
-      <div className="skills-list">
-        {skills.map((s) => (
-          <div key={s.id} className="skill-item">
-            <div className="skill-item-info">
-              <div className="skill-name-row">
-                <span className="skill-name">{s.name}</span>
-                <span className="skill-skill-badge">{t('settings.skills.skillBadge')}</span>
+      <div className="handlers-list">
+        {handlers.map((s) => (
+          <div key={s.id} className="handler-item">
+            <div className="handler-item-info">
+              <div className="handler-name-row">
+                <span className="handler-name">{s.name}</span>
+                <span className="handler-handler-badge">{t('settings.handlers.handlerBadge')}</span>
               </div>
-              <div className="skill-desc">{s.description}</div>
+              <div className="handler-desc">{s.description}</div>
             </div>
-            <div className="skill-always-on">
-              {t('settings.skills.alwaysEnabled')}
+            <div className="handler-always-on">
+              {t('settings.handlers.alwaysEnabled')}
             </div>
           </div>
         ))}
       </div>
 
       <style>{`
-        .skills-list {
+        .handlers-list {
           display: flex;
           flex-direction: column;
           margin-bottom: 24px;
         }
-        .skill-item {
+        .handler-item {
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -67,27 +67,27 @@ export function SkillsTab() {
           border-bottom: 1px solid var(--color-border-light);
           transition: background 0.15s;
         }
-        .skill-item:hover {
+        .handler-item:hover {
           background: var(--color-accent-bg);
         }
-        .skill-item:last-child {
+        .handler-item:last-child {
           border-bottom: none;
         }
-        .skill-item-info {
+        .handler-item-info {
           flex: 1;
           min-width: 0;
         }
-        .skill-name {
+        .handler-name {
           font-size: 13px;
           font-weight: 500;
           color: var(--color-text-primary);
         }
-        .skill-name-row {
+        .handler-name-row {
           display: flex;
           align-items: center;
           gap: 6px;
         }
-        .skill-tool-badge {
+        .handler-tool-badge {
           font-size: 10px;
           font-weight: 500;
           padding: 1px 6px;
@@ -95,7 +95,7 @@ export function SkillsTab() {
           background: var(--color-accent-bg);
           color: var(--color-accent);
         }
-        .skill-skill-badge {
+        .handler-handler-badge {
           font-size: 10px;
           font-weight: 500;
           padding: 1px 6px;
@@ -103,12 +103,12 @@ export function SkillsTab() {
           background: var(--color-purple-light);
           color: var(--color-purple);
         }
-        .skill-always-on {
+        .handler-always-on {
           font-size: 11px;
           color: var(--color-text-quaternary);
           flex-shrink: 0;
         }
-        .skill-desc {
+        .handler-desc {
           font-size: 11px;
           color: var(--color-text-quaternary);
           margin-top: 2px;

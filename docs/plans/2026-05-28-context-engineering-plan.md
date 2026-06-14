@@ -1,5 +1,7 @@
 # DocAgent 上下文工程开发计划
 
+> **注意**: 本文档中提到的 "Skill" 已重命名为 "Handler"，相关工具名如 `docx_skill` 已更改为 `docx_handler`。
+
 **文档版本**: v1.1
 **创建日期**: 2026-05-28
 **理论基础**: 菜鸟教程《Agent 上下文工程》(https://www.runoob.com/ai-agent/agent-context-engineering.html)
@@ -21,7 +23,7 @@
 |------|------|----------|----------|
 | Layer 0 | 身份层 | `context.rs:341-361` | 定义 DocAgent 角色、专业领域、行为方式和核心立场 |
 | Layer 1 | 规则层 | `context.rs:364-387` | 正面约束（7条必须遵守）+ 负面约束（8条禁止行为） |
-| Layer 2 | 上下文层 | `context.rs:390-395` | 工作区路径、工具/技能数量等运行时信息 |
+| Layer 2 | 上下文层 | `context.rs:390-395` | 工作区路径、工具/处理器数量等运行时信息 |
 | Layer 3 | 策略层 | `context.rs:398-428` | 工具选择策略指导（读取/写入/搜索/转换/分析） |
 | Layer 4 | 防幻觉层 | `context.rs:431-442` | 信息诚实规则，防止编造内容 |
 | Layer 5 | 错误处理层 | `context.rs:445-474` | 工具失败处理策略和确认机制说明 |
@@ -613,7 +615,7 @@ impl ToolSelector {
         &self,
         task_type: &TaskType,
         tool_registry: &ToolRegistry,
-        skill_registry: &SkillRegistry,
+        handler_registry: &HandlerRegistry,
     ) -> Vec<serde_json::Value> {
         // 基础工具始终包含：list_directory, search_files, read_file, file_info, file_exists
         // 按任务类型选择性包含高级工具
@@ -643,15 +645,15 @@ impl ToolSelector {
 // 当前代码（全量发送）:
 let tool_defs_json = {
     let tool_defs = self.tool_registry.tool_definitions();
-    let skill_defs = { ... };
-    [tool_defs, skill_defs].concat()
+    let handler_defs = { ... };
+    [tool_defs, handler_defs].concat()
 };
 
 // 优化后（按需发送）:
 let tool_defs_json = self.tool_selector.select_tools(
     ctx.task_type(),
     &self.tool_registry,
-    &self.skill_registry,
+    &self.handler_registry,
 );
 ```
 
@@ -670,7 +672,7 @@ let tool_defs_json = self.tool_selector.select_tools(
 **目标**: 优化每个工具的描述文本，使其更简洁且信息密度更高
 
 **修改文件**:
-- 各 Tool/Skill 实现文件中的 `description()` 和 `parameters()` 方法
+- 各 Tool/Handler 实现文件中的 `description()` 和 `parameters()` 方法
 
 **实施步骤**:
 

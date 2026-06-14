@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// Tool 执行结果（与 SkillResult 格式一致，便于 AgentExecutor 统一处理）
+/// Tool 执行结果（与 HandlerResult 格式一致，便于 AgentExecutor 统一处理）
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolResult {

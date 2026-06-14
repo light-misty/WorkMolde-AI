@@ -1,4 +1,6 @@
-# Skills 整合开发计划：提升文档生成专业性
+# Handlers 整合开发计划：提升文档生成专业性
+
+> **注意**: 本文档中提到的 "Skill" 已重命名为 "Handler"，相关工具名如 `docx_skill` 已更改为 `docx_handler`。
 
 ## 一、现状分析
 
@@ -22,11 +24,11 @@
 4. **缺少高级功能**：Word 缺少页眉页脚、目录、书签；PPT 缺少设计模板；PDF 缺少合并、水印、加密等
 5. **缺少 QA 流程**：生成后没有验证机制，无法确保文档质量
 
-### 1.3 新 Skills 的优势
+### 1.3 新 Handlers 的优势
 
-用户提供的四个 Skill 文件包含丰富的专业指南：
+用户提供的四个 Handler 文件包含丰富的专业指南：
 
-#### docx Skill 优势
+#### docx Handler 优势
 - **页面尺寸规范**：US Letter vs A4，DXA 单位换算
 - **样式系统**：标题层级、字体选择（Arial）、间距规范
 - **列表规范**：使用 LevelFormat.BULLET 而非 Unicode 字符
@@ -37,14 +39,14 @@
 - **颜色编码标准**：蓝色输入、黑色公式、绿色跨表、红色外部
 - **编辑方法**：unpack → edit XML → pack 流程
 
-#### xlsx Skill 优势
+#### xlsx Handler 优势
 - **公式优先原则**：使用 Excel 公式而非 Python 硬编码
 - **数据分析**：pandas + openpyxl 组合使用
 - **颜色编码标准**：蓝色输入、黑色公式、绿色跨表引用、红色外部链接、黄色假设
 - **数字格式标准**：年份文本化、货币格式、零值显示、百分比、负数括号
 - **库选择指南**：pandas 用于数据分析，openpyxl 用于格式和公式
 
-#### pptx Skill 优势
+#### pptx Handler 优势
 - **设计理念**：避免无聊幻灯片，内容驱动的颜色方案
 - **颜色方案库**：Midnight Executive、Forest & Moss、Coral Energy 等
 - **字体规范**：标题 36-44pt，正文 14-16pt
@@ -52,7 +54,7 @@
 - **避免错误**：不重复布局、不居中正文、不默认蓝色
 - **QA 流程**：使用 python-pptx 读取生成内容检查 + PDF 转图片视觉检查
 
-#### pdf Skill 优势
+#### pdf Handler 优势
 - **多库覆盖**：pypdf（基础操作）、pdfplumber（表格提取）、reportlab（创建）
 - **高级操作**：合并、拆分、旋转、水印、加密、OCR
 - **命令行工具**：pdftotext、qpdf
@@ -66,10 +68,10 @@
 
 由于 DocAgent 的 Sidecar 是 Python 进程，无法直接执行 JavaScript（docx-js、pptxgenjs），因此采用以下整合策略：
 
-1. **系统提示词整合**：将新 Skills 的设计指导、最佳实践、颜色标准等整合到 Agent 的 System Prompt 中
-2. **Python Handler 增强**：根据新 Skills 的规范，增强现有 Python Handler 的功能
-3. **参数 Schema 扩展**：扩展 Skill 的参数定义，支持更多专业选项
-4. **QA 验证流程**：在 Skill 执行后添加验证步骤
+1. **系统提示词整合**：将新 Handlers 的设计指导、最佳实践、颜色标准等整合到 Agent 的 System Prompt 中
+2. **Python Handler 增强**：根据新 Handlers 的规范，增强现有 Python Handler 的功能
+3. **参数 Schema 扩展**：扩展 Handler 的参数定义，支持更多专业选项
+4. **QA 验证流程**：在 Handler 执行后添加验证步骤
 
 ### 2.2 整合架构
 
@@ -77,7 +79,7 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Agent System Prompt                          │
 │  ┌─────────────────────────────────────────────────────────────┐│
-│  │  文档设计指导（从新 Skills 整合）                            ││
+│  │  文档设计指导（从新 Handlers 整合）                            ││
 │  │  - Word: 页面尺寸、样式、颜色编码、表格规范                  ││
 │  │  - Excel: 公式优先、数字格式、颜色编码                       ││
 │  │  - PPT: 设计理念、颜色方案、字体规范、避免错误               ││
@@ -86,7 +88,7 @@
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│                     Skill 参数定义                               │
+│                     Handler 参数定义                               │
 │  ┌─────────────────────────────────────────────────────────────┐│
 │  │  扩展参数支持：                                              ││
 │  │  - generate_document: pageSize, colorScheme, font, QA       ││
@@ -361,12 +363,12 @@ const PDF_DESIGN_GUIDE: &str = r#"
    - 参数：`subscripts: [{text, position}]`、`superscripts: [{text, position}]`
    - 实现：使用 reportlab XML 标签
 
-### 阶段三：Skill 参数 Schema 扩展（预计 1-2 天）
+### 阶段三：Handler 参数 Schema 扩展（预计 1-2 天）
 
-#### 任务 3.1：扩展 generate_document Skill 参数
+#### 任务 3.1：扩展 generate_document Handler 参数
 
 **文件**：
-- 修改：`src-tauri/src/services/skill/builtin.rs`
+- 修改：`src-tauri/src/services/handler/builtin.rs`
 
 **新增参数**：
 
@@ -406,7 +408,7 @@ const PDF_DESIGN_GUIDE: &str = r#"
 }
 ```
 
-#### 任务 3.2：扩展 modify_document Skill 参数
+#### 任务 3.2：扩展 modify_document Handler 参数
 
 **新增参数**：
 
@@ -455,14 +457,14 @@ const PDF_DESIGN_GUIDE: &str = r#"
 3. **公式验证**：检查 Excel 公式是否正确
 4. **设计验证**：检查 PPT 是否遵循设计规范
 
-#### 任务 4.2：集成到 Skill 执行流程
+#### 任务 4.2：集成到 Handler 执行流程
 
 **文件**：
-- 修改：`src-tauri/src/services/skill/builtin.rs`
+- 修改：`src-tauri/src/services/handler/builtin.rs`
 
 **流程**：
 ```
-1. Skill 执行（生成/修改文档）
+1. Handler 执行（生成/修改文档）
 2. 调用 validator.validate()
 3. 返回验证结果
 4. 如果验证失败，返回警告信息给 LLM
@@ -492,7 +494,7 @@ DocAgent 的 Sidecar 是 Python 进程，通过 stdin/stdout JSON 协议与 Rust
 
 ### 4.3 验证流程的作用
 
-验证流程在 Skill 执行后检查文档质量，如果发现问题则返回警告给 LLM，LLM 可以决定是否重新生成或修改。这形成了一个闭环的质量保证机制。
+验证流程在 Handler 执行后检查文档质量，如果发现问题则返回警告给 LLM，LLM 可以决定是否重新生成或修改。这形成了一个闭环的质量保证机制。
 
 ---
 
@@ -503,8 +505,8 @@ DocAgent 的 Sidecar 是 Python 进程，通过 stdin/stdout JSON 协议与 Rust
 3. ExcelHandler 支持公式写入、数字格式、颜色编码、条件格式
 4. PptHandler 支持颜色方案、设计模板、字体规范、间距控制
 5. PdfHandler 支持合并、拆分、水印、加密、下标上标
-6. generate_document Skill 参数 Schema 包含所有新增参数
-7. modify_document Skill 参数 Schema 包含所有新增操作
+6. generate_document Handler 参数 Schema 包含所有新增参数
+7. modify_document Handler 参数 Schema 包含所有新增操作
 8. 文档验证模块能检测常见质量问题
 9. 生成的文档遵循颜色编码标准
 10. 生成的 Excel 使用公式而非硬编码值
@@ -526,9 +528,9 @@ DocAgent 的 Sidecar 是 Python 进程，通过 stdin/stdout JSON 协议与 Rust
 
 ## 七、与其他计划的依赖关系
 
-本计划与《Skills 与 Tools 分离重构开发计划》存在执行顺序依赖：
+本计划与《Handlers 与 Tools 分离重构开发计划》存在执行顺序依赖：
 
-1. **应先执行 Tools 分离重构**：该计划将 3 个 Rust 原生 Skill 迁移为 Tool，精简 SkillRegistry
-2. **再执行本计划**：在精简后的 Skill 基础上扩展参数和增强 Handler
+1. **应先执行 Tools 分离重构**：该计划将 3 个 Rust 原生 Handler 迁移为 Tool，精简 HandlerRegistry
+2. **再执行本计划**：在精简后的 Handler 基础上扩展参数和增强 Handler
 3. **原因**：如果先扩展参数再分离，迁移时需要重新调整已扩展的参数 Schema；先分离后扩展可以避免重复工作
 4. **系统提示词冲突**：两份计划都修改 `context.rs` 的系统提示词，需合并处理

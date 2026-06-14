@@ -1,5 +1,7 @@
 # 上下文窗口管理功能完善 - 开发计划
 
+> **注意**: 本文档中提到的 "Skill" 已重命名为 "Handler"，相关工具名如 `docx_skill` 已更改为 `docx_handler`。
+
 **目标**: 将上下文窗口大小与主流大模型实际能力匹配，修复现有死代码问题，并在右侧栏添加上下文占用可视化 UI
 
 **架构**: 后端新增模型上下文窗口预设表 + Tauri 命令/事件推送 Token 用量，前端新增 ContextWindowSection 组件以横条可视化展示各部分占比
@@ -216,7 +218,7 @@ pub struct ContextUsageInfo {
     pub context_window: usize,
     /// 系统提示词占用 tokens
     pub system_prompt_tokens: usize,
-    /// 函数定义占用 tokens（包含 Tool + Skill 两部分）
+    /// 函数定义占用 tokens（包含 Tool + Handler 两部分）
     pub function_definitions_tokens: usize,
     /// 对话历史占用 tokens
     pub conversation_tokens: usize,
@@ -235,7 +237,7 @@ pub struct ContextUsageInfo {
 }
 ```
 
-**字段命名说明**: `function_definitions_tokens`（而非 `tool_definitions_tokens`），因为 Agent 发送给 LLM 的工具定义包含 Tool（8 个基础工具）和 Skill（6 个内置技能 + 自定义技能）两部分，executor 中通过 `[tool_defs, skill_defs].concat()` 合并。"function" 更准确反映 OpenAI API 中 `functions` / `tools` 的概念。
+**字段命名说明**: `function_definitions_tokens`（而非 `tool_definitions_tokens`），因为 Agent 发送给 LLM 的工具定义包含 Tool（8 个基础工具）和 Handler（6 个内置处理器 + 自定义处理器）两部分，executor 中通过 `[tool_defs, handler_defs].concat()` 合并。"function" 更准确反映 OpenAI API 中 `functions` / `tools` 的概念。
 
 **function_definitions_tokens 的计算来源**: `AgentContext` 没有访问 tool definitions 的途径（tool definitions 在 executor 的局部变量中构建），因此:
 1. `AgentContext` 新增 `pub function_definitions_tokens: usize` 字段（默认 0）
@@ -442,7 +444,7 @@ pub fn build_system_prompt_with_task(
     workspace_path: &str,
     task_type: &TaskType,
     tool_count: usize,
-    skill_count: usize,
+    handler_count: usize,
     context_window: Option<usize>,  // 新增: None 表示不做预算检查（保持旧行为）
 ) -> String
 ```

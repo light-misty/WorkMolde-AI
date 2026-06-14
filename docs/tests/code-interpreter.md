@@ -3,7 +3,7 @@
 > 对应设计文档：`docs/plans/2026-06-11-code-interpreter-design.md`
 >
 > Code Interpreter 通过编写和执行 Python 代码实现文档的生成与修改，
-> 替代了原有 Sidecar 的 generate/modify 操作。原有 Skill 精简为仅保留 read/convert/analyze。
+> 替代了原有 Sidecar 的 generate/modify 操作。原有 Handler 精简为仅保留 read/convert/analyze。
 
 ---
 
@@ -23,7 +23,7 @@
 **输入**："帮我创建一份项目周报"
 
 **验证点**：
-- Agent 调用 `code_interpreter_skill` 而非旧的 `docx_skill action="generate"`
+- Agent 调用 `code_interpreter_handler` 而非旧的 `docx_handler action="generate"`
 - 弹出确认弹窗，风险等级为 "high"
 - 确认弹窗中显示代码功能描述和代码摘要（前 200 字符）
 - 确认后代码执行成功，工作区生成 `.docx` 文件
@@ -84,9 +84,9 @@
 **输入**："先读取工作区中的 Excel 文件，计算各产品的销售总额，生成一份分析报告"
 
 **验证点**：
-- Agent 先调用 `xlsx_skill action="read"` 读取数据
-- 再调用 `code_interpreter_skill` 用 pandas 处理数据并生成报告
-- 两种 Skill 混合使用正常（读取用 Skill，生成用 Code Interpreter）
+- Agent 先调用 `xlsx_handler action="read"` 读取数据
+- 再调用 `code_interpreter_handler` 用 pandas 处理数据并生成报告
+- 两种 Handler 混合使用正常（读取用 Handler，生成用 Code Interpreter）
 
 ### TC-08 修改现有文档
 
@@ -95,7 +95,7 @@
 **输入**："修改报告的标题为'2024年度总结'，并在末尾添加结论章节"
 
 **验证点**：
-- Agent 使用 `code_interpreter_skill` 编写修改代码
+- Agent 使用 `code_interpreter_handler` 编写修改代码
 - 修改后文档内容正确更新
 - 原有内容未被破坏
 
@@ -106,7 +106,7 @@
 **输入**："读取工作区中的报告.docx"
 
 **验证点**：
-- Agent 调用 `docx_skill action="read"` 而非 `code_interpreter_skill`
+- Agent 调用 `docx_handler action="read"` 而非 `code_interpreter_handler`
 - 读取结果正确展示
 - 不弹出确认弹窗（read 不是高风险操作）
 
@@ -117,7 +117,7 @@
 **输入**："把报告.docx转换为PDF格式"
 
 **验证点**：
-- Agent 调用 `docx_skill action="convert"`
+- Agent 调用 `docx_handler action="convert"`
 - 转换后文件可正常打开
 - 不弹出确认弹窗（convert 不是高风险操作）
 
@@ -128,7 +128,7 @@
 **输入**："分析工作区中报告.docx的结构和统计信息"
 
 **验证点**：
-- Agent 调用 `docx_skill action="analyze"`
+- Agent 调用 `docx_handler action="analyze"`
 - 返回正确的统计信息（页数、段落数、字数等）
 
 ### TC-12 多步骤复杂任务
@@ -153,7 +153,7 @@
 - 风险等级为 "high"
 - 描述中包含代码功能说明和代码摘要
 - 点击确认后执行成功
-- 工作流时间线中工具名称显示 "code_interpreter_skill (等待确认)"
+- 工作流时间线中工具名称显示 "code_interpreter_handler (等待确认)"
 
 ### TC-14 用户确认 - 拒绝执行
 
@@ -271,41 +271,41 @@
 
 ## 五、设置页面测试
 
-### TC-27 Skill 启用/禁用开关
+### TC-27 Handler 启用/禁用开关
 
-**操作**：设置 -> 技能标签页
+**操作**：设置 -> 处理器标签页
 
 **验证点**：
-- 所有内置 Skill 显示开关（不再是"始终启用"）
+- 所有内置 Handler 显示开关（不再是"始终启用"）
 - Tool 列表仍显示"始终启用"
-- `code_interpreter_skill` 标注"高级"标签（橙色）
-- 禁用 `code_interpreter_skill` 后显示安全提示："代码解释器已禁用，文档生成和修改功能将不可用"
+- `code_interpreter_handler` 标注"高级"标签（橙色）
+- 禁用 `code_interpreter_handler` 后显示安全提示："代码解释器已禁用，文档生成和修改功能将不可用"
 
-### TC-28 Skill 开关持久化
+### TC-28 Handler 开关持久化
 
-**操作**：禁用 `code_interpreter_skill` -> 关闭应用 -> 重新启动
+**操作**：禁用 `code_interpreter_handler` -> 关闭应用 -> 重新启动
 
 **验证点**：
-- 重启后 `code_interpreter_skill` 仍为禁用状态
+- 重启后 `code_interpreter_handler` 仍为禁用状态
 - 设置页面正确反映禁用状态
 
 ### TC-29 禁用后的行为
 
-**前置**：`code_interpreter_skill` 已禁用
+**前置**：`code_interpreter_handler` 已禁用
 
 **输入**："帮我创建一份报告"
 
 **验证点**：
-- Agent 无法调用 `code_interpreter_skill`
+- Agent 无法调用 `code_interpreter_handler`
 - Agent 告知用户代码解释器已禁用
-- Agent 不会反复尝试调用被禁用的 Skill
+- Agent 不会反复尝试调用被禁用的 Handler
 
 ### TC-30 重新启用后的行为
 
-**操作**：重新启用 `code_interpreter_skill`，再次请求生成文档
+**操作**：重新启用 `code_interpreter_handler`，再次请求生成文档
 
 **验证点**：
-- Agent 可正常调用 `code_interpreter_skill`
+- Agent 可正常调用 `code_interpreter_handler`
 - 文档生成成功
 
 ---
@@ -321,7 +321,7 @@
 - 节点展开后可查看代码内容
 - 执行结果（成功/失败）正确展示
 
-### TC-32 工具节点展示 - 文档 Skill
+### TC-32 工具节点展示 - 文档 Handler
 
 **操作**：执行读取文档操作
 
@@ -452,7 +452,7 @@
 3. 输入 **"读取工作区中的项目周报.docx"** → 验证精简后 read 正常（TC-09）
 4. 输入 **"把项目周报转换为PDF"** → 验证精简后 convert 正常（TC-10）
 5. 输入 **"生成一份包含柱状图的销售分析报告"** → 验证图表生成（TC-06）
-6. 设置 -> 技能 -> 禁用代码解释器 → 验证开关功能（TC-27、TC-29）
+6. 设置 -> 处理器 -> 禁用代码解释器 → 验证开关功能（TC-27、TC-29）
 
 ---
 

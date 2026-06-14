@@ -22,7 +22,7 @@ import type {
   SearchResult,
   PreviewContent,
   VersionInfo,
-  SkillInfo,
+  HandlerInfo,
   ToolInfo,
   AppSettings,
   PromptTemplate,
@@ -317,12 +317,12 @@ export async function listTools(): Promise<ToolInfo[]> {
 }
 
 // ================================================================
-// Skill 命令
+// Handler 命令
 // ================================================================
 
-/** 列出所有 Skill */
-export async function listSkills(): Promise<SkillInfo[]> {
-  const result = await safeInvoke(() => invoke<SkillInfo[]>("list_skills"), { context: "listSkills" });
+/** 列出所有 Handler */
+export async function listHandlers(): Promise<HandlerInfo[]> {
+  const result = await safeInvoke(() => invoke<HandlerInfo[]>("list_handlers"), { context: "listHandlers" });
   if (!result.ok) throw result.error.raw;
   return result.data;
 }

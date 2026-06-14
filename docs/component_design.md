@@ -57,7 +57,7 @@ App
 │   └── SettingsDialog              // 设置对话框
 │       ├── LLMConfig              // LLM 配置
 │       ├── WorkspaceManager        // 工作区管理
-│       ├── SkillManager            // 技能管理
+│       ├── HandlerManager           // 处理器管理
 │       ├── TemplateManager         // 模板管理
 │       └── GeneralSettings         // 通用设置
 └── HistoryPanel                    // 历史会话面板
@@ -550,7 +550,7 @@ interface SettingsDialogProps {
   onTabChange: (tab: SettingsTab) => void;
 }
 
-type SettingsTab = 'llm' | 'workspace' | 'skill' | 'template' | 'general';
+type SettingsTab = 'llm' | 'workspace' | 'handler' | 'template' | 'general';
 
 // LLM 配置
 interface LLMConfigProps {
@@ -593,14 +593,14 @@ interface Workspace {
   isDefault: boolean;
 }
 
-// 技能管理
-interface SkillManagerProps {
-  skills: Skill[];
-  onToggleSkill: (id: string) => void;
-  onConfigureSkill: (id: string, config: Record<string, unknown>) => void;
+// 处理器管理
+interface HandlerManagerProps {
+  handlers: Handler[];
+  onToggleHandler: (id: string) => void;
+  onConfigureHandler: (id: string, config: Record<string, unknown>) => void;
 }
 
-interface Skill {
+interface Handler {
   id: string;
   name: string;
   description: string;
@@ -861,7 +861,7 @@ interface SettingsState {
   settings: AppSettings;
   llmProviders: LLMProviderConfig[];
   activeProviderId: string;
-  skills: Skill[];
+  handlers: Handler[];
   templates: PromptTemplate[];
   isSettingsOpen: boolean;
   activeSettingsTab: SettingsTab;
@@ -877,8 +877,8 @@ interface SettingsState {
   setActiveProvider: (id: string) => void;
   testLLMConnection: (id: string) => Promise<boolean>;
 
-  // 技能操作（内置技能始终启用，仅展示信息）
-  configureSkill: (id: string, config: Record<string, unknown>) => void;
+  // 处理器操作（内置处理器始终启用，仅展示信息）
+  configureHandler: (id: string, config: Record<string, unknown>) => void;
 
   // 模板操作
   addTemplate: (template: Omit<PromptTemplate, 'id' | 'createdAt' | 'updatedAt'>) => string;
@@ -1205,7 +1205,7 @@ type LLMProvider = 'openai' | 'anthropic' | 'google' | 'local' | 'custom';
 type PreviewFileType = 'markdown' | 'diff' | 'image' | 'pdf' | 'text';
 
 // 设置标签页
-type SettingsTab = 'llm' | 'workspace' | 'skill' | 'template' | 'general';
+type SettingsTab = 'llm' | 'workspace' | 'handler' | 'template' | 'general';
 
 // 任务状态
 type TodoStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
@@ -1296,8 +1296,8 @@ interface PromptTemplate {
   updatedAt: number;
 }
 
-// 技能
-interface Skill {
+// 处理器
+interface Handler {
   id: string;
   name: string;
   description: string;

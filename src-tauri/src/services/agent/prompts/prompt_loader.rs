@@ -269,16 +269,16 @@ impl PromptLoader {
 
 ### 读取操作
 - 纯文本文件(.txt/.md/.csv/.json) -> read_file（更快，不依赖Sidecar）
-- Word文档(.docx) -> docx_skill，action="read"
-- Excel文档(.xlsx) -> xlsx_skill，action="read"
-- PPT文档(.pptx) -> pptx_skill，action="read"
-- PDF文档(.pdf) -> pdf_skill，action="read"
+- Word文档(.docx) -> docx_handler，action="read"
+- Excel文档(.xlsx) -> xlsx_handler，action="read"
+- PPT文档(.pptx) -> pptx_handler，action="read"
+- PDF文档(.pdf) -> pdf_handler，action="read"
 - 仅需文件信息(大小/类型/修改时间) -> file_info
 - 仅需判断文件是否存在 -> file_exists
 
 ### 写入操作
 - 纯文本文件 -> write_text_file
-- 生成/修改文档 -> code_interpreter_skill（编写 Python 代码生成或修改任意文档）
+- 生成/修改文档 -> code_interpreter_handler（编写 Python 代码生成或修改任意文档）
 
 ### 搜索操作
 - 按文件名搜索 -> search_files（设置include_content=false）
@@ -295,10 +295,10 @@ impl PromptLoader {
 6. 获取到相关文件列表后，向用户展示并确认具体要处理哪个文件，再执行后续操作
 
 ### 转换操作
-- 文档格式转换 -> 对应 Skill 的 action="convert"
+- 文档格式转换 -> 对应 Handler 的 action="convert"
 
 ### 分析操作
-- 文档结构和统计 -> 对应 Skill 的 action="analyze"
+- 文档结构和统计 -> 对应 Handler 的 action="analyze"
 
 ### 输出风格
 - 回复和文档中不得出现任何emoji表情符号，使用文字替代（如用"完成"替代"✅"，用"注意"替代"⚠️"）
@@ -345,7 +345,7 @@ impl PromptLoader {
 
 以下操作会自动触发用户确认：
 - delete_file: 删除文件（critical风险级别）
-- code_interpreter_skill: 执行代码生成/修改文档（high风险级别）
+- code_interpreter_handler: 执行代码生成/修改文档（high风险级别）
 
 当你的工具调用被确认机制拦截时：
 - 你会收到"用户拒绝了操作"的反馈
@@ -362,8 +362,8 @@ impl PromptLoader {
 
 ### 示例: 生成Word文档
 用户: "帮我创建一份项目周报"
-思考: 用户需要生成Word文档，应使用code_interpreter_skill编写Python代码
-工具调用: code_interpreter_skill({
+思考: 用户需要生成Word文档，应使用code_interpreter_handler编写Python代码
+工具调用: code_interpreter_handler({
   "code": "doc = create_word_doc(title='项目周报', author='DocAgent')\ndoc.add_heading('本周工作总结', level=1)\ndoc.add_paragraph('本周完成了以下工作...')\nsave_word_doc(doc, '项目周报.docx', working_dir=working_dir)",
   "description": "生成项目周报Word文档",
   "expected_files": ["项目周报.docx"]
@@ -407,7 +407,7 @@ mod tests {
         let content = PromptLoader::default_tool_strategy();
         assert!(content.contains("<tool_strategy>"));
         assert!(content.contains("read_file"));
-        assert!(content.contains("docx_skill"));
+        assert!(content.contains("docx_handler"));
     }
 
     #[test]
@@ -427,7 +427,7 @@ mod tests {
     #[test]
     fn test_default_examples() {
         let content = PromptLoader::default_examples("document");
-        assert!(content.contains("code_interpreter_skill"));
+        assert!(content.contains("code_interpreter_handler"));
     }
 
     #[test]

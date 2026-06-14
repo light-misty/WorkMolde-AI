@@ -1,7 +1,7 @@
 use tauri::State;
 
 use crate::errors::CommandError;
-use crate::models::skill::SkillInfo;
+use crate::models::handler::HandlerInfo;
 use crate::models::tool::ToolInfo;
 use crate::AppState;
 
@@ -14,14 +14,14 @@ pub async fn list_tools(state: State<'_, AppState>) -> Result<Vec<ToolInfo>, Com
     Ok(tools)
 }
 
-/// 列出所有 Skill（内置，始终启用）
+/// 列出所有 Handler（内置，始终启用）
 #[tauri::command]
-pub async fn list_skills(state: State<'_, AppState>) -> Result<Vec<SkillInfo>, CommandError> {
-    log::info!("list_skills: 查询所有 Skill");
-    let skills = {
-        let reg = state.skill_registry.lock().await;
-        reg.list_skills()
+pub async fn list_handlers(state: State<'_, AppState>) -> Result<Vec<HandlerInfo>, CommandError> {
+    log::info!("list_handlers: 查询所有 Handler");
+    let handlers = {
+        let reg = state.handler_registry.lock().await;
+        reg.list_handlers()
     };
-    log::info!("list_skills: 查询完成, 共 {} 个 Skill", skills.len());
-    Ok(skills)
+    log::info!("list_handlers: 查询完成, 共 {} 个 Handler", handlers.len());
+    Ok(handlers)
 }

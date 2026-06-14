@@ -4,7 +4,7 @@ import { useSettingsStore } from "../../stores/useSettingsStore";
 import { Icon } from "../common/Icon";
 import { LLMConfigTab } from "./LLMConfig";
 import { WorkspaceTab } from "./WorkspaceTab";
-import { SkillsTab } from "./SkillsTab";
+import { HandlersTab } from "./HandlersTab";
 import { TemplatesTab } from "./TemplatesTab";
 import { AppearanceTab } from "./AppearanceTab";
 import { ShortcutsTab } from "./ShortcutsTab";
@@ -19,7 +19,7 @@ export function SettingsDialog() {
   const tabs = [
     { id: "llm" as const, label: t('settings.tabs.llm'), icon: "settings" },
     { id: "workspace" as const, label: t('settings.tabs.workspace'), icon: "folder" },
-    { id: "skill" as const, label: t('settings.tabs.skill'), icon: "tool" },
+    { id: "handler" as const, label: t('settings.tabs.handler'), icon: "tool" },
     { id: "template" as const, label: t('settings.tabs.template'), icon: "template" },
     { id: "appearance" as const, label: t('settings.tabs.appearance'), icon: "theme" },
     { id: "shortcuts" as const, label: t('settings.tabs.shortcuts'), icon: "keyboard" },
@@ -42,7 +42,7 @@ export function SettingsDialog() {
     switch (activeSettingsTab) {
       case "llm": return <LLMConfigTab />;
       case "workspace": return <WorkspaceTab />;
-      case "skill": return <SkillsTab />;
+      case "handler": return <HandlersTab />;
       case "template": return <TemplatesTab />;
       case "appearance": return <AppearanceTab />;
       case "shortcuts": return <ShortcutsTab />;

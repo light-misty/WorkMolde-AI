@@ -74,7 +74,7 @@ pub struct ContextUsageInfo {
     pub context_window: usize,
     /// 系统提示词估算 Token 数
     pub system_prompt_tokens: usize,
-    /// 工具定义估算 Token 数（包含 Tool + Skill 两部分）
+    /// 工具定义估算 Token 数（包含 Tool + Handler 两部分）
     pub function_definitions_tokens: usize,
     /// 对话历史估算 Token 数
     pub conversation_tokens: usize,

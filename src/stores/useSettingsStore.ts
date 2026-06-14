@@ -3,7 +3,7 @@ import i18n from "../i18n";
 import type {
   AppSettings,
   ProviderInfo,
-  SkillInfo,
+  HandlerInfo,
   ToolInfo,
   PromptTemplate,
   CreateTemplateParams,
@@ -81,7 +81,7 @@ interface SettingsState {
   settings: AppSettings;
   llmProviders: ProviderInfo[];
   activeProviderId: string | null;
-  skills: SkillInfo[];
+  handlers: HandlerInfo[];
   tools: ToolInfo[];
   templates: PromptTemplate[];
   isSettingsOpen: boolean;
@@ -95,10 +95,10 @@ interface SettingsState {
   setActiveTab: (tab: SettingsTab) => void;
   loadSettings: () => Promise<void>;
   loadProviders: () => Promise<void>;
-  loadSkills: () => Promise<void>;
+  loadHandlers: () => Promise<void>;
   loadTools: () => Promise<void>;
-  /** 刷新 Skill 列表（loadSkills 的别名，语义更清晰） */
-  refreshSkills: () => Promise<void>;
+  /** 刷新 Handler 列表（loadHandlers 的别名，语义更清晰） */
+  refreshHandlers: () => Promise<void>;
   /** 刷新 Tool 列表（loadTools 的别名，语义更清晰） */
   refreshTools: () => Promise<void>;
   /** 初始化 Provider 切换事件监听 */
@@ -121,7 +121,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   settings: defaultSettings,
   llmProviders: [],
   activeProviderId: null,
-  skills: [],
+  handlers: [],
   tools: [],
   templates: [],
   isSettingsOpen: false,
@@ -165,13 +165,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set({ activeSettingsTab: tab });
   },
 
-  // 从后端加载设置、Provider 列表和 Skill 列表
+  // 从后端加载设置、Provider 列表和 Handler 列表
   loadSettings: async () => {
     try {
-      const [settings, providers, skills, tools] = await Promise.all([
+      const [settings, providers, handlers, tools] = await Promise.all([
         tauriCmd.getSettings(),
         tauriCmd.listProviders(),
-        tauriCmd.listSkills(),
+        tauriCmd.listHandlers(),
         tauriCmd.listTools(),
       ]);
       const defaultProvider = providers.find((p) => p.isDefault);
@@ -179,7 +179,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         settings,
         llmProviders: providers,
         activeProviderId: defaultProvider?.id ?? null,
-        skills,
+        handlers,
         tools,
       });
       // 设置加载完成后应用外观（含语言）
@@ -205,19 +205,19 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     }
   },
 
-  // 从后端加载 Skill 列表
-  loadSkills: async () => {
+  // 从后端加载 Handler 列表
+  loadHandlers: async () => {
     try {
-      const skills = await tauriCmd.listSkills();
-      set({ skills });
+      const handlers = await tauriCmd.listHandlers();
+      set({ handlers });
     } catch (error) {
-      console.error("[SettingsStore] 加载 Skill 列表失败:", error);
+      console.error("[SettingsStore] 加载 Handler 列表失败:", error);
     }
   },
 
-  // 刷新 Skill 列表
-  refreshSkills: async () => {
-    await get().loadSkills();
+  // 刷新 Handler 列表
+  refreshHandlers: async () => {
+    await get().loadHandlers();
   },
 
   // 从后端加载 Tool 列表

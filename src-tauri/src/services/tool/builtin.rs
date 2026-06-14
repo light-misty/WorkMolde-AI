@@ -476,7 +476,7 @@ struct ReadFileTool;
 #[async_trait]
 impl Tool for ReadFileTool {
     fn tool_name(&self) -> &str { "read_file" }
-    fn description(&self) -> &str { "读取纯文本文件内容（.txt/.md/.csv/.json/.xml等），不依赖Sidecar，速度更快。注意：仅适用于纯文本文件，读取Word/Excel/PPT/PDF等结构化文档请使用docx_skill/xlsx_skill/pptx_skill/pdf_skill的read操作。文件大小限制1MB。" }
+    fn description(&self) -> &str { "读取纯文本文件内容（.txt/.md/.csv/.json/.xml等），不依赖Sidecar，速度更快。注意：仅适用于纯文本文件，读取Word/Excel/PPT/PDF等结构化文档请使用docx_handler/xlsx_handler/pptx_handler/pdf_handler的read操作。文件大小限制1MB。" }
     fn category(&self) -> &str { "filesystem" }
     fn parameters(&self) -> Value {
         json!({
@@ -1376,7 +1376,7 @@ struct WriteTextFileTool;
 #[async_trait]
 impl Tool for WriteTextFileTool {
     fn tool_name(&self) -> &str { "write_text_file" }
-    fn description(&self) -> &str { "写入纯文本文件内容（.txt/.md/.csv/.json等），不依赖Sidecar。使用场景：创建纯文本文件、修改Markdown文件、保存JSON配置。支持追加模式。注意：仅适用于纯文本，生成结构化文档请使用docx_skill/xlsx_skill/pptx_skill/pdf_skill的generate操作。" }
+    fn description(&self) -> &str { "写入纯文本文件内容（.txt/.md/.csv/.json等），不依赖Sidecar。使用场景：创建纯文本文件、修改Markdown文件、保存JSON配置。支持追加模式。注意：仅适用于纯文本，生成结构化文档请使用docx_handler/xlsx_handler/pptx_handler/pdf_handler的generate操作。" }
     fn category(&self) -> &str { "filesystem" }
     fn parameters(&self) -> Value {
         json!({

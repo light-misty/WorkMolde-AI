@@ -44,7 +44,7 @@ export interface ConfirmNodeData {
   confirmLabel: string;
   cancelLabel: string;
   confirmed: boolean | null;
-  /** 代码预览（仅 code_interpreter_skill 操作时存在） */
+  /** 代码预览（仅 code_interpreter_handler 操作时存在） */
   code?: string;
 }
 

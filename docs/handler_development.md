@@ -1,4 +1,4 @@
-# DocAgent Skill 系统开发规范
+# DocAgent Handler 系统开发规范
 
 > 版本: 1.0.0
 > 适用项目: DocAgent AI 文档处理桌面应用
@@ -9,41 +9,41 @@
 ## 目录
 
 1. [概述](#1-概述)
-2. [Skill 接口规范](#2-skill-接口规范)
-3. [内置 Skill 详细实现规范](#3-内置-skill-详细实现规范)
-4. [自定义 Skill 开发指南](#4-自定义-skill-开发指南)
-5. [Skill 与 LLM 的 Tool Calling 交互协议](#5-skill-与-llm-的-tool-calling-交互协议)
+2. [Handler 接口规范](#2-handler-接口规范)
+3. [内置 Handler 详细实现规范](#3-内置-handler-详细实现规范)
+4. [自定义 Handler 开发指南](#4-自定义-handler-开发指南)
+5. [Handler 与 LLM 的 Tool Calling 交互协议](#5-handler-与-llm-的-tool-calling-交互协议)
 6. [附录](#6-附录)
 
 ---
 
 ## 1. 概述
 
-### 1.1 什么是 Skill
+### 1.1 什么是 Handler
 
-Skill 是 DocAgent 中可被 LLM 通过 Tool Calling 机制调用的原子化能力单元。每个 Skill 封装了一项具体的文档操作能力（如生成、修改、转换、分析等），并通过统一的接口规范与 LLM 进行交互。
+Handler 是 DocAgent 中可被 LLM 通过 Tool Calling 机制调用的原子化能力单元。每个 Handler 封装了一项具体的文档操作能力（如生成、修改、转换、分析等），并通过统一的接口规范与 LLM 进行交互。
 
 ### 1.2 设计原则
 
-- **原子性**: 每个 Skill 只负责一项明确的操作，避免职责混淆
-- **可组合性**: Skill 之间可以组合使用，batch_process 即为组合调用的体现
+- **原子性**: 每个 Handler 只负责一项明确的操作，避免职责混淆
+- **可组合性**: Handler 之间可以组合使用，batch_process 即为组合调用的体现
 - **安全性**: 涉及文件修改/删除的操作必须提供快照/备份机制
-- **可观测性**: 所有 Skill 执行结果均包含结构化的 display 信息，便于前端展示
-- **可扩展性**: 支持用户通过标准接口开发自定义 Skill
+- **可观测性**: 所有 Handler 执行结果均包含结构化的 display 信息，便于前端展示
+- **可扩展性**: 支持用户通过标准接口开发自定义 Handler
 
 ### 1.3 架构总览
 
 ```
 +------------------+     Tool Calling     +------------------+
 |                  | <------------------> |                  |
-|   LLM (大模型)   |   tool_calls/result  |  Skill Registry  |
+|   LLM (大模型)   |   tool_calls/result  |  Handler Registry  |
 |                  |                      |                  |
 +------------------+                      +------------------+
                                                   |
                                           +-------+-------+
                                           |               |
                                     +-----+-----+   +-----+-----+
-                                    | 内置 Skill |   | 自定义Skill |
+                                    | 内置 Handler |   | 自定义Handler |
                                     +-----------+   +-----------+
                                     | generate   |   | custom_1   |
                                     | modify     |   | custom_2   |
@@ -64,7 +64,7 @@ Skill 是 DocAgent 中可被 LLM 通过 Tool Calling 机制调用的原子化能
 
 ---
 
-## 2. Skill 接口规范
+## 2. Handler 接口规范
 
 ### 2.1 核心 Trait 定义（Rust）
 
@@ -73,7 +73,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
-/// Skill 执行结果中的展示信息
+/// Handler 执行结果中的展示信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DisplayInfo {
     /// 简短摘要，用于对话气泡中展示
@@ -82,9 +82,9 @@ pub struct DisplayInfo {
     pub details: Option<Value>,
 }
 
-/// Skill 执行结果
+/// Handler 执行结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SkillResult {
+pub struct HandlerResult {
     /// 是否执行成功
     pub success: bool,
     /// 结果数据（结构化 JSON）
@@ -95,7 +95,7 @@ pub struct SkillResult {
     pub display: DisplayInfo,
 }
 
-/// Skill 参数的 JSON Schema 定义
+/// Handler 参数的 JSON Schema 定义
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParameterSchema {
     /// 参数名称
@@ -112,33 +112,33 @@ pub struct ParameterSchema {
     pub enum_values: Option<Vec<String>>,
 }
 
-/// Skill 接口 Trait
+/// Handler 接口 Trait
 #[async_trait::async_trait]
-pub trait Skill: Send + Sync {
-    /// Skill 唯一标识名称（如 "generate_document"）
-    fn name(&self) -> &str;
+pub trait Handler: Send + Sync {
+    /// Handler 唯一标识名称（如 "generate_document"）
+    fn handler_name(&self) -> &str;
 
-    /// Skill 功能描述（供 LLM 理解何时调用此 Skill）
+    /// Handler 功能描述（供 LLM 理解何时调用此 Handler）
     fn description(&self) -> &str;
 
     /// 参数定义（JSON Schema 格式）
     fn parameters(&self) -> Value;
 
-    /// 执行 Skill
+    /// 执行 Handler
     ///
     /// # 参数
     /// - `params`: LLM 传递的调用参数（已通过 JSON Schema 验证）
     ///
     /// # 返回
-    /// - `SkillResult`: 执行结果
-    async fn execute(&self, params: Value) -> SkillResult;
+    /// - `HandlerResult`: 执行结果
+    async fn execute(&self, params: Value) -> HandlerResult;
 }
 ```
 
-### 2.2 SkillResult 详细规范
+### 2.2 HandlerResult 详细规范
 
 ```rust
-impl SkillResult {
+impl HandlerResult {
     /// 创建成功结果
     pub fn ok(data: Value, summary: &str, details: Option<Value>) -> Self {
         Self {
@@ -169,7 +169,7 @@ impl SkillResult {
 
 ### 2.3 JSON Schema 参数规范
 
-每个 Skill 的 `parameters()` 方法返回符合 JSON Schema Draft-07 规范的对象，格式如下：
+每个 Handler 的 `parameters()` 方法返回符合 JSON Schema Draft-07 规范的对象，格式如下：
 
 ```json
 {
@@ -187,58 +187,58 @@ impl SkillResult {
 该 Schema 同时用于：
 1. **LLM Tool Calling**: 作为 `tools[].function.parameters` 传递给模型
 2. **参数验证**: 在执行前对 LLM 返回的参数进行校验
-3. **文档生成**: 自动生成 Skill 使用文档
+3. **文档生成**: 自动生成 Handler 使用文档
 
-### 2.4 Skill 注册表
+### 2.4 Handler 注册表
 
 ```rust
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// Skill 注册表，管理所有已注册的 Skill
-pub struct SkillRegistry {
-    skills: HashMap<String, Arc<dyn Skill>>,
+/// Handler 注册表，管理所有已注册的 Handler
+pub struct HandlerRegistry {
+    handlers: HashMap<String, Arc<dyn Handler>>,
 }
 
-impl SkillRegistry {
+impl HandlerRegistry {
     pub fn new() -> Self {
         Self {
-            skills: HashMap::new(),
+            handlers: HashMap::new(),
         }
     }
 
-    /// 注册一个 Skill
-    pub fn register(&mut self, skill: Arc<dyn Skill>) {
-        let name = skill.name().to_string();
-        self.skills.insert(name, skill);
+    /// 注册一个 Handler
+    pub fn register(&mut self, handler: Arc<dyn Handler>) {
+        let name = handler.handler_name().to_string();
+        self.handlers.insert(name, handler);
     }
 
-    /// 根据名称获取 Skill
-    pub fn get(&self, name: &str) -> Option<&Arc<dyn Skill>> {
-        self.skills.get(name)
+    /// 根据名称获取 Handler
+    pub fn get(&self, name: &str) -> Option<&Arc<dyn Handler>> {
+        self.handlers.get(name)
     }
 
-    /// 获取所有 Skill 的 Tool Calling 定义
+    /// 获取所有 Handler 的 Tool Calling 定义
     pub fn tool_definitions(&self) -> Vec<Value> {
-        self.skills.values().map(|skill| {
+        self.handlers.values().map(|handler| {
             serde_json::json!({
                 "type": "function",
                 "function": {
-                    "name": skill.name(),
-                    "description": skill.description(),
-                    "parameters": skill.parameters(),
+                    "name": handler.handler_name(),
+                    "description": handler.description(),
+                    "parameters": handler.parameters(),
                 }
             })
         }).collect()
     }
 
-    /// 执行指定 Skill
-    pub async fn execute(&self, name: &str, params: Value) -> SkillResult {
-        match self.skills.get(name) {
-            Some(skill) => skill.execute(params).await,
-            None => SkillResult::err(
-                &format!("未找到 Skill: {}", name),
-                &format!("Skill '{}' 不存在", name),
+    /// 执行指定 Handler
+    pub async fn execute(&self, name: &str, params: Value) -> HandlerResult {
+        match self.handlers.get(name) {
+            Some(handler) => handler.execute(params).await,
+            None => HandlerResult::err(
+                &format!("未找到 Handler: {}", name),
+                &format!("Handler '{}' 不存在", name),
             ),
         }
     }
@@ -247,7 +247,7 @@ impl SkillRegistry {
 
 ---
 
-## 3. 内置 Skill 详细实现规范
+## 3. 内置 Handler 详细实现规范
 
 ### 3.1 generate_document - 生成文档
 
@@ -1210,7 +1210,7 @@ impl SkillRegistry {
 
 3. 逐个执行
    |-- 遍历 file_paths
-   |-- 对每个文件调用对应的 Skill
+   |-- 对每个文件调用对应的 Handler
        |-- generate -> generate_document
        |-- modify -> modify_document
        |-- convert -> convert_format
@@ -1271,7 +1271,7 @@ impl SkillRegistry {
 
 ---
 
-## 5. Skill 与 LLM 的 Tool Calling 交互协议
+## 5. Handler 与 LLM 的 Tool Calling 交互协议
 
 ### 5.1 交互流程总览
 
@@ -1280,7 +1280,7 @@ impl SkillRegistry {
    |
    v
 +------------------+
-| 构建系统提示词    |  <-- 包含可用 Skill 列表（tool_definitions）
+| 构建系统提示词    |  <-- 包含可用 Handler 列表（tool_definitions）
 +------------------+
    |
    v
@@ -1304,7 +1304,7 @@ impl SkillRegistry {
            |
            v
    +------------------+
-   | Skill 选择与     |
+   | Handler 选择与     |
    | 参数映射         |
    +------------------+
            |
@@ -1316,7 +1316,7 @@ impl SkillRegistry {
            | (确认通过)             | (拒绝)
            v                        v
    +------------------+     返回拒绝消息给 LLM
-   | 执行 Skill       |
+   | 执行 Handler       |
    +------------------+
            |
            v
@@ -1342,7 +1342,7 @@ impl SkillRegistry {
 
 #### 5.2.1 请求格式
 
-发送给 LLM 的请求中包含 `tools` 字段，由 `SkillRegistry::tool_definitions()` 生成：
+发送给 LLM 的请求中包含 `tools` 字段，由 `HandlerRegistry::tool_definitions()` 生成：
 
 ```json
 {
@@ -1413,20 +1413,20 @@ LLM 返回 `tool_calls` 时的响应格式：
 1. 检查 `choices[0].message.tool_calls` 是否存在
 2. 遍历 `tool_calls` 数组，提取每个调用的：
    - `id`: 工具调用 ID（用于结果关联）
-   - `function.name`: Skill 名称
+   - `function.name`: Handler 名称
    - `function.arguments`: 参数 JSON 字符串
 
-### 5.3 Skill 选择与参数映射
+### 5.3 Handler 选择与参数映射
 
-#### 5.3.1 Skill 选择
+#### 5.3.1 Handler 选择
 
 ```rust
-/// 根据 LLM 返回的 tool_call 选择并执行对应的 Skill
+/// 根据 LLM 返回的 tool_call 选择并执行对应的 Handler
 async fn handle_tool_call(
-    registry: &SkillRegistry,
+    registry: &HandlerRegistry,
     tool_call: &ToolCall,
-) -> (String, SkillResult) {
-    let skill_name = &tool_call.function.name;
+) -> (String, HandlerResult) {
+    let handler_name = &tool_call.function.name;
 
     // 解析参数 JSON
     let params: Value = match serde_json::from_str(&tool_call.function.arguments) {
@@ -1434,7 +1434,7 @@ async fn handle_tool_call(
         Err(e) => {
             return (
                 tool_call.id.clone(),
-                SkillResult::err(
+                HandlerResult::err(
                     &format!("参数 JSON 解析失败: {}", e),
                     "参数格式错误",
                 ),
@@ -1442,15 +1442,15 @@ async fn handle_tool_call(
         }
     };
 
-    // 从注册表查找并执行 Skill
-    let result = registry.execute(skill_name, params).await;
+    // 从注册表查找并执行 Handler
+    let result = registry.execute(handler_name, params).await;
     (tool_call.id.clone(), result)
 }
 ```
 
 #### 5.3.2 参数映射规则
 
-| LLM 参数类型 | Skill 参数类型 | 映射规则 |
+| LLM 参数类型 | Handler 参数类型 | 映射规则 |
 |-------------|---------------|----------|
 | string | string | 直接映射 |
 | integer | integer | 直接映射 |
@@ -1458,8 +1458,8 @@ async fn handle_tool_call(
 | boolean | boolean | 直接映射 |
 | array | array | 直接映射 |
 | object | object | 直接映射 |
-| null | - | 移除该字段，使用 Skill 默认值 |
-| 缺失字段 | - | 使用 skill.json 中定义的 default 值 |
+| null | - | 移除该字段，使用 Handler 默认值 |
+| 缺失字段 | - | 使用 handler.json 中定义的 default 值 |
 
 #### 5.3.3 参数补全
 
@@ -1484,7 +1484,7 @@ fn fill_defaults(params: &mut Value, schema: &Value) {
 
 ### 5.4 执行结果返回格式
 
-Skill 执行完成后，需要将结果以 `tool` 角色消息返回给 LLM：
+Handler 执行完成后，需要将结果以 `tool` 角色消息返回给 LLM：
 
 ```json
 {
@@ -1496,10 +1496,10 @@ Skill 执行完成后，需要将结果以 `tool` 角色消息返回给 LLM：
 
 #### 5.4.1 结果序列化规则
 
-1. 将完整的 `SkillResult` 序列化为 JSON 字符串
+1. 将完整的 `HandlerResult` 序列化为 JSON 字符串
 2. `content` 字段为 JSON 字符串（非 JSON 对象）
 3. `tool_call_id` 必须与 LLM 返回的 `tool_calls[].id` 一致
-4. 即使 Skill 执行失败，也必须返回 `tool` 消息（包含 error 信息）
+4. 即使 Handler 执行失败，也必须返回 `tool` 消息（包含 error 信息）
 
 #### 5.4.2 失败结果返回
 
@@ -1514,7 +1514,7 @@ Skill 执行完成后，需要将结果以 `tool` 角色消息返回给 LLM：
 LLM 收到失败结果后，可以：
 - 向用户解释失败原因
 - 建议替代方案
-- 使用其他 Skill 重试
+- 使用其他 Handler 重试
 
 ### 5.5 多轮 Tool Calling 循环控制
 
@@ -1534,7 +1534,7 @@ LLM 可能在收到工具结果后继续发起 `tool_calls`，形成多轮调用
 |------|--------|------|
 | `max_tool_rounds` | 10 | 最大 Tool Calling 轮次 |
 | `max_tools_per_round` | 3 | 单轮最大并行工具调用数 |
-| `tool_call_timeout` | 30s | 单个 Skill 执行超时时间 |
+| `tool_call_timeout` | 30s | 单个 Handler 执行超时时间 |
 
 #### 5.5.3 循环终止条件
 
@@ -1550,7 +1550,7 @@ LLM 可能在收到工具结果后继续发起 `tool_calls`，形成多轮调用
 ```rust
 /// Tool Calling 循环控制器
 pub struct ToolCallingLoop {
-    registry: Arc<SkillRegistry>,
+    registry: Arc<HandlerRegistry>,
     max_rounds: usize,
     max_tools_per_round: usize,
     timeout: Duration,
@@ -1559,7 +1559,7 @@ pub struct ToolCallingLoop {
 }
 
 impl ToolCallingLoop {
-    pub fn new(registry: Arc<SkillRegistry>) -> Self {
+    pub fn new(registry: Arc<HandlerRegistry>) -> Self {
         Self {
             registry,
             max_rounds: 10,
@@ -1642,10 +1642,10 @@ impl ToolCallingLoop {
 
 #### 5.6.1 确认触发条件
 
-以下情况需要用户确认后才能执行 Skill：
+以下情况需要用户确认后才能执行 Handler：
 
-1. Skill 声明了 `requires_confirmation: true`
-2. Skill 的 `risk_level` 为 `high` 或 `critical`
+1. Handler 声明了 `requires_confirmation: true`
+2. Handler 的 `risk_level` 为 `high` 或 `critical`
 3. `batch_process` 操作中包含 `modify` 类型
 4. `delete_document` 操作（强制确认）
 
@@ -1668,7 +1668,7 @@ LLM 返回 tool_calls
        |
        +--- 需要确认 --> 展示确认对话框
                |
-               +--- 用户确认 --> 执行 Skill
+               +--- 用户确认 --> 执行 Handler
                |        |
                |        v
                |   返回正常结果给 LLM
@@ -1747,9 +1747,9 @@ LLM 返回 tool_calls
 
 ## 6. 附录
 
-### 6.1 内置 Skill 速查表
+### 6.1 内置 Handler 速查表
 
-| Skill | 名称 | 风险等级 | 需确认 | 核心参数 |
+| Handler | 名称 | 风险等级 | 需确认 | 核心参数 |
 |-------|------|----------|--------|----------|
 | 生成文档 | `generate_document` | 低 | 否 | document_type, filename, content |
 | 修改文档 | `modify_document` | 高 | 是 | file_path, instructions |
@@ -1763,7 +1763,7 @@ LLM 返回 tool_calls
 
 ### 6.2 错误码汇总
 
-| 错误码 | 类别 | 适用 Skill |
+| 错误码 | 类别 | 适用 Handler |
 |--------|------|-----------|
 | `INVALID_FORMAT` | 参数 | generate_document |
 | `FILENAME_INVALID` | 参数 | generate_document |
@@ -1788,11 +1788,11 @@ LLM 返回 tool_calls
 | `EMPTY_FILE_LIST` | 参数 | batch_process |
 | `INVALID_OPERATION` | 参数 | batch_process |
 | `PARAMS_MISMATCH` | 参数 | batch_process |
-| `PARAM_VALIDATION_FAILED` | 参数 | 所有 Skill |
-| `USER_REJECTED` | 确认 | 需确认的 Skill |
-| `CONFIRMATION_TIMEOUT` | 确认 | 需确认的 Skill |
-| `SIDECAR_UNAVAILABLE` | 外部 | 所有 Skill |
-| `SIDECAR_TIMEOUT` | 外部 | 所有 Skill |
+| `PARAM_VALIDATION_FAILED` | 参数 | 所有 Handler |
+| `USER_REJECTED` | 确认 | 需确认的 Handler |
+| `CONFIRMATION_TIMEOUT` | 确认 | 需确认的 Handler |
+| `SIDECAR_UNAVAILABLE` | 外部 | 所有 Handler |
+| `SIDECAR_TIMEOUT` | 外部 | 所有 Handler |
 
 ### 6.3 JSON Schema 常用模式
 
@@ -1847,14 +1847,14 @@ LLM 返回 tool_calls
 }
 ```
 
-### 6.4 Skill 生命周期
+### 6.4 Handler 生命周期
 
 ```
 注册阶段:
-  Skill 实现 Trait / 编写 skill.json
+  Handler 实现 Trait / 编写 handler.json
        |
        v
-  注册到 SkillRegistry
+  注册到 HandlerRegistry
        |
        v
   生成 tool_definitions 供 LLM 使用
@@ -1869,16 +1869,16 @@ LLM 返回 tool_calls
   确认检查 (risk_level / requires_confirmation)
        |
        v
-  执行 Skill (execute 方法)
+  执行 Handler (execute 方法)
        |
        v
-  结果序列化 (SkillResult -> JSON)
+  结果序列化 (HandlerResult -> JSON)
        |
        v
   返回给 LLM (tool 角色消息)
 
 卸载阶段:
-  从 SkillRegistry 移除
+  从 HandlerRegistry 移除
        |
        v
   释放资源
@@ -1886,9 +1886,9 @@ LLM 返回 tool_calls
 
 ### 6.5 版本兼容性
 
-| Skill 版本 | DocAgent 版本 | 变更说明 |
+| Handler 版本 | DocAgent 版本 | 变更说明 |
 |-----------|--------------|----------|
-| 1.0.0 | >= 0.1.0 | 初始版本，9 个内置 Skill |
+| 1.0.0 | >= 0.1.0 | 初始版本，9 个内置 Handler |
 
-> 自定义 Skill 的 `version` 字段遵循语义化版本规范（SemVer）。
+> 自定义 Handler 的 `version` 字段遵循语义化版本规范（SemVer）。
 > 主版本号变更表示不兼容的 API 变更，次版本号变更表示向后兼容的功能新增，修订号变更表示向后兼容的问题修复。

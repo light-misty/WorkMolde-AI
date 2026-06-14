@@ -91,7 +91,7 @@ cargo clean
 │  │  ├─ sidebar/        右侧栏: FileTreeSection, AgentInfoSection, TodoSection, ContextWindowSection
 │  │  ├─ preview/        文档预览浮层: PreviewOverlay, MarkdownPreview, PdfCanvasViewer,
 │  │  │                      VersionHistoryPanel (版本快照历史)
-│  │  ├─ settings/       设置弹窗: SettingsDialog + 8 个标签页 (LLMConfig, WorkspaceTab, SkillsTab,
+│  │  ├─ settings/       设置弹窗: SettingsDialog + 8 个标签页 (LLMConfig, WorkspaceTab, HandlersTab,
 │  │  │                      TemplatesTab, AppearanceTab, ShortcutsTab, GeneralTab, HelpTab)
 │  │  │                      + 子弹窗 (ProviderFormDialog, AddWorkspaceDialog, TemplateEditDialog)
 │  │  ├─ session/        历史会话面板: HistoryPanel
@@ -111,14 +111,14 @@ cargo clean
 │  ├─ capabilities/      Tauri 权限配置 (shell, dialog 等插件权限)
 │  ├─ src/
 │  │  ├─ lib.rs          入口, AppState定义 (含 network_monitor), 命令注册, 初始化流程
-│  │  ├─ commands/       Tauri命令层 (10个模块): llm, session, workspace, document, skill,
+│  │  ├─ commands/       Tauri命令层 (10个模块): llm, session, workspace, document, handler,
 │  │  │                       settings, agent, template, log, update (desktop-only)
 │  │  ├─ services/       业务逻辑层
 │  │  │  ├─ agent/       Agent调度引擎: executor (Tool Calling循环), context (对话上下文管理)
 │  │  │  │  └─ prompts/   System Prompt: document_design, prompt_loader, task_type, token_budget
 │  │  │  ├─ llm/         LLM多Provider适配: router, provider (trait),
 │  │  │  │                  openai_adapter, anthropic_adapter, gemini_adapter
-│  │  │  ├─ skill/       Skill引擎: registry (注册表), builtin
+│  │  │  ├─ handler/      Handler引擎: registry (注册表), builtin (文档处理器，始终启用)
 │  │  │  ├─ tool/        Tool引擎: registry, builtin, trait_def (文件系统操作，始终启用)
 │  │  │  ├─ document/    Python Sidecar进程管理 (自动重启、超时、重试)
 │  │  │  ├─ attachment.rs 文件附件处理 (图片/文档/文本，base64编码，MIME校验)
@@ -128,7 +128,7 @@ cargo clean
 │  │  ├─ config/         配置管理: app_settings, llm_config, workspace_config, ConfigManager
 │  │  ├─ models/         数据模型: message (含 AttachmentMeta/AttachmentType), session, document,
 │  │  │                      llm (含 ContentPart/ProviderConfig/ContextUsageInfo),
-│  │  │                      skill, workspace, template, tool
+│  │  │                      handler, workspace, template, tool
 │  │  ├─ events/         事件系统: types (15+事件名常量+payload结构体), emitter (事件发射封装)
 │  │  ├─ utils/          工具: logger (双输出日志: 文件+stderr)
 │  │  └─ errors.rs       统一错误码 (按模块分段: LLM/Agent/Doc/DB/Config/FS/Runtime/Update/Tool)
@@ -145,7 +145,7 @@ cargo clean
    ├─ tech_architecture.md     技术架构
    ├─ tauri_commands.md        Tauri命令/事件接口规范
    ├─ database_design.md       数据库设计
-   ├─ skill_development.md     Skill开发规范
+   ├─ handler_development.md   Handler开发规范
    ├─ component_design.md      前端组件设计
    ├─ task_breakdown.md        任务分解
    ├─ plans/                   设计文档 (工作流重设计、上下文窗口设计等)
@@ -162,11 +162,11 @@ cargo clean
 
 ### Agent 执行流程
 1. 前端 `useAgent` hook 调用 `start_agent` 命令
-2. Rust `AgentExecutor` 构建上下文（System Prompt + Skill/Tool Definitions + 历史消息）
-3. 循环: 调用 LLM (流式) → 解析响应 → 执行 Tool Calling (Skill/Tool) → 返回结果给 LLM
+2. Rust `AgentExecutor` 构建上下文（System Prompt + Handler/Tool Definitions + 历史消息）
+3. 循环: 调用 LLM (流式) → 解析响应 → 执行 Tool Calling (Handler/Tool) → 返回结果给 LLM
 4. 高风险操作（删除/修改/批量）需用户确认，通过 `confirm_channels` oneshot channel 同步等待（5分钟超时）
 5. 每轮迭代后增量持久化消息到 SQLite，防止崩溃丢失
-6. Skill/Tool 执行时短暂持锁获取 Arc 引用后立即释放，避免阻塞注册表
+6. Handler/Tool 执行时短暂持锁获取 Arc 引用后立即释放，避免阻塞注册表
 7. 支持用户手动停止（`stop_agent`），通过 `should_stop` 闭包检查；停止时状态流转变为 `stopping` → `cancelled`
 
 ### LLM Provider 系统
@@ -178,20 +178,19 @@ cargo clean
 - Provider 类型 (前端): `openai | anthropic | ollama | gemini | custom`；Rust 端以 String 存储，兼容更多类型
 - 每 5 分钟后台自动执行健康检查，自动标记不可用 Provider；Provider 切换时发射 `llm:provider_switch` 事件
 
-### Skill 系统（文档处理，始终启用）
-- 每个 Skill 实现 `Skill` trait: `skill_name()`, `description()`, `parameters()` (JSON Schema), `execute()`
-- 内置 6 个文档处理 Skill（均通过 Python Sidecar 执行）:
-  - `generate_document`: 生成 docx/xlsx/pptx/pdf/md（含 Excel 公式/条件格式、PPT 颜色方案/字体、PDF 水印/密码等）
-  - `read_document`: 读取结构化文档内容，支持格式信息
-  - `modify_document`: 修改文档（替换/添加段落/表格/书签/超链接/页眉页脚/目录等 30+ 操作类型）
-  - `convert_format`: 格式转换（docx/pdf/md/txt/csv/html 等互转）
-  - `analyze_document`: 分析文档结构和统计信息
-  - `batch_process`: 批量处理（批量转换/修改/分析）
-- Skill 始终启用，前端 SkillsTab 仅展示信息
+### Handler 系统（文档处理，始终启用）
+- 每个 Handler 实现 `Handler` trait: `handler_name()`, `description()`, `parameters()` (JSON Schema), `execute()`
+- 内置 5 个文档类型 Handler（均通过 Python Sidecar 执行）:
+  - `docx_handler`: Word 文档处理（生成/读取/修改/转换/分析）
+  - `xlsx_handler`: Excel 文档处理（生成/读取/修改/转换/分析）
+  - `pptx_handler`: PPT 文档处理（生成/读取/修改/转换/分析）
+  - `pdf_handler`: PDF 文档处理（生成/读取/修改/转换/分析）
+  - `code_interpreter_handler`: 代码解释器（执行 Python 代码，用于复杂文档生成和修改）
+- Handler 始终启用，前端 HandlersTab 仅展示信息
 
 ### Tool 系统（文件系统操作，始终启用）
-- Tool 是轻量级、始终启用的基础文件系统操作，与 Skill 平行但不可禁用
-- 每个 Tool 实现 `Tool` trait（与 Skill 相似的接口: `tool_name()`, `description()`, `parameters()`, `execute()`）
+- Tool 是轻量级、始终启用的基础文件系统操作，与 Handler 平行但不可禁用
+- 每个 Tool 实现 `Tool` trait（与 Handler 相似的接口: `tool_name()`, `description()`, `parameters()`, `execute()`）
 - 内置 8 个 Tool（纯 Rust 实现，不依赖 Python Sidecar）:
   - `list_directory`: 列出目录内容（支持深度控制、扩展名过滤、排序，含路径遍历安全校验）
   - `search_files`: 按文件名/内容搜索文件（支持扩展名过滤、内容预览）
@@ -214,13 +213,13 @@ AppState {
     doc_service: Arc<DocumentService>,
     llm_router: Arc<RwLock<Arc<LlmRouter>>>,
     tool_registry: Arc<ToolRegistry>,                    // 工具（始终启用，不加 Mutex）
-    skill_registry: Arc<Mutex<SkillRegistry>>,           // 技能（始终启用，Mutex 用于运行时注册保护）
+    handler_registry: Arc<Mutex<HandlerRegistry>>,        // 处理器（始终启用，Mutex 用于运行时注册保护）
     fs_watcher: Arc<FsWatcherService>,
     network_monitor: Arc<NetworkMonitor>,                 // 网络状态监控（Online/Offline）
 }
 ```
-- `tool_registry` 在运行时不变，无需 Mutex 保护；`skill_registry` 使用 Mutex 保护运行时注册访问
-- 锁获取原则：Skill 执行时短暂持锁获取 `Arc` 引用后立即释放，避免阻塞注册表
+- `tool_registry` 在运行时不变，无需 Mutex 保护；`handler_registry` 使用 Mutex 保护运行时注册访问
+- 锁获取原则：Handler 执行时短暂持锁获取 `Arc` 引用后立即释放，避免阻塞注册表
 
 ### 前端组件要点
 - **懒加载**: PreviewOverlay、SettingsDialog、HistoryPanel 通过 `React.lazy` 延迟加载，减少首屏体积
@@ -255,14 +254,14 @@ AppState {
 
 错误码按模块分段：
 - 1000-1999: LLM (连接失败/认证/限流/超时/Provider不可用等)
-- 2000-2999: Agent (已运行/最大迭代/确认超时/Skill不存在等)
+- 2000-2999: Agent (已运行/最大迭代/确认超时/Handler不存在等)
 - 3000-3999: 文档处理 (文件不存在/格式不支持/解析错误/Sidecar错误等)
 - 4000-4999: 数据库 (连接/查询/记录不存在/约束冲突/迁移失败等)
 - 5000-5999: 配置 (格式无效/字段缺失/Provider不存在等)
 - 6000-6999: 文件系统 (路径不存在/权限/已存在/IO错误等)
 - 7000-7999: 运行时 (事件发射错误)
 - 8000-8999: 更新 (检查/下载/安装失败)
-- 9000-9999: 工具/技能 (不存在/参数无效/执行失败/路径越界)
+- 9000-9999: 工具/处理器 (不存在/参数无效/执行失败/路径越界)
 
 ### 附件系统与多模态支持
 - `attachment.rs` 负责处理用户上传的附件文件（图片/文档/文本）
@@ -326,7 +325,7 @@ AppState {
 - CSP 限制严格: 仅允许 `http://localhost:*` 和 `http://127.0.0.1:*` 的 connect-src（用于 LLM API 调用）
 - 使用 `capabilities/` 目录配置插件权限（shell、dialog 等）
 - Tauri 插件: `tauri-plugin-shell`, `tauri-plugin-dialog`；桌面端额外注册 `tauri-plugin-updater` + `tauri-plugin-process`
-- 40+ 注册命令覆盖 LLM 管理、会话 CRUD、工作区操作、文档处理、Skill 管理、工具管理、设置、模板 CRUD、日志读取、DevTools 切换、更新检查/安装等
+- 40+ 注册命令覆盖 LLM 管理、会话 CRUD、工作区操作、文档处理、Handler 管理、工具管理、设置、模板 CRUD、日志读取、DevTools 切换、更新检查/安装等
 
 ### 自动更新
 - 通过 `tauri-plugin-updater` 实现自动更新，NSIS 安装器打包
@@ -350,7 +349,7 @@ AppState {
 `docs/` 目录包含详细的开发规范文档，在实现相关功能前应优先查阅:
 - `tech_architecture.md` — 完整技术架构与技术选型理由
 - `tauri_commands.md` — 所有 Tauri 命令、事件、错误码的完整接口规范
-- `skill_development.md` — Skill 接口规范与开发指南
+- `handler_development.md` — Handler 接口规范与开发指南
 - `database_design.md` — 数据库表结构与迁移策略
 - `component_design.md` — 前端组件层级与交互设计
 - `task_breakdown.md` — 阶段任务分解与进度
@@ -377,9 +376,9 @@ AppState {
 - Tauri 命令名 `snake_case`，前端封装函数名 `camelCase`（见 `src/services/tauri.ts`）
 - Rust 事件 payload 使用 `#[serde(rename_all = "camelCase")]`，前端直接接收 camelCase 字段
 - Python Sidecar 的 `input_path` 要映射为 handler 期望的 `path` 参数
-- Skill/Tool 的 `workspace_root` 由 executor 注入，不信任 LLM 提供的值，防止路径遍历攻击
+- Handler/Tool 的 `workspace_root` 由 executor 注入，不信任 LLM 提供的值，防止路径遍历攻击
 - 文档预览: 普通文件返回文本 `PreviewContent`，PDF 文件通过 `get_pdf_data` 返回 base64 数据由前端 `PdfCanvasViewer` 渲染
 - 版本历史: `VersionHistoryPanel` 组件展示文档版本快照列表，支持版本对比（diff）和回滚操作
 - 所有文件操作（创建/删除/重命名）通过 Tauri 命令在 Rust 端执行，前端不直接操作文件系统
-- 应用初始化顺序: 应用数据目录 → 日志系统 → 数据库（含损坏检测+自动重建） → 配置管理器 → LLM Config → LLM Router → Sidecar → Skill 注册表 + builtin skills → Tool 注册表 + builtin tools → AppState 注册 → FS 监听器 → 网络状态监控器 → 后台健康检查任务（LLM 每5分钟、Sidecar 每3分钟、网络监控）
+- 应用初始化顺序: 应用数据目录 → 日志系统 → 数据库（含损坏检测+自动重建） → 配置管理器 → LLM Config → LLM Router → Sidecar → Handler 注册表 + builtin handlers → Tool 注册表 + builtin tools → AppState 注册 → FS 监听器 → 网络状态监控器 → 后台健康检查任务（LLM 每5分钟、Sidecar 每3分钟、网络监控）
 - 应用安装了自定义 panic hook，将 panic 信息记录到日志文件并尝试发射 `runtime:error` 事件到前端

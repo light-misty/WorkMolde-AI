@@ -202,7 +202,7 @@ mod tests {
             tool_calls: Some(vec![
                 ToolCall {
                     id: "call_1".to_string(),
-                    name: "code_interpreter_skill".to_string(),
+                    name: "code_interpreter_handler".to_string(),
                     arguments: serde_json::json!({"code": "doc = create_word_doc()", "description": "生成周报"}),
                     result: None,
                 },
@@ -216,7 +216,7 @@ mod tests {
         assert_eq!(chat_msg.role, "assistant");
         let tool_calls = chat_msg.tool_calls.unwrap();
         assert_eq!(tool_calls.len(), 1);
-        assert_eq!(tool_calls[0].name, "code_interpreter_skill");
+        assert_eq!(tool_calls[0].name, "code_interpreter_handler");
         assert_eq!(tool_calls[0].id, "call_1");
         // arguments 应该是 JSON 字符串
         let args: serde_json::Value = serde_json::from_str(&tool_calls[0].arguments).unwrap();
@@ -233,7 +233,7 @@ mod tests {
             tool_calls: Some(vec![
                 ToolCall {
                     id: "call_1".to_string(),
-                    name: "docx_skill".to_string(),
+                    name: "docx_handler".to_string(),
                     arguments: serde_json::json!({}),
                     result: Some(serde_json::json!({"success": true})),
                 },
@@ -292,13 +292,13 @@ mod tests {
             tool_calls: Some(vec![
                 ToolCall {
                     id: "call_a".to_string(),
-                    name: "docx_skill".to_string(),
+                    name: "docx_handler".to_string(),
                     arguments: serde_json::json!({"action": "read", "path": "a.docx"}),
                     result: None,
                 },
                 ToolCall {
                     id: "call_b".to_string(),
-                    name: "xlsx_skill".to_string(),
+                    name: "xlsx_handler".to_string(),
                     arguments: serde_json::json!({"action": "read", "path": "b.xlsx"}),
                     result: None,
                 },
@@ -311,7 +311,7 @@ mod tests {
         let chat_msg = msg.to_chat_message().unwrap();
         let tool_calls = chat_msg.tool_calls.unwrap();
         assert_eq!(tool_calls.len(), 2);
-        assert_eq!(tool_calls[0].name, "docx_skill");
-        assert_eq!(tool_calls[1].name, "xlsx_skill");
+        assert_eq!(tool_calls[0].name, "docx_handler");
+        assert_eq!(tool_calls[1].name, "xlsx_handler");
     }
 }

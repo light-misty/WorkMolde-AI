@@ -1,6 +1,6 @@
 // ===== 设置相关类型定义 - 与 Rust 后端对齐 =====
 
-export type SettingsTab = "llm" | "workspace" | "skill" | "template" | "appearance" | "shortcuts" | "general" | "help";
+export type SettingsTab = "llm" | "workspace" | "handler" | "template" | "appearance" | "shortcuts" | "general" | "help";
 
 // ----- 应用设置 -----
 
@@ -106,9 +106,9 @@ export interface ModelInfo {
   supportsToolCall: boolean;
 }
 
-// ----- Skill 相关类型 -----
+// ----- Handler 相关类型 -----
 
-export interface SkillInfo {
+export interface HandlerInfo {
   id: string;
   name: string;
   description: string;
@@ -141,7 +141,7 @@ export interface ContextUsageInfo {
   contextWindow: number;
   /** 系统提示词估算 Token 数 */
   systemPromptTokens: number;
-  /** 工具定义估算 Token 数（包含 Tool + Skill 两部分） */
+  /** 工具定义估算 Token 数（包含 Tool + Handler 两部分） */
   functionDefinitionsTokens: number;
   /** 对话历史估算 Token 数 */
   conversationTokens: number;

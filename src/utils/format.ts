@@ -66,18 +66,18 @@ export function generateToolBrief(toolName: string, input: Record<string, unknow
     analyze: i18n.t('toolBrief.analyze'),
   };
   const formatMap: Record<string, string> = {
-    docx_skill: "Word",
-    xlsx_skill: "Excel",
-    pptx_skill: "PPT",
-    pdf_skill: "PDF",
+    docx_handler: "Word",
+    xlsx_handler: "Excel",
+    pptx_handler: "PPT",
+    pdf_handler: "PDF",
   };
   const action = actionMap[f("action")] || "";
   const format = formatMap[toolName] || "";
   switch (toolName) {
-    case "docx_skill":
-    case "xlsx_skill":
-    case "pptx_skill":
-    case "pdf_skill":
+    case "docx_handler":
+    case "xlsx_handler":
+    case "pptx_handler":
+    case "pdf_handler":
       // 流式阶段提前发射时参数可能为空，此时只显示格式名称
       if (action) {
         return `${action} ${format} ${f("path") || i18n.t('toolBrief.document')}`;
@@ -93,7 +93,7 @@ export function generateToolBrief(toolName: string, input: Record<string, unknow
       return `${i18n.t('toolBrief.read')} ${f("path") || i18n.t('toolBrief.file')}`;
     case "write_text_file":
       return `${i18n.t('toolBrief.write')} ${f("path") || i18n.t('toolBrief.file')}`;
-    case "code_interpreter_skill":
+    case "code_interpreter_handler":
       return `${i18n.t('toolBrief.executeCode')} ${f("description") || ""}`;
     default:
       return toolName;
