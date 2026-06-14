@@ -28,6 +28,28 @@ export function WorkflowTimeline({ onRetryError }: WorkflowTimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   // 追踪是否应自动滚动（用户未手动上滚时自动跟随）
   const autoScrollRef = useRef(true);
+  // 用于取消前一次 requestAnimationFrame，避免同一帧内重复滚动
+  const rafIdRef = useRef<number>(0);
+  // 标记当前滚动是否由程序触发，避免 onScroll 误判为用户手动上滚
+  const isProgrammaticScrollRef = useRef(false);
+
+  // 计算流式内容变化标识：当流式节点的文本/代码内容增长时，此值变化
+  // 用于在流式输出期间（nodes.length 不变但内容增长时）也触发自动滚动
+  const streamingContentKey = nodes.reduce((acc, node) => {
+    if (node.type === "content") {
+      const d = node.data as { content: string; isStreaming?: boolean };
+      if (node.status === "running" || d.isStreaming) return acc + d.content.length;
+    }
+    if (node.type === "thinking") {
+      const d = node.data as { content: string; isStreaming?: boolean };
+      if (node.status === "running" || d.isStreaming) return acc + d.content.length;
+    }
+    if (node.type === "tool") {
+      const d = node.data as { streamingCode?: string; isCodeStreaming?: boolean };
+      if (d.isCodeStreaming && d.streamingCode) return acc + d.streamingCode.length;
+    }
+    return acc;
+  }, 0);
 
   // 创建虚拟化器，使用动态高度测量
   const virtualizer = useVirtualizer({
@@ -54,7 +76,9 @@ export function WorkflowTimeline({ onRetryError }: WorkflowTimelineProps) {
   });
 
   // 检测用户是否手动上滚，决定是否自动跟随
+  // 程序触发的滚动（isProgrammaticScrollRef）不纳入判断
   const handleScroll = useCallback(() => {
+    if (isProgrammaticScrollRef.current) return;
     const el = scrollRef.current;
     if (!el) return;
     // 距离底部 50px 以内视为"在底部"，保持自动滚动
@@ -62,18 +86,30 @@ export function WorkflowTimeline({ onRetryError }: WorkflowTimelineProps) {
     autoScrollRef.current = distanceFromBottom < 50;
   }, []);
 
-  // 新增节点时自动滚动到底部
+  // 自动滚动到底部：新增节点或流式内容更新时触发
   useEffect(() => {
-    if (autoScrollRef.current && nodes.length > 0) {
-      // 使用 requestAnimationFrame 确保 DOM 更新后再滚动
-      requestAnimationFrame(() => {
-        virtualizer.scrollToIndex(nodes.length - 1, {
-          align: "end",
-          behavior: "smooth",
-        });
+    if (nodes.length > 0) {
+      // 取消前一次未执行的滚动请求，确保每帧最多滚动一次
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = requestAnimationFrame(() => {
+        // 在回调内再次检查，防止用户在 rAF 等待期间手动上滚
+        if (autoScrollRef.current) {
+          // 标记为程序触发的滚动，防止 onScroll 回调误判
+          isProgrammaticScrollRef.current = true;
+          virtualizer.scrollToIndex(nodes.length - 1, {
+            align: "end",
+            // 流式输出时使用即时滚动以紧跟内容，新增节点时使用平滑滚动
+            behavior: streamingContentKey > 0 ? "auto" : "smooth",
+          });
+          // 程序滚动后延迟重置标志，确保 onScroll 事件已处理完毕
+          requestAnimationFrame(() => {
+            isProgrammaticScrollRef.current = false;
+          });
+        }
       });
     }
-  }, [nodes.length, virtualizer]);
+    return () => cancelAnimationFrame(rafIdRef.current);
+  }, [nodes.length, streamingContentKey, virtualizer]);
 
   // 空状态：根据工作区和服务商配置情况展示引导提示
   const hasWorkspace = !!currentWorkspaceId;

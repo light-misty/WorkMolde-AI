@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import type { WorkflowNode, ToolNodeData } from "../../types";
 import { useTranslation } from 'react-i18next';
 import { Icon } from "../common/Icon";
@@ -22,13 +22,57 @@ export function ToolNode({ node }: ToolNodeProps) {
   const [codeExpanded, setCodeExpanded] = useState(true);
   const prevIsCodeStreamingRef = useRef<boolean | undefined>(undefined);
 
+  // 代码内容：优先使用流式代码，回退到 input.code
+  const codeContent = data.streamingCode
+    || (data.input?.code as string | undefined)
+    || "";
+  const isCodeStreaming = data.isCodeStreaming ?? false;
+
+  // 代码预览自动滚动：流式输出时跟随最新代码，用户手动上滚时暂停
+  const codePreviewRef = useRef<HTMLPreElement>(null);
+  const codeAutoScrollRef = useRef(true);
+  // 标记当前滚动是否由程序触发，避免 onScroll 误判为用户手动上滚
+  const isProgrammaticScrollRef = useRef(false);
+
   // 当代码流式输出结束时，自动收缩代码预览
   useEffect(() => {
     if (prevIsCodeStreamingRef.current === true && !data.isCodeStreaming) {
       setCodeExpanded(false);
     }
+    // 当代码流式输出开始时，重置自动滚动状态
+    if (data.isCodeStreaming && prevIsCodeStreamingRef.current !== true) {
+      codeAutoScrollRef.current = true;
+    }
     prevIsCodeStreamingRef.current = data.isCodeStreaming;
   }, [data.isCodeStreaming]);
+
+  // 检测用户是否在代码预览框中手动上滚
+  // 程序触发的滚动（isProgrammaticScrollRef）不纳入判断
+  const handleCodeScroll = useCallback(() => {
+    if (isProgrammaticScrollRef.current) return;
+    const el = codePreviewRef.current;
+    if (!el) return;
+    // 距离底部 20px 以内视为"在底部"，保持自动滚动
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    codeAutoScrollRef.current = distanceFromBottom < 20;
+  }, []);
+
+  // 代码流式输出时自动滚动到底部
+  useEffect(() => {
+    if (isCodeStreaming && codeAutoScrollRef.current && codePreviewRef.current) {
+      requestAnimationFrame(() => {
+        if (codeAutoScrollRef.current && codePreviewRef.current) {
+          // 标记为程序触发的滚动，防止 onScroll 回调误判
+          isProgrammaticScrollRef.current = true;
+          codePreviewRef.current.scrollTop = codePreviewRef.current.scrollHeight;
+          // 程序滚动后延迟重置标志，确保 onScroll 事件已处理完毕
+          requestAnimationFrame(() => {
+            isProgrammaticScrollRef.current = false;
+          });
+        }
+      });
+    }
+  }, [codeContent, isCodeStreaming]);
 
   // 代码解释器错误：截断显示，可展开
   const errorText = data.error || "";
@@ -36,12 +80,6 @@ export function ToolNode({ node }: ToolNodeProps) {
   const displayError = shouldTruncateError && !errorExpanded
     ? errorText.slice(0, 150) + "..."
     : errorText;
-
-  // 代码内容：优先使用流式代码，回退到 input.code
-  const codeContent = data.streamingCode
-    || (data.input?.code as string | undefined)
-    || "";
-  const isCodeStreaming = data.isCodeStreaming ?? false;
 
   // 收缩状态下显示前几行代码（最多3行），而非仅用省略号
   const collapsedMaxLines = 3;
@@ -117,7 +155,7 @@ export function ToolNode({ node }: ToolNodeProps) {
               )}
             </div>
             {codeExpanded ? (
-              <pre className="wf-code-preview-content">
+              <pre ref={codePreviewRef} className="wf-code-preview-content" onScroll={handleCodeScroll}>
                 {codeContent}
                 {isCodeStreaming && <span className="wf-code-cursor" />}
               </pre>
