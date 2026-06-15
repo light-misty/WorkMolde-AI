@@ -267,7 +267,7 @@ impl<R: Runtime> AgentExecutor<R> {
     /// - Never: 任何操作都不需要确认
     /// - EditOnly: 仅高风险操作需要确认
     /// - Always: 所有 Handler/Tool 调用都需要确认
-    fn needs_confirmation(&self, name: &str, _params: &serde_json::Value) -> bool {
+    fn needs_confirmation(&self, name: &str, params: &serde_json::Value) -> bool {
         // code_interpreter_handler 始终不需要确认（代码自动执行）
         if name == "code_interpreter_handler" {
             return false;
@@ -276,8 +276,11 @@ impl<R: Runtime> AgentExecutor<R> {
             ConfirmationLevel::Never => false,
             ConfirmationLevel::EditOnly => {
                 // 仅编辑/删除操作需要确认
-                // 1. delete_file 始终为高风险
                 if HIGH_RISK_HANDLERS.contains(&name) {
+                    return true;
+                }
+                // write_text_file 在覆盖模式（非追加）下属于修改操作
+                if name == "write_text_file" && !params.get("append").and_then(|v| v.as_bool()).unwrap_or(false) {
                     return true;
                 }
                 false
@@ -288,11 +291,20 @@ impl<R: Runtime> AgentExecutor<R> {
 
     /// 从 Handler 参数中提取需要创建快照的文件路径列表
     /// delete_file: 单文件路径
+    /// write_text_file（覆盖模式）: 单文件路径
     /// 文档 Handler（docx_handler/xlsx_handler/pptx_handler/pdf_handler）: 精简后不再有 modify 操作，无需快照
     fn extract_snapshot_paths(&self, handler_name: &str, params: &serde_json::Value) -> Vec<String> {
         match handler_name {
             "delete_file" => {
                 vec![params["path"].as_str().unwrap_or("").to_string()]
+            }
+            "write_text_file" => {
+                let append = params.get("append").and_then(|v| v.as_bool()).unwrap_or(false);
+                if !append {
+                    vec![params["path"].as_str().unwrap_or("").to_string()]
+                } else {
+                    Vec::new()
+                }
             }
             "docx_handler" | "xlsx_handler" | "pptx_handler" | "pdf_handler" => {
                 // 文档 Handler 精简后不再有 modify 操作，无需创建快照
@@ -369,14 +381,22 @@ impl<R: Runtime> AgentExecutor<R> {
             channels.insert(operation_id.clone(), tx);
         }
 
-        self.emitter.emit_confirm(ConfirmPayload {
+        if self.emitter.emit_confirm(ConfirmPayload {
             session_id: session_id.to_string(),
             operation_id: operation_id.clone(),
             operation_type: tool_name.to_string(),
             description,
             details: arguments.clone(),
             risk_level: risk_level.to_string(),
-        }).ok();
+        }).is_err() {
+            // 发射事件失败，清理通道，避免泄漏
+            let mut channels = self.confirm_channels.lock().await;
+            channels.remove(&operation_id);
+            return Err(CommandError::new(
+                crate::errors::RUNTIME_EVENT_EMIT_ERROR,
+                "发射确认事件失败",
+            ));
+        }
 
         match tokio::time::timeout(Duration::from_secs(CONFIRM_TIMEOUT_SECS), rx).await {
             Ok(Ok(decision)) => {
@@ -562,7 +582,7 @@ impl<R: Runtime> AgentExecutor<R> {
             let mut _last_error: Option<CommandError> = None;
             let mut stream_rx = loop {
                 if self.check_stopped(&ctx.session_id) {
-                    return Ok(self.handle_stop_if_needed(ctx, total_steps, start_time).unwrap());
+                    return Ok(self.handle_stop_if_needed(ctx, total_steps, start_time).expect("check_stopped 返回 true 但 handle_stop_if_needed 返回 None"));
                 }
                 
                 // 缓存诊断：记录每次 LLM 调用的消息特征，便于分析跨迭代/跨会话缓存命中率
@@ -997,7 +1017,7 @@ impl<R: Runtime> AgentExecutor<R> {
                             );
 
                             if self.check_stopped(&ctx.session_id) {
-                                return Ok(self.handle_stop_if_needed(ctx, total_steps, start_time).unwrap());
+                                return Ok(self.handle_stop_if_needed(ctx, total_steps, start_time).expect("check_stopped 返回 true 但 handle_stop_if_needed 返回 None"));
                             }
 
                             let retry_messages = ctx.get_messages_for_iteration(current_iteration);
@@ -1407,10 +1427,12 @@ impl<R: Runtime> AgentExecutor<R> {
                                                 content_str.len(),
                                                 MAX_TOOL_RESULT_CHARS,
                                             );
-                                            truncated.as_object_mut().unwrap().insert(
-                                                "content".to_string(),
-                                                json!(truncated_content),
-                                            );
+                                            if let Some(obj) = truncated.as_object_mut() {
+                                                obj.insert(
+                                                    "content".to_string(),
+                                                    json!(truncated_content),
+                                                );
+                                            }
                                             return truncated;
                                         }
                                     }

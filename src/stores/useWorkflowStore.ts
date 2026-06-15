@@ -59,8 +59,7 @@ interface WorkflowState {
   nodes: WorkflowNode[];
   executionStatus: ExecutionStatus;
   error: string | null;
-  autoScroll: boolean;
-  confirmHandler: ((approved: boolean) => Promise<void>) | null;
+  confirmHandler: ((approved: boolean, feedback?: string) => Promise<void>) | null;
   /** 上下文窗口使用信息（Agent 运行时实时更新） */
   contextUsage: ContextUsageInfo | null;
   /** 任务进度列表（按会话缓存） */
@@ -75,8 +74,7 @@ interface WorkflowState {
   setExecutionStatus: (status: ExecutionStatus) => void;
   setError: (error: string | null) => void;
   toggleNode: (id: string) => void;
-  setAutoScroll: (autoScroll: boolean) => void;
-  setConfirmHandler: (handler: ((approved: boolean) => Promise<void>) | null) => void;
+  setConfirmHandler: (handler: ((approved: boolean, feedback?: string) => Promise<void>) | null) => void;
   loadFromMessages: (messages: Message[]) => void;
   /** 初始化上下文窗口使用情况事件监听 */
   initContextUsageListener: () => Promise<() => void>;
@@ -133,7 +131,6 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   nodes: [],
   executionStatus: "idle",
   error: null,
-  autoScroll: true,
   confirmHandler: null,
   contextUsage: null,
   todos: null,
@@ -190,10 +187,6 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         n.id === id ? { ...n, isExpanded: !n.isExpanded } : n
       ),
     }));
-  },
-
-  setAutoScroll: (autoScroll) => {
-    set({ autoScroll });
   },
 
   setConfirmHandler: (handler) => {

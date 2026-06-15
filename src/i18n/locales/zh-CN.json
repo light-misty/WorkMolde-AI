@@ -78,6 +78,7 @@
     "cancelOperation": "取消操作",
     "codePreview": "代码预览",
     "expandCode": "展开代码",
+    "feedbackPlaceholder": "输入拒绝原因（可选）…",
     "collapseCode": "收起代码"
   },
   "errorNode": {

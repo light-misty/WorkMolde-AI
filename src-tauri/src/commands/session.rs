@@ -94,6 +94,19 @@ pub async fn delete_session(
     state: State<'_, AppState>,
 ) -> Result<(), CommandError> {
     log::info!("delete_session 请求: session_id={}", session_id);
+
+    // 检查会话是否有 Agent 正在运行，防止数据丢失
+    {
+        let active = state.active_agents.lock().await;
+        if active.contains_key(&session_id) {
+            log::warn!("delete_session 失败: 会话 '{}' 的 Agent 正在运行", session_id);
+            return Err(CommandError::agent(
+                crate::errors::AGENT_ALREADY_RUNNING,
+                format!("会话 '{}' 的 Agent 正在运行，无法删除", session_id),
+            ));
+        }
+    }
+
     let conn = state.db.conn()?;
     session_repo::delete_session(&conn, &session_id)?;
     log::info!("delete_session 成功: session_id={}", session_id);

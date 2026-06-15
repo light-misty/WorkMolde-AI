@@ -26,7 +26,7 @@ export function WorkflowNodeRenderer({ node, onRetry }: WorkflowNodeRendererProp
     case "tool":
       return <ToolNode node={node as WorkflowNode<"tool">} />;
     case "confirm":
-      return <ConfirmNode node={node as WorkflowNode<"confirm">} onToggle={() => toggleNode(node.id)} />;
+      return <ConfirmNode node={node as WorkflowNode<"confirm">} />;
     case "error":
       return <ErrorNode node={node as WorkflowNode<"error">} onToggle={() => toggleNode(node.id)} onRetry={onRetry} />;
     default:

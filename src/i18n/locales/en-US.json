@@ -78,6 +78,7 @@
     "cancelOperation": "Cancel Operation",
     "codePreview": "Code Preview",
     "expandCode": "Expand code",
+    "feedbackPlaceholder": "Enter reason (optional)…",
     "collapseCode": "Collapse code"
   },
   "errorNode": {

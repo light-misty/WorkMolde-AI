@@ -557,6 +557,7 @@ export default function App() {
       // 防御性检查：code_interpreter_handler 不应再触发确认流程
       // 如果仍然收到，直接自动确认（兼容性兜底）
       if (pendingConfirmation.operationType === "code_interpreter_handler") {
+        console.warn("[Confirm] code_interpreter_handler 不应触发确认流程，已自动批准（兼容性兜底）");
         confirmOperation(pendingConfirmation.operationId, true);
         return;
       }
@@ -585,15 +586,15 @@ export default function App() {
       const nodeId = addNode("confirm", confirmData, "running");
       confirmNodeIdRef.current = nodeId;
 
-      setConfirmHandler(async (approved: boolean) => {
+      setConfirmHandler(async (approved: boolean, feedback?: string) => {
         if (confirmNodeIdRef.current) {
           updateNode(confirmNodeIdRef.current, {
-            data: { ...confirmData, confirmed: approved },
+            data: { ...confirmData, confirmed: approved, feedback },
             status: approved ? "completed" : "cancelled",
           });
           confirmNodeIdRef.current = null;
         }
-        await confirmOperation(pendingConfirmation.operationId, approved);
+        await confirmOperation(pendingConfirmation.operationId, approved, feedback);
         setConfirmHandler(null);
       });
     }
@@ -602,6 +603,12 @@ export default function App() {
   // 发送用户消息
   const handleSend = useCallback(async (text: string) => {
     if (!text.trim()) return;
+
+    // 检查是否正在等待用户确认，防止 UI 状态不一致
+    if (confirmNodeIdRef.current !== null) {
+      console.warn("[App] 正在等待操作确认，忽略新消息");
+      return;
+    }
 
     streamingNodeIdRef.current = null;
     thinkingNodeIdRef.current = null;

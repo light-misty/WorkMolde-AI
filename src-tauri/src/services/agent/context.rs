@@ -497,26 +497,6 @@ impl AgentContext {
     }
 
     /// 构建结构化的迭代上下文
-    #[allow(dead_code)]
-    fn build_iteration_context(&self, current_iteration: u32) -> String {
-        let mut context = String::from("<iteration_context>\n## 当前执行进度\n\n");
-        context.push_str(&format!("迭代轮次: {}/{}\n", current_iteration, self.max_iterations));
-
-        if !self.completed_steps.is_empty() {
-            context.push_str("已完成步骤:\n");
-            for (i, step) in self.completed_steps.iter().enumerate() {
-                context.push_str(&format!("  {}. [已完成] {}\n", i + 1, step));
-            }
-        }
-
-        if !self.current_step.is_empty() {
-            context.push_str(&format!("当前步骤: [进行中] {}\n", self.current_step));
-        }
-
-        context.push_str("\n请基于以上进度继续执行，不要重复已完成的步骤。\n</iteration_context>");
-        context
-    }
-
     /// 对话历史压缩：滑动窗口 + 关键消息保护
     fn compress_history_if_needed(&self) -> CompressionResult {
         // 估算当前对话历史的 Token 数

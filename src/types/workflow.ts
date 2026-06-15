@@ -50,6 +50,8 @@ export interface ConfirmNodeData {
   confirmed: boolean | null;
   /** 代码预览（仅 code_interpreter_handler 操作时存在） */
   code?: string;
+  /** 用户拒绝时填写的反馈原因 */
+  feedback?: string;
 }
 
 export interface ErrorNodeData {
