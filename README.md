@@ -5,6 +5,7 @@
 **AI-Powered Document Agent - Handle All Document Tasks Through Conversation**
 
 [![Windows](https://img.shields.io/badge/platform-Windows-blue?logo=windows)](https://github.com/user-attachments/docagent)
+[![Version](https://img.shields.io/badge/version-0.2.0-4ccd24)](https://github.com/XuMingKe-06/DocAgent/releases)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2.x-orange?logo=tauri)](https://v2.tauri.app/)
 [![React 19](https://img.shields.io/badge/React-19-61dafb?logo=react)](https://react.dev/)
 [![Rust](https://img.shields.io/badge/Rust-1.80+-000000?logo=rust)](https://www.rust-lang.org/)
@@ -38,18 +39,25 @@ All document processing and file operations are completed on your machine. Only 
 
 Flexible integration with mainstream LLM services like OpenAI, Anthropic Claude, Google Gemini, and Ollama. Automatic health checks and failover ensure you won't be locked into a single provider.
 
-### Professional Document Processing Engine
+### Code Interpreter -- Document Generation Reimagined
 
-Built-in 6 major document processing skills, covering the complete workflow from generation to analysis:
+The core highlight of v0.2.0: AI writes and executes Python code to directly manipulate document object models. From "descriptive generation" to "code-level control" -- results are more precise, complex formatting is no longer a struggle.
 
-| Skill | Description |
+- **Read-modify-save workflow**: Read existing document structure, write code for precise modifications, save -- all executed in a local sandbox
+- **Full format coverage**: Word, Excel, PPT, PDF, Markdown -- one engine handles them all
+- **Complex operations made simple**: Table merges, conditional formatting, chart embedding -- achieve them with code execution in one shot
+
+### Always-On Document Handlers
+
+5 built-in document type handlers, always available with no enable/disable hassle:
+
+| Handler | Capability |
 |------|------|
-| **generate_document** | Generate Word / Excel / PPT / PDF / Markdown with advanced features like formulas, conditional formatting, color schemes, watermarks, etc. |
-| **read_document** | Read document structure and content, supporting format information extraction |
-| **modify_document** | 30+ modification operations: paragraphs, tables, bookmarks, hyperlinks, headers/footers, table of contents, etc. |
-| **convert_format** | Convert between docx / pdf / md / txt / csv / html formats |
-| **analyze_document** | Document structure analysis and statistical information |
-| **batch_process** | Batch conversion, modification, and analysis |
+| **Word (docx)** | Generate, read, modify, convert, analyze .docx documents |
+| **Excel (xlsx)** | Generate, read, modify, convert, analyze .xlsx spreadsheets |
+| **PowerPoint (pptx)** | Generate, read, modify, convert, analyze .pptx presentations |
+| **PDF** | Generate, read, convert, analyze PDF documents |
+| **Code Interpreter** | Execute Python code for complex document generation and modification |
 
 ### Secure and Controllable Operation Confirmation
 
@@ -63,14 +71,27 @@ Automatic version snapshots are created for every document modification. One-cli
 
 Workspace file changes are synchronized to the interface in real-time, combined with built-in file tree browsing for clear document status visibility.
 
+### Smart LLM Caching
+
+Multi-provider cache support intelligently caches repeated context requests, significantly reducing API call costs and improving response speed. Cache hit rate is displayed in the interface for full transparency.
+
+### Reliable Tool Execution
+
+Automatic retry mechanism for truncated LLM responses during tool calls ensures operation integrity. Network fluctuations or API limitations won't silently break your document operations.
+
+### Code Preview Streaming
+
+AI-generated code is displayed in real-time as it's written -- watch your document logic unfold line by line instead of waiting for the entire process to complete.
+
 ---
 
 ## Technical Highlights
 
 - **Tauri 2.x** -- Rust backend + Web frontend, small installation package, fast startup, low memory footprint
+- **Code Interpreter** -- AI writes and executes Python code to precisely generate and modify documents in a local sandbox
 - **Rust Agent Engine** -- Asynchronous Tool Calling loop, streaming output, incremental persistence to prevent crash-induced data loss
 - **Python Sidecar** -- Professional document processing (python-docx / openpyxl / python-pptx / PyMuPDF / reportlab), process-level isolation, automatic restart on crash
-- **Multi-LLM Routing** -- Provider health checks, latency tracking, automatic fallback
+- **Multi-LLM Routing** -- Provider health checks, latency tracking, automatic fallback, smart caching with hit rate display
 - **React 19 + Zustand 5** -- Modern frontend architecture, virtual scrolling for optimized long list performance
 - **PDF Canvas Rendering** -- High-performance PDF preview based on pdfjs-dist, supporting zoom and page navigation
 - **Unified Error Code System** -- Segmented by module (LLM / Agent / Doc / DB / Config / FS / Runtime) for precise problem localization
@@ -115,9 +136,9 @@ Workspace file changes are synchronized to the interface in real-time, combined 
 
 Supports OpenAI, Anthropic, Gemini, Ollama, and any OpenAI API-compatible service. Simply add your API Key and model in the settings page to get started.
 
-### Skill Management
+### Handler Management
 
-6 built-in document processing skills can be enabled/disabled as needed, managed in the Skills tab of the settings page.
+5 built-in document handlers are always enabled and ready to use. The Handlers tab in settings displays their capabilities and status for reference.
 
 ### Prompt Templates
 
