@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+﻿use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -1324,6 +1324,8 @@ impl<R: Runtime> AgentExecutor<R> {
                         tool_call.name.as_str(),
                         "list_directory" | "search_files" | "read_file" | "file_info"
                         | "file_exists" | "delete_file" | "create_directory" | "write_text_file"
+                        | "rename_file" | "copy_file" | "delete_directory" | "get_file_hash"
+                        | "read_file_lines"
                         | "docx_handler" | "xlsx_handler" | "pptx_handler" | "pdf_handler"
                         | "code_interpreter_handler"  // 需要workspace_root作为working_dir
                     );
@@ -1392,7 +1394,7 @@ impl<R: Runtime> AgentExecutor<R> {
                                 success: r.success,
                                 output: r.output,
                                 error: r.error,
-                                duration_ms: r.duration_ms,
+                                duration_ms: r.duration_ms, error_code: r.error_code,
                             },
                             Err(_) => {
                                 log::error!("Tool 执行发生 panic: tool={}", tool_call.name);
@@ -1400,7 +1402,7 @@ impl<R: Runtime> AgentExecutor<R> {
                                     success: false,
                                     output: None,
                                     error: Some(format!("工具执行发生内部错误: {}", tool_call.name)),
-                                    duration_ms: 0,
+                                    duration_ms: 0, error_code: None,
                                 }
                             }
                         }
@@ -1415,7 +1417,7 @@ impl<R: Runtime> AgentExecutor<R> {
                                     success: false,
                                     output: None,
                                     error: Some(format!("处理器执行发生内部错误: {}", tool_call.name)),
-                                    duration_ms: 0,
+                                    duration_ms: 0, error_code: None,
                                 }
                             }
                         }
@@ -1424,7 +1426,7 @@ impl<R: Runtime> AgentExecutor<R> {
                             success: false,
                             output: None,
                             error: Some(format!("工具或处理器不存在: {}", tool_call.name)),
-                            duration_ms: 0,
+                            duration_ms: 0, error_code: Some(crate::errors::AGENT_HANDLER_NOT_FOUND),
                         }
                     };
 
@@ -1475,13 +1477,33 @@ impl<R: Runtime> AgentExecutor<R> {
                             if let Some(obj) = v.as_object() {
                                 if let Some(content_val) = obj.get("content") {
                                     if let Some(content_str) = content_val.as_str() {
-                                        if content_str.len() > MAX_TOOL_RESULT_CHARS {
+                                        // 使用 chars().count() 获取字符数（而非 len() 字节数）
+                                        // 避免多字节 UTF-8 字符（如中文）在字节切片时 panic
+                                        let total_chars = content_str.chars().count();
+                                        if total_chars > MAX_TOOL_RESULT_CHARS {
                                             let mut truncated = v.clone();
+                                            // 智能截断：保留头部 70% + 尾部 30%
+                                            // 避免丢失文档末尾结论、表格尾部或代码 traceback
+                                            let head_chars = MAX_TOOL_RESULT_CHARS * 7 / 10;
+                                            let tail_chars = MAX_TOOL_RESULT_CHARS - head_chars;
+                                            let head: String = content_str.chars().take(head_chars).collect();
+                                            // 反向取尾部再反序，避免收集整个字符串
+                                            let tail: String = content_str
+                                                .chars()
+                                                .rev()
+                                                .take(tail_chars)
+                                                .collect::<String>()
+                                                .chars()
+                                                .rev()
+                                                .collect();
                                             let truncated_content = format!(
-                                                "{}...\n[已截断: 原始内容 {} 字符，仅保留前 {} 字符]",
-                                                &content_str[..MAX_TOOL_RESULT_CHARS],
-                                                content_str.len(),
-                                                MAX_TOOL_RESULT_CHARS,
+                                                "{}\n\n...[已截断: 原始 {} 字符，保留头部 {} + 尾部 {}，省略中间 {} 字符]...\n\n{}",
+                                                head,
+                                                total_chars,
+                                                head_chars,
+                                                tail_chars,
+                                                total_chars - MAX_TOOL_RESULT_CHARS,
+                                                tail,
                                             );
                                             if let Some(obj) = truncated.as_object_mut() {
                                                 obj.insert(

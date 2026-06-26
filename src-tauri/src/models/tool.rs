@@ -8,6 +8,10 @@ pub struct ToolResult {
     pub output: Option<serde_json::Value>,
     pub error: Option<String>,
     pub duration_ms: u64,
+    /// 统一错误码（参见 errors.rs），success=true 时为 None
+    /// 用于前端精确处理和日志统计，向后兼容（旧反序列化无此字段时为 None）
+    #[serde(default)]
+    pub error_code: Option<u32>,
 }
 
 /// Tool 信息（用于前端展示）

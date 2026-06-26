@@ -34,3 +34,5 @@ base64 = "0.22"
 dunce = "1"
 # 编码转换：支持 GBK/GB2312/Big5/Shift_JIS/Latin1 等多种编码的读取和写入
 encoding_rs = "0.8"
+# SHA-256 哈希计算：用于 get_file_hash 工具计算文件哈希，支持去重和完整性校验
+sha2 = "0.10"

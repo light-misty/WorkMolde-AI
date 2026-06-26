@@ -1,7 +1,13 @@
+﻿// 允许在测试模块之后定义工具：项目原有结构将测试模块置于文件中部，
+// WriteTextFileTool 及阶段三 3.5 新增的 5 个工具均位于测试模块之后。
+// 完整重构文件结构（移动测试模块到末尾）超出当前任务范围，这里以 allow 抑制 lint。
+#![allow(clippy::items_after_test_module)]
+
 use std::time::Instant;
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 
 use crate::models::tool::ToolResult;
 use super::trait_def::Tool;
@@ -31,7 +37,13 @@ pub fn register_builtin_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(DeleteFileTool));
     registry.register(Box::new(CreateDirectoryTool));
     registry.register(Box::new(WriteTextFileTool));
-    log::info!("内置工具注册完成, 共注册 8 个工具");
+    // 阶段三 3.5 新增的 5 个基础文件系统工具
+    registry.register(Box::new(RenameFileTool));
+    registry.register(Box::new(CopyFileTool));
+    registry.register(Box::new(DeleteDirectoryTool));
+    registry.register(Box::new(GetFileHashTool));
+    registry.register(Box::new(ReadFileLinesTool));
+    log::info!("内置工具注册完成, 共注册 13 个工具");
 }
 
 // ============================================================
@@ -78,7 +90,7 @@ impl Tool for ListDirectoryTool {
                 success: false,
                 output: None,
                 error: Some("depth 参数必须大于等于 1".to_string()),
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: None,
             };
         }
 
@@ -94,7 +106,7 @@ impl Tool for ListDirectoryTool {
                 success: false,
                 output: None,
                 error: Some(format!("目录不存在: {}", dir_path)),
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: None,
             };
         }
 
@@ -103,7 +115,7 @@ impl Tool for ListDirectoryTool {
                 success: false,
                 output: None,
                 error: Some(format!("路径不是目录: {}", dir_path)),
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: None,
             };
         }
 
@@ -116,7 +128,7 @@ impl Tool for ListDirectoryTool {
                         success: false,
                         output: None,
                         error: Some(format!("目录路径无效: {}", dir_path)),
-                        duration_ms: start.elapsed().as_millis() as u64,
+                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                     };
                 }
             };
@@ -127,7 +139,7 @@ impl Tool for ListDirectoryTool {
                         success: false,
                         output: None,
                         error: Some("工作区根目录路径无效".to_string()),
-                        duration_ms: start.elapsed().as_millis() as u64,
+                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                     };
                 }
             };
@@ -136,7 +148,7 @@ impl Tool for ListDirectoryTool {
                     success: false,
                     output: None,
                     error: Some("目录不在工作区内，拒绝访问".to_string()),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
                 };
             }
         }
@@ -156,11 +168,12 @@ impl Tool for ListDirectoryTool {
                     success: false,
                     output: None,
                     error: Some(format!("目录列出任务执行失败: {}", join_err)),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                 };
             }
         };
 
+        log::info!("列出目录完成: {}, 结果数: {}", dir_path, results.len());
         ToolResult {
             success: true,
             output: Some(json!({
@@ -168,7 +181,7 @@ impl Tool for ListDirectoryTool {
                 "items": results,
             })),
             error: None,
-            duration_ms: start.elapsed().as_millis() as u64,
+            duration_ms: start.elapsed().as_millis() as u64, error_code: None,
         }
     }
 }
@@ -314,7 +327,7 @@ impl Tool for SearchFilesTool {
                 success: false,
                 output: None,
                 error: Some("搜索关键词和文件扩展名不能同时为空，请至少提供一项".to_string()),
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: None,
             };
         }
 
@@ -325,7 +338,7 @@ impl Tool for SearchFilesTool {
                 success: false,
                 output: None,
                 error: Some(format!("目录不存在或不是目录: {}", directory)),
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: None,
             };
         }
 
@@ -337,7 +350,7 @@ impl Tool for SearchFilesTool {
                         success: false,
                         output: None,
                         error: Some(format!("目录路径无效: {}", directory)),
-                        duration_ms: start.elapsed().as_millis() as u64,
+                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                     };
                 }
             };
@@ -348,7 +361,7 @@ impl Tool for SearchFilesTool {
                         success: false,
                         output: None,
                         error: Some("工作区根目录路径无效".to_string()),
-                        duration_ms: start.elapsed().as_millis() as u64,
+                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                     };
                 }
             };
@@ -357,7 +370,7 @@ impl Tool for SearchFilesTool {
                     success: false,
                     output: None,
                     error: Some("搜索目录不在工作区内，拒绝访问".to_string()),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
                 };
             }
         }
@@ -380,11 +393,12 @@ impl Tool for SearchFilesTool {
                     success: false,
                     output: None,
                     error: Some(format!("文件搜索任务执行失败: {}", join_err)),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                 };
             }
         };
 
+        log::info!("文件搜索完成: query={}, directory={}, 结果数: {}", query, directory, results.len());
         ToolResult {
             success: true,
             output: Some(json!({
@@ -394,7 +408,7 @@ impl Tool for SearchFilesTool {
                 "results": results,
             })),
             error: None,
-            duration_ms: start.elapsed().as_millis() as u64,
+            duration_ms: start.elapsed().as_millis() as u64, error_code: None,
         }
     }
 }
@@ -567,7 +581,7 @@ impl Tool for ReadFileTool {
                 success: false,
                 output: None,
                 error: Some("缺少文件路径".to_string()),
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
         }
 
@@ -583,7 +597,7 @@ impl Tool for ReadFileTool {
                         success: false,
                         output: None,
                         error: Some(format!("文件不存在或路径无效: {}", file_path)),
-                        duration_ms: start.elapsed().as_millis() as u64,
+                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                     };
                 }
             };
@@ -594,7 +608,7 @@ impl Tool for ReadFileTool {
                         success: false,
                         output: None,
                         error: Some("工作区根目录路径无效".to_string()),
-                        duration_ms: start.elapsed().as_millis() as u64,
+                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                     };
                 }
             };
@@ -603,7 +617,7 @@ impl Tool for ReadFileTool {
                     success: false,
                     output: None,
                     error: Some("文件路径不在工作区内，拒绝访问".to_string()),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
                 };
             }
         }
@@ -613,7 +627,7 @@ impl Tool for ReadFileTool {
                 success: false,
                 output: None,
                 error: Some(format!("文件不存在: {}", file_path)),
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: None,
             };
         }
 
@@ -622,7 +636,7 @@ impl Tool for ReadFileTool {
                 success: false,
                 output: None,
                 error: Some(format!("路径不是文件: {}", file_path)),
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: None,
             };
         }
 
@@ -634,7 +648,7 @@ impl Tool for ReadFileTool {
                     success: false,
                     output: None,
                     error: Some(format!("获取文件信息失败: {}", e)),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                 };
             }
         };
@@ -644,7 +658,7 @@ impl Tool for ReadFileTool {
                 success: false,
                 output: None,
                 error: Some(format!("文件过大 ({}字节)，超过最大读取限制 ({}字节)", metadata.len(), max_size)),
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: None,
             };
         }
 
@@ -673,15 +687,16 @@ impl Tool for ReadFileTool {
                         "encoding": encoding.name(),
                     })),
                     error: None,
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                 }
             }
             Err(e) => {
+                log::error!("读取文件失败: {}, 错误: {}", file_path, e);
                 ToolResult {
                     success: false,
                     output: None,
                     error: Some(format!("读取文件失败: {}", e)),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                 }
             }
         }
@@ -719,9 +734,9 @@ mod tests {
         let mut registry = ToolRegistry::new();
         register_builtin_tools(&mut registry);
 
-        // 验证 8 个工具都已注册
+        // 验证 13 个工具都已注册（8 个原有 + 5 个阶段三新增）
         let tools = registry.list_tools();
-        assert_eq!(tools.len(), 8);
+        assert_eq!(tools.len(), 13);
 
         // 验证每个工具的基本属性
         let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
@@ -733,6 +748,12 @@ mod tests {
         assert!(tool_names.contains(&"delete_file"));
         assert!(tool_names.contains(&"create_directory"));
         assert!(tool_names.contains(&"write_text_file"));
+        // 阶段三 3.5 新增工具
+        assert!(tool_names.contains(&"rename_file"));
+        assert!(tool_names.contains(&"copy_file"));
+        assert!(tool_names.contains(&"delete_directory"));
+        assert!(tool_names.contains(&"get_file_hash"));
+        assert!(tool_names.contains(&"read_file_lines"));
     }
 
     #[test]
@@ -741,7 +762,7 @@ mod tests {
         register_builtin_tools(&mut registry);
 
         let defs = registry.tool_definitions();
-        assert_eq!(defs.len(), 8);
+        assert_eq!(defs.len(), 13);
 
         // 验证每个定义都有 type 和 function 字段
         for def in &defs {
@@ -1032,7 +1053,7 @@ impl Tool for FileInfoTool {
                 success: false,
                 output: None,
                 error: Some("缺少文件路径".to_string()),
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
         }
 
@@ -1048,7 +1069,7 @@ impl Tool for FileInfoTool {
                         success: false,
                         output: None,
                         error: Some(format!("文件不存在或路径无效: {}", file_path)),
-                        duration_ms: start.elapsed().as_millis() as u64,
+                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                     };
                 }
             };
@@ -1059,7 +1080,7 @@ impl Tool for FileInfoTool {
                         success: false,
                         output: None,
                         error: Some("工作区根目录路径无效".to_string()),
-                        duration_ms: start.elapsed().as_millis() as u64,
+                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                     };
                 }
             };
@@ -1068,28 +1089,30 @@ impl Tool for FileInfoTool {
                     success: false,
                     output: None,
                     error: Some("文件路径不在工作区内，拒绝访问".to_string()),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
                 };
             }
         }
 
         if !path.exists() {
+            log::error!("文件不存在: {}", file_path);
             return ToolResult {
                 success: false,
                 output: None,
                 error: Some(format!("文件不存在: {}", file_path)),
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: None,
             };
         }
 
         let metadata = match tokio::fs::metadata(&resolved_path).await {
             Ok(m) => m,
             Err(e) => {
+                log::error!("获取文件信息失败: {}, 错误: {}", file_path, e);
                 return ToolResult {
                     success: false,
                     output: None,
                     error: Some(format!("获取文件信息失败: {}", e)),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                 };
             }
         };
@@ -1137,7 +1160,7 @@ impl Tool for FileInfoTool {
                 "read_only": metadata.permissions().readonly(),
             })),
             error: None,
-            duration_ms: start.elapsed().as_millis() as u64,
+            duration_ms: start.elapsed().as_millis() as u64, error_code: None,
         }
     }
 }
@@ -1175,7 +1198,7 @@ impl Tool for FileExistsTool {
                 success: false,
                 output: None,
                 error: Some("缺少路径".to_string()),
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
         }
 
@@ -1191,7 +1214,7 @@ impl Tool for FileExistsTool {
                             success: false,
                             output: None,
                             error: Some("路径不在工作区内，拒绝访问".to_string()),
-                            duration_ms: start.elapsed().as_millis() as u64,
+                            duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
                         };
                     }
                 }
@@ -1211,7 +1234,7 @@ impl Tool for FileExistsTool {
                 "is_file": is_file,
             })),
             error: None,
-            duration_ms: start.elapsed().as_millis() as u64,
+            duration_ms: start.elapsed().as_millis() as u64, error_code: None,
         }
     }
 }
@@ -1254,7 +1277,7 @@ impl Tool for DeleteFileTool {
                 success: false,
                 output: None,
                 error: Some("缺少文件路径".to_string()),
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
         }
 
@@ -1263,7 +1286,7 @@ impl Tool for DeleteFileTool {
                 success: false,
                 output: None,
                 error: Some("缺少工作区根目录路径，无法进行安全校验".to_string()),
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
         }
 
@@ -1277,7 +1300,7 @@ impl Tool for DeleteFileTool {
                     success: false,
                     output: None,
                     error: Some(format!("文件不存在或路径无效: {}", file_path)),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                 };
             }
         };
@@ -1289,7 +1312,7 @@ impl Tool for DeleteFileTool {
                     success: false,
                     output: None,
                     error: Some(format!("工作区根目录不存在或路径无效: {}", workspace_root)),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                 };
             }
         };
@@ -1299,7 +1322,7 @@ impl Tool for DeleteFileTool {
                 success: false,
                 output: None,
                 error: Some("文件路径不在工作区内，拒绝删除操作".to_string()),
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
             };
         }
 
@@ -1308,7 +1331,7 @@ impl Tool for DeleteFileTool {
                 success: false,
                 output: None,
                 error: Some(format!("路径不是文件: {}", file_path)),
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: None,
             };
         }
 
@@ -1334,7 +1357,7 @@ impl Tool for DeleteFileTool {
                             "创建备份失败: {}。如需跳过备份强制删除，请设置 create_backup=false 后重试",
                             e
                         )),
-                        duration_ms: start.elapsed().as_millis() as u64,
+                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                     };
                 }
             }
@@ -1354,7 +1377,7 @@ impl Tool for DeleteFileTool {
                     success: true,
                     output: Some(result),
                     error: None,
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                 }
             }
             Err(e) => {
@@ -1363,7 +1386,7 @@ impl Tool for DeleteFileTool {
                     success: false,
                     output: None,
                     error: Some(format!("删除文件失败: {}", e)),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                 }
             }
         }
@@ -1409,7 +1432,7 @@ impl Tool for CreateDirectoryTool {
                 success: false,
                 output: None,
                 error: Some("缺少目录路径".to_string()),
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
         }
 
@@ -1427,7 +1450,7 @@ impl Tool for CreateDirectoryTool {
                             success: false,
                             output: None,
                             error: Some(format!("路径无效: {}", dir_path)),
-                            duration_ms: start.elapsed().as_millis() as u64,
+                            duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                         };
                     }
                 }
@@ -1442,7 +1465,7 @@ impl Tool for CreateDirectoryTool {
                                     success: false,
                                     output: None,
                                     error: Some(format!("父目录路径无效: {}", dir_path)),
-                                    duration_ms: start.elapsed().as_millis() as u64,
+                                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                                 };
                             }
                         }
@@ -1465,7 +1488,7 @@ impl Tool for CreateDirectoryTool {
                                         success: false,
                                         output: None,
                                         error: Some("目录路径不在工作区内，拒绝创建".to_string()),
-                                        duration_ms: start.elapsed().as_millis() as u64,
+                                        duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
                                     };
                                 }
                                 // 校验通过，继续执行
@@ -1476,7 +1499,7 @@ impl Tool for CreateDirectoryTool {
                                     success: false,
                                     output: None,
                                     error: Some("工作区根目录路径无效".to_string()),
-                                    duration_ms: start.elapsed().as_millis() as u64,
+                                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                                 };
                             }
                         }
@@ -1491,7 +1514,7 @@ impl Tool for CreateDirectoryTool {
                         success: false,
                         output: None,
                         error: Some("工作区根目录路径无效".to_string()),
-                        duration_ms: start.elapsed().as_millis() as u64,
+                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                     };
                 }
             };
@@ -1500,7 +1523,7 @@ impl Tool for CreateDirectoryTool {
                     success: false,
                     output: None,
                     error: Some("目录路径不在工作区内，拒绝创建".to_string()),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
                 };
             }
         }
@@ -1511,7 +1534,7 @@ impl Tool for CreateDirectoryTool {
                 success: false,
                 output: None,
                 error: Some(format!("目录已存在: {}", dir_path)),
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: None,
             };
         }
 
@@ -1523,7 +1546,7 @@ impl Tool for CreateDirectoryTool {
                     success: false,
                     output: None,
                     error: Some("工作区目录已被删除，请移除该工作区后重新选择".to_string()),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                 };
             }
         }
@@ -1544,7 +1567,7 @@ impl Tool for CreateDirectoryTool {
                         "message": format!("目录已创建: {}", dir_path),
                     })),
                     error: None,
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                 }
             }
             Err(e) => {
@@ -1553,7 +1576,7 @@ impl Tool for CreateDirectoryTool {
                     success: false,
                     output: None,
                     error: Some(format!("创建目录失败: {}", e)),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                 }
             }
         }
@@ -1611,7 +1634,7 @@ impl Tool for WriteTextFileTool {
                 success: false,
                 output: None,
                 error: Some("缺少文件路径".to_string()),
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
         }
 
@@ -1630,7 +1653,7 @@ impl Tool for WriteTextFileTool {
                             success: false,
                             output: None,
                             error: Some(format!("路径无效: {}", file_path)),
-                            duration_ms: start.elapsed().as_millis() as u64,
+                            duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                         };
                     }
                 }
@@ -1645,7 +1668,7 @@ impl Tool for WriteTextFileTool {
                                     success: false,
                                     output: None,
                                     error: Some(format!("父目录路径无效: {}", file_path)),
-                                    duration_ms: start.elapsed().as_millis() as u64,
+                                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                                 };
                             }
                         }
@@ -1666,7 +1689,7 @@ impl Tool for WriteTextFileTool {
                                         success: false,
                                         output: None,
                                         error: Some("文件路径不在工作区内，拒绝写入".to_string()),
-                                        duration_ms: start.elapsed().as_millis() as u64,
+                                        duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
                                     };
                                 }
                                 path.to_path_buf()
@@ -1676,7 +1699,7 @@ impl Tool for WriteTextFileTool {
                                     success: false,
                                     output: None,
                                     error: Some("工作区根目录路径无效".to_string()),
-                                    duration_ms: start.elapsed().as_millis() as u64,
+                                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                                 };
                             }
                         }
@@ -1691,7 +1714,7 @@ impl Tool for WriteTextFileTool {
                         success: false,
                         output: None,
                         error: Some("工作区根目录路径无效".to_string()),
-                        duration_ms: start.elapsed().as_millis() as u64,
+                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                     };
                 }
             };
@@ -1700,7 +1723,7 @@ impl Tool for WriteTextFileTool {
                     success: false,
                     output: None,
                     error: Some("文件路径不在工作区内，拒绝写入".to_string()),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
                 };
             }
         }
@@ -1717,7 +1740,7 @@ impl Tool for WriteTextFileTool {
                             success: false,
                             output: None,
                             error: Some("工作区目录已被删除，请移除该工作区后重新选择".to_string()),
-                            duration_ms: start.elapsed().as_millis() as u64,
+                            duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                         };
                     }
                 }
@@ -1726,7 +1749,7 @@ impl Tool for WriteTextFileTool {
                         success: false,
                         output: None,
                         error: Some(format!("创建父目录失败: {}", e)),
-                        duration_ms: start.elapsed().as_millis() as u64,
+                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                     };
                 }
             }
@@ -1787,7 +1810,7 @@ impl Tool for WriteTextFileTool {
                         "encoding": encoding.name(),
                     })),
                     error: None,
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                 }
             }
             Err(e) => {
@@ -1796,7 +1819,806 @@ impl Tool for WriteTextFileTool {
                     success: false,
                     output: None,
                     error: Some(format!("写入文件失败: {}", e)),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+                }
+            }
+        }
+    }
+}
+
+// ============================================================
+// 阶段三 3.5 新增工具：rename_file / copy_file / delete_directory
+// / get_file_hash / read_file_lines
+// ============================================================
+
+/// 校验已存在的路径是否在工作区内
+/// 返回 Ok((canonical_path, canonical_root)) 表示通过校验
+/// 返回 Err(error_message) 表示校验失败
+/// 用于需要路径安全校验的工具，减少重复代码
+fn validate_existing_path_in_workspace(
+    resolved_path: &str,
+    workspace_root: &str,
+) -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
+    if workspace_root.is_empty() {
+        return Err("缺少工作区根目录路径，无法进行安全校验".to_string());
+    }
+
+    let canonical_path = crate::utils::canonicalize(std::path::Path::new(resolved_path))
+        .map_err(|_| format!("路径不存在或无效: {}", resolved_path))?;
+
+    let canonical_root = crate::utils::canonicalize(std::path::Path::new(workspace_root))
+        .map_err(|_| format!("工作区根目录不存在或无效: {}", workspace_root))?;
+
+    // 路径组件级别的 starts_with 比较（避免字符串前缀匹配的绕过风险）
+    if !canonical_path.starts_with(&canonical_root) {
+        return Err(format!(
+            "路径不在工作区内，拒绝访问: {} (工作区: {})",
+            canonical_path.display(),
+            canonical_root.display()
+        ));
+    }
+
+    Ok((canonical_path, canonical_root))
+}
+
+/// 校验目标路径（可能不存在）的父目录是否在工作区内
+/// 用于 rename_file/copy_file 的目标路径校验（目标文件可能尚不存在）
+/// 返回 Ok(canonical_root) 表示通过校验
+fn validate_target_path_in_workspace(
+    resolved_target: &str,
+    workspace_root: &str,
+) -> Result<std::path::PathBuf, String> {
+    if workspace_root.is_empty() {
+        return Err("缺少工作区根目录路径，无法进行安全校验".to_string());
+    }
+
+    let canonical_root = crate::utils::canonicalize(std::path::Path::new(workspace_root))
+        .map_err(|_| format!("工作区根目录不存在或无效: {}", workspace_root))?;
+
+    let target_path = std::path::Path::new(resolved_target);
+    // 目标路径可能不存在，规范化父目录
+    let check_path = if target_path.exists() {
+        crate::utils::canonicalize(target_path)
+            .map_err(|_| format!("目标路径无效: {}", resolved_target))?
+    } else {
+        // 父目录必须存在且在工作区内
+        let parent = target_path.parent().unwrap_or(std::path::Path::new(""));
+        if parent.as_os_str().is_empty() {
+            // 没有父目录（如 "file.txt"），用工作区根目录
+            canonical_root.clone()
+        } else {
+            crate::utils::canonicalize(parent)
+                .map_err(|_| format!("目标路径的父目录无效: {}", parent.display()))?
+        }
+    };
+
+    if !check_path.starts_with(&canonical_root) {
+        return Err(format!(
+            "目标路径不在工作区内，拒绝访问: {} (工作区: {})",
+            resolved_target,
+            canonical_root.display()
+        ));
+    }
+
+    Ok(canonical_root)
+}
+
+// ============================================================
+// rename_file - 重命名/移动文件
+// ============================================================
+
+struct RenameFileTool;
+
+#[async_trait]
+impl Tool for RenameFileTool {
+    fn tool_name(&self) -> &str { "rename_file" }
+    fn description(&self) -> &str { "重命名或移动文件。使用场景：整理文件结构、修改文件名。注意：跨文件系统移动可能失败，此操作不可逆。" }
+    fn category(&self) -> &str { "filesystem" }
+    fn parameters(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "source_path": {
+                    "type": "string",
+                    "description": "源文件路径（相对于工作区）"
+                },
+                "target_path": {
+                    "type": "string",
+                    "description": "目标文件路径（相对于工作区）"
+                }
+            },
+            "required": ["source_path", "target_path"]
+        })
+    }
+    async fn execute(&self, params: Value) -> ToolResult {
+        let start = Instant::now();
+        let source_path = params["source_path"].as_str().unwrap_or("");
+        let target_path = params["target_path"].as_str().unwrap_or("");
+        let workspace_root = params["workspace_root"].as_str().unwrap_or("");
+
+        if source_path.is_empty() {
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some("缺少源文件路径".to_string()),
+                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
+            };
+        }
+        if target_path.is_empty() {
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some("缺少目标文件路径".to_string()),
+                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
+            };
+        }
+
+        let resolved_source = resolve_path(source_path, workspace_root);
+        let resolved_target = resolve_path(target_path, workspace_root);
+
+        // 校验源路径在工作区内
+        let (canonical_source, _) = match validate_existing_path_in_workspace(&resolved_source, workspace_root) {
+            Ok(paths) => paths,
+            Err(e) => {
+                log::warn!("rename_file 源路径校验失败: {}", e);
+                return ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some(e),
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
+                };
+            }
+        };
+
+        // 校验目标路径在工作区内
+        if let Err(e) = validate_target_path_in_workspace(&resolved_target, workspace_root) {
+            log::warn!("rename_file 目标路径校验失败: {}", e);
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some(e),
+                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
+            };
+        }
+
+        // 源路径必须是文件
+        if !canonical_source.is_file() {
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some(format!("源路径不是文件: {}", source_path)),
+                duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+            };
+        }
+
+        // 确保目标父目录存在
+        let target_p = std::path::Path::new(&resolved_target);
+        if let Some(parent) = target_p.parent() {
+            if !parent.exists() {
+                if let Err(e) = tokio::fs::create_dir_all(parent).await {
+                    return ToolResult {
+                        success: false,
+                        output: None,
+                        error: Some(format!("创建目标父目录失败: {}", e)),
+                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+                    };
+                }
+            }
+        }
+
+        // 执行重命名
+        match tokio::fs::rename(&canonical_source, &resolved_target).await {
+            Ok(_) => {
+                log::info!("文件已重命名: {} -> {}", source_path, target_path);
+                ToolResult {
+                    success: true,
+                    output: Some(json!({
+                        "source_path": source_path,
+                        "target_path": target_path,
+                        "message": format!("文件已重命名: {} -> {}", source_path, target_path),
+                    })),
+                    error: None,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+                }
+            }
+            Err(e) => {
+                log::error!("重命名文件失败: {} -> {}, 错误: {}", source_path, target_path, e);
+                ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some(format!("重命名文件失败: {}", e)),
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+                }
+            }
+        }
+    }
+}
+
+// ============================================================
+// copy_file - 复制文件
+// ============================================================
+
+struct CopyFileTool;
+
+#[async_trait]
+impl Tool for CopyFileTool {
+    fn tool_name(&self) -> &str { "copy_file" }
+    fn description(&self) -> &str { "复制文件到新路径。使用场景：创建文件副本、备份文件、复制模板。支持二进制文件复制。" }
+    fn category(&self) -> &str { "filesystem" }
+    fn parameters(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "source_path": {
+                    "type": "string",
+                    "description": "源文件路径（相对于工作区）"
+                },
+                "target_path": {
+                    "type": "string",
+                    "description": "目标文件路径（相对于工作区）"
+                }
+            },
+            "required": ["source_path", "target_path"]
+        })
+    }
+    async fn execute(&self, params: Value) -> ToolResult {
+        let start = Instant::now();
+        let source_path = params["source_path"].as_str().unwrap_or("");
+        let target_path = params["target_path"].as_str().unwrap_or("");
+        let workspace_root = params["workspace_root"].as_str().unwrap_or("");
+
+        if source_path.is_empty() {
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some("缺少源文件路径".to_string()),
+                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
+            };
+        }
+        if target_path.is_empty() {
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some("缺少目标文件路径".to_string()),
+                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
+            };
+        }
+
+        let resolved_source = resolve_path(source_path, workspace_root);
+        let resolved_target = resolve_path(target_path, workspace_root);
+
+        // 校验源路径在工作区内
+        let (canonical_source, _) = match validate_existing_path_in_workspace(&resolved_source, workspace_root) {
+            Ok(paths) => paths,
+            Err(e) => {
+                log::warn!("copy_file 源路径校验失败: {}", e);
+                return ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some(e),
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
+                };
+            }
+        };
+
+        // 校验目标路径在工作区内
+        if let Err(e) = validate_target_path_in_workspace(&resolved_target, workspace_root) {
+            log::warn!("copy_file 目标路径校验失败: {}", e);
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some(e),
+                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
+            };
+        }
+
+        // 源路径必须是文件
+        if !canonical_source.is_file() {
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some(format!("源路径不是文件: {}", source_path)),
+                duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+            };
+        }
+
+        // 确保目标父目录存在
+        let target_p = std::path::Path::new(&resolved_target);
+        if let Some(parent) = target_p.parent() {
+            if !parent.exists() {
+                if let Err(e) = tokio::fs::create_dir_all(parent).await {
+                    return ToolResult {
+                        success: false,
+                        output: None,
+                        error: Some(format!("创建目标父目录失败: {}", e)),
+                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+                    };
+                }
+            }
+        }
+
+        // 执行复制
+        match tokio::fs::copy(&canonical_source, &resolved_target).await {
+            Ok(bytes_copied) => {
+                log::info!("文件已复制: {} -> {}, 字节数: {}", source_path, target_path, bytes_copied);
+                ToolResult {
+                    success: true,
+                    output: Some(json!({
+                        "source_path": source_path,
+                        "target_path": target_path,
+                        "bytes_copied": bytes_copied,
+                        "message": format!("文件已复制: {} -> {}", source_path, target_path),
+                    })),
+                    error: None,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+                }
+            }
+            Err(e) => {
+                log::error!("复制文件失败: {} -> {}, 错误: {}", source_path, target_path, e);
+                ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some(format!("复制文件失败: {}", e)),
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+                }
+            }
+        }
+    }
+}
+
+// ============================================================
+// delete_directory - 删除目录
+// ============================================================
+
+struct DeleteDirectoryTool;
+
+#[async_trait]
+impl Tool for DeleteDirectoryTool {
+    fn tool_name(&self) -> &str { "delete_directory" }
+    fn description(&self) -> &str { "递归删除目录及其所有内容。注意：此操作不可逆，会自动触发用户确认。建议在删除前确认目录内容。" }
+    fn category(&self) -> &str { "filesystem" }
+    fn parameters(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "要删除的目录路径（相对于工作区）"
+                },
+                "create_backup": {
+                    "type": "boolean",
+                    "description": "删除前是否创建备份目录（复制到 .bak 后缀目录），默认 false（目录备份开销较大）",
+                    "default": false
+                }
+            },
+            "required": ["path"]
+        })
+    }
+    async fn execute(&self, params: Value) -> ToolResult {
+        let start = Instant::now();
+        let dir_path = params["path"].as_str().unwrap_or("");
+        let workspace_root = params["workspace_root"].as_str().unwrap_or("");
+        let create_backup = params["create_backup"].as_bool().unwrap_or(false);
+
+        if dir_path.is_empty() {
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some("缺少目录路径".to_string()),
+                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
+            };
+        }
+
+        let resolved_path = resolve_path(dir_path, workspace_root);
+
+        // 校验路径在工作区内
+        let (canonical_dir, _) = match validate_existing_path_in_workspace(&resolved_path, workspace_root) {
+            Ok(paths) => paths,
+            Err(e) => {
+                log::warn!("delete_directory 路径校验失败: {}", e);
+                return ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some(e),
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
+                };
+            }
+        };
+
+        // 必须是目录
+        if !canonical_dir.is_dir() {
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some(format!("路径不是目录: {}", dir_path)),
+                duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+            };
+        }
+
+        // 禁止删除工作区根目录本身
+        let canonical_root = crate::utils::canonicalize(std::path::Path::new(workspace_root))
+            .unwrap_or_else(|_| std::path::PathBuf::from(workspace_root));
+        if canonical_dir == canonical_root {
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some("禁止删除工作区根目录".to_string()),
+                duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+            };
+        }
+
+        let safe_path = canonical_dir.to_string_lossy().to_string();
+        let mut backup_path_str = String::new();
+
+        // 可选备份：复制到 .bak 目录
+        if create_backup {
+            let backup_path = format!("{}.bak", safe_path);
+            match tokio::fs::create_dir_all(&backup_path).await {
+                Ok(_) => {
+                    // 递归复制目录内容到备份目录
+                    if let Err(e) = copy_dir_recursive(&safe_path, &backup_path).await {
+                        log::error!("创建目录备份失败: {}, 拒绝删除操作", e);
+                        // 清理部分创建的备份
+                        let _ = tokio::fs::remove_dir_all(&backup_path).await;
+                        return ToolResult {
+                            success: false,
+                            output: None,
+                            error: Some(format!(
+                                "创建备份失败: {}。如需跳过备份强制删除，请设置 create_backup=false 后重试",
+                                e
+                            )),
+                            duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+                        };
+                    }
+                    log::info!("删除前已创建备份: {}", backup_path);
+                    backup_path_str = backup_path;
+                }
+                Err(e) => {
+                    log::error!("创建备份目录失败: {}, 拒绝删除操作", e);
+                    return ToolResult {
+                        success: false,
+                        output: None,
+                        error: Some(format!(
+                            "创建备份失败: {}。如需跳过备份强制删除，请设置 create_backup=false 后重试",
+                            e
+                        )),
+                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+                    };
+                }
+            }
+        }
+
+        // 执行删除
+        match tokio::fs::remove_dir_all(&safe_path).await {
+            Ok(_) => {
+                log::info!("目录已删除: {}", safe_path);
+                let mut result = json!({
+                    "path": dir_path,
+                    "message": format!("目录已删除: {}", dir_path),
+                });
+                if !backup_path_str.is_empty() {
+                    result["backup_path"] = json!(backup_path_str);
+                }
+                ToolResult {
+                    success: true,
+                    output: Some(result),
+                    error: None,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+                }
+            }
+            Err(e) => {
+                log::error!("删除目录失败: {}, 错误: {}", safe_path, e);
+                ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some(format!("删除目录失败: {}", e)),
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+                }
+            }
+        }
+    }
+}
+
+/// 递归复制目录内容到目标目录
+/// 用于 delete_directory 的备份功能
+async fn copy_dir_recursive(src: &str, dst: &str) -> Result<(), std::io::Error> {
+    tokio::task::spawn_blocking({
+        let src = src.to_string();
+        let dst = dst.to_string();
+        move || {
+            fn copy_inner(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
+                if !dst.exists() {
+                    std::fs::create_dir_all(dst)?;
+                }
+                for entry in std::fs::read_dir(src)? {
+                    let entry = entry?;
+                    let path = entry.path();
+                    let file_name = entry.file_name();
+                    let dest_path = dst.join(&file_name);
+                    if path.is_dir() {
+                        copy_inner(&path, &dest_path)?;
+                    } else {
+                        std::fs::copy(&path, &dest_path)?;
+                    }
+                }
+                Ok(())
+            }
+            copy_inner(std::path::Path::new(&src), std::path::Path::new(&dst))
+        }
+    })
+    .await
+    .map_err(std::io::Error::other)?
+}
+
+// ============================================================
+// get_file_hash - 计算文件哈希
+// ============================================================
+
+struct GetFileHashTool;
+
+#[async_trait]
+impl Tool for GetFileHashTool {
+    fn tool_name(&self) -> &str { "get_file_hash" }
+    fn description(&self) -> &str { "计算文件的 SHA-256 哈希值。使用场景：文件去重、完整性校验、变更检测。返回十六进制哈希字符串。" }
+    fn category(&self) -> &str { "filesystem" }
+    fn parameters(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "文件路径（相对于工作区）"
+                }
+            },
+            "required": ["path"]
+        })
+    }
+    async fn execute(&self, params: Value) -> ToolResult {
+        let start = Instant::now();
+        let file_path = params["path"].as_str().unwrap_or("");
+        let workspace_root = params["workspace_root"].as_str().unwrap_or("");
+
+        if file_path.is_empty() {
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some("缺少文件路径".to_string()),
+                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
+            };
+        }
+
+        let resolved_path = resolve_path(file_path, workspace_root);
+
+        // 校验路径在工作区内
+        let (canonical_file, _) = match validate_existing_path_in_workspace(&resolved_path, workspace_root) {
+            Ok(paths) => paths,
+            Err(e) => {
+                log::warn!("get_file_hash 路径校验失败: {}", e);
+                return ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some(e),
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
+                };
+            }
+        };
+
+        // 必须是文件
+        if !canonical_file.is_file() {
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some(format!("路径不是文件: {}", file_path)),
+                duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+            };
+        }
+
+        // 在 spawn_blocking 中读取文件并计算哈希（避免阻塞异步运行时）
+        let hash_result = tokio::task::spawn_blocking(move || {
+            use std::io::Read;
+            let mut file = std::fs::File::open(&canonical_file)?;
+            let mut hasher = Sha256::new();
+            // 分块读取，避免大文件一次性加载到内存
+            let mut buffer = [0u8; 8192];
+            loop {
+                let n = file.read(&mut buffer)?;
+                if n == 0 {
+                    break;
+                }
+                hasher.update(&buffer[..n]);
+            }
+            let hash_bytes = hasher.finalize();
+            Ok::<String, std::io::Error>(format!("{:x}", hash_bytes))
+        })
+        .await;
+
+        match hash_result {
+            Ok(Ok(hash)) => {
+                log::info!("文件哈希计算完成: {}, sha256={}", file_path, &hash[..16]);
+                ToolResult {
+                    success: true,
+                    output: Some(json!({
+                        "path": file_path,
+                        "algorithm": "sha256",
+                        "hash": hash,
+                    })),
+                    error: None,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+                }
+            }
+            Ok(Err(e)) => {
+                log::error!("计算文件哈希失败: {}, 错误: {}", file_path, e);
+                ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some(format!("计算文件哈希失败: {}", e)),
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+                }
+            }
+            Err(e) => {
+                log::error!("计算文件哈希任务失败: {}, 错误: {}", file_path, e);
+                ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some(format!("计算文件哈希任务失败: {}", e)),
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+                }
+            }
+        }
+    }
+}
+
+// ============================================================
+// read_file_lines - 按行读取文件
+// ============================================================
+
+struct ReadFileLinesTool;
+
+#[async_trait]
+impl Tool for ReadFileLinesTool {
+    fn tool_name(&self) -> &str { "read_file_lines" }
+    fn description(&self) -> &str { "按行读取纯文本文件，支持偏移和行数限制。使用场景：读取大文件的指定部分、分页读取、查看日志文件尾部。推荐用于大文件分页读取。" }
+    fn category(&self) -> &str { "filesystem" }
+    fn parameters(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "文件路径（相对于工作区）"
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "起始行偏移（0-based），默认 0",
+                    "default": 0
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "读取行数限制，默认 100，最大 1000",
+                    "default": 100
+                },
+                "encoding": {
+                    "type": "string",
+                    "description": "文件编码，默认 utf-8。支持 gbk/gb2312/big5/shift_jis/latin1",
+                    "default": "utf-8"
+                }
+            },
+            "required": ["path"]
+        })
+    }
+    async fn execute(&self, params: Value) -> ToolResult {
+        let start = Instant::now();
+        let file_path = params["path"].as_str().unwrap_or("");
+        let workspace_root = params["workspace_root"].as_str().unwrap_or("");
+        let offset = params["offset"].as_u64().unwrap_or(0) as usize;
+        let limit = params["limit"].as_u64().unwrap_or(100) as usize;
+        let encoding_label = params["encoding"].as_str().unwrap_or("utf-8");
+
+        if file_path.is_empty() {
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some("缺少文件路径".to_string()),
+                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
+            };
+        }
+
+        // 限制最大读取行数，防止 LLM 请求过大导致内存压力
+        let safe_limit = limit.min(1000);
+
+        let resolved_path = resolve_path(file_path, workspace_root);
+
+        // 校验路径在工作区内
+        let (canonical_file, _) = match validate_existing_path_in_workspace(&resolved_path, workspace_root) {
+            Ok(paths) => paths,
+            Err(e) => {
+                log::warn!("read_file_lines 路径校验失败: {}", e);
+                return ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some(e),
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
+                };
+            }
+        };
+
+        // 必须是文件
+        if !canonical_file.is_file() {
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some(format!("路径不是文件: {}", file_path)),
+                duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+            };
+        }
+
+        // 在 spawn_blocking 中读取文件（避免阻塞异步运行时）
+        let path_for_task = canonical_file.clone();
+        let encoding_label_owned = encoding_label.to_string();
+        let read_result = tokio::task::spawn_blocking(move || {
+            // 读取文件字节
+            let bytes = std::fs::read(&path_for_task)?;
+
+            // 根据编码参数解码
+            let encoding = encoding_rs::Encoding::for_label(encoding_label_owned.as_bytes())
+                .unwrap_or(encoding_rs::UTF_8);
+            let (decoded, _actual_encoding, _had_errors) = encoding.decode(&bytes);
+            let content = decoded.into_owned();
+
+            // 按行分割（兼容 \n 和 \r\n）
+            let lines: Vec<&str> = content.lines().collect();
+            let total_lines = lines.len();
+
+            // 应用 offset 和 limit
+            let end = offset.saturating_add(safe_limit).min(total_lines);
+            let selected: Vec<String> = if offset < total_lines {
+                lines[offset..end].iter().map(|s| s.to_string()).collect()
+            } else {
+                Vec::new()
+            };
+
+            Ok::<(Vec<String>, usize), std::io::Error>((selected, total_lines))
+        })
+        .await;
+
+        match read_result {
+            Ok(Ok((lines, total_lines))) => {
+                let returned_lines = lines.len();
+                log::debug!(
+                    "按行读取文件完成: {}, offset={}, limit={}, 返回 {} 行（总 {} 行）",
+                    file_path, offset, safe_limit, returned_lines, total_lines
+                );
+                ToolResult {
+                    success: true,
+                    output: Some(json!({
+                        "path": file_path,
+                        "offset": offset,
+                        "limit": safe_limit,
+                        "total_lines": total_lines,
+                        "returned_lines": returned_lines,
+                        "lines": lines,
+                        "has_more": offset + returned_lines < total_lines,
+                    })),
+                    error: None,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+                }
+            }
+            Ok(Err(e)) => {
+                log::error!("按行读取文件失败: {}, 错误: {}", file_path, e);
+                ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some(format!("按行读取文件失败: {}", e)),
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+                }
+            }
+            Err(e) => {
+                log::error!("按行读取文件任务失败: {}, 错误: {}", file_path, e);
+                ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some(format!("按行读取文件任务失败: {}", e)),
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                 }
             }
         }

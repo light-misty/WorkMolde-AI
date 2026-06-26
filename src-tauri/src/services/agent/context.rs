@@ -850,7 +850,7 @@ impl AgentContext {
 
     /// Layer 3: 策略层
     fn layer_tool_strategy() -> String {
-        r#"<tool_strategy>
+        let base = r#"<tool_strategy>
 ## 工具选择策略
 
 ### 读取操作
@@ -888,7 +888,12 @@ impl AgentContext {
 
 ### 输出风格
 - 回复和文档中不得出现任何emoji表情符号，使用文字替代（如用"完成"替代"✅"，用"注意"替代"⚠️"）
-</tool_strategy>"#.to_string()
+</tool_strategy>"#;
+
+        // 追加 Code Interpreter 指导（patches 模式等系统级指导）
+        // 与 PromptLoader::default_tool_strategy 保持一致
+        let ci_guide = super::prompts::code_interpreter::CODE_INTERPRETER_GUIDE;
+        format!("{}\n\n{}", base, ci_guide)
     }
 
     /// Layer 4: 防幻觉层
@@ -1272,7 +1277,7 @@ mod tests {
         assert!(!prompt.contains("<examples>"));
     }
 
-    /// 测试按任务类型构建系统提示词 - 未知类型默认注入Word规范
+    /// 测试按任务类型构建系统提示词 - 未知类型不注入任何设计规范（P4-2）
     #[test]
     fn test_build_system_prompt_with_task_unknown() {
         let budget = TokenBudgetManager::default_context();
@@ -1285,8 +1290,11 @@ mod tests {
             None,
         );
 
-        // 未知类型默认注入 Word 规范
-        assert!(prompt.contains("<guide type=\"docx\">"));
+        // P4-2: 未知类型不注入任何设计规范，避免浪费 Token 和误导 LLM
+        assert!(!prompt.contains("<guide type=\"docx\">"));
+        assert!(!prompt.contains("<guide type=\"xlsx\">"));
+        assert!(!prompt.contains("<guide type=\"pptx\">"));
+        assert!(!prompt.contains("<guide type=\"pdf\">"));
     }
 
     /// 测试规则层包含正负约束

@@ -13,15 +13,6 @@ logger = logging.getLogger(__name__)
 class DocumentValidator:
     """文档质量验证器"""
 
-    # 颜色编码标准 RGB 值
-    COLOR_CODING_STANDARD = {
-        "input": (0, 0, 255),
-        "formula": (0, 0, 0),
-        "cross_ref": (0, 128, 0),
-        "external": (255, 0, 0),
-        "assumption_bg": (255, 255, 0),
-    }
-
     def validate(self, file_path: str, doc_type: str = "", options: dict = None) -> dict:
         """验证文档质量
 
@@ -62,6 +53,10 @@ class DocumentValidator:
                 warnings, stats = self._validate_pptx(file_path, options)
             elif doc_type == "pdf":
                 warnings, stats = self._validate_pdf(file_path, options)
+            elif doc_type in ("md", "markdown"):
+                warnings, stats = self._validate_markdown(file_path, options)
+            elif doc_type == "txt":
+                warnings, stats = self._validate_txt(file_path, options)
             else:
                 logger.info("validate: 不支持验证的文档类型: %s, 跳过验证", doc_type)
                 return {"valid": True, "warnings": [], "stats": {}}
@@ -308,6 +303,236 @@ class DocumentValidator:
             warnings.append({
                 "code": "VALIDATION_SKIPPED",
                 "message": "PyMuPDF 未安装，跳过 PDF 验证",
+                "severity": "warning",
+            })
+
+        return warnings, stats
+
+    def _validate_markdown(self, file_path: str, options: dict) -> tuple:
+        """验证 Markdown 文档
+
+        检查项：空文档、代码块配对、标题层级跳跃、行尾空白、
+        连续空行、链接/图片/表格语法统计
+        """
+        import re
+
+        warnings = []
+        stats = {}
+
+        # 尝试多种编码读取（utf-8 优先，回退 gbk/latin-1）
+        content = None
+        used_encoding = None
+        for encoding in ("utf-8", "gbk", "latin-1"):
+            try:
+                with open(file_path, "r", encoding=encoding) as f:
+                    content = f.read()
+                used_encoding = encoding
+                break
+            except UnicodeDecodeError:
+                continue
+
+        if content is None:
+            warnings.append({
+                "code": "READ_ERROR",
+                "message": "无法以 utf-8/gbk/latin-1 编码读取文件",
+                "severity": "error",
+            })
+            return warnings, stats
+
+        lines = content.split("\n")
+        line_count = len(lines)
+        char_count = len(content)
+        word_count = len(content.split())
+
+        stats["line_count"] = line_count
+        stats["char_count"] = char_count
+        stats["word_count"] = word_count
+        stats["encoding"] = used_encoding
+
+        # 检查1: 文档是否为空
+        if not content.strip():
+            warnings.append({"code": "EMPTY_DOCUMENT", "message": "文档内容为空", "severity": "error"})
+            return warnings, stats
+
+        # 检查2: 代码块 ``` 配对（应为偶数）
+        code_block_marker_count = content.count("```")
+        stats["code_block_count"] = code_block_marker_count // 2
+        if code_block_marker_count % 2 != 0:
+            warnings.append({
+                "code": "UNCLOSED_CODE_BLOCK",
+                "message": f"代码块标记 ``` 出现 {code_block_marker_count} 次，应为偶数（成对）",
+                "severity": "error",
+            })
+
+        # 检查3: 标题层级跳跃（如 # 直接到 ###，跳过 ##）
+        prev_level = 0
+        heading_count = 0
+        for line in lines:
+            stripped = line.lstrip()
+            if stripped.startswith("#"):
+                # 计算 # 的连续数量作为标题层级
+                level = 0
+                for ch in stripped:
+                    if ch == "#":
+                        level += 1
+                    else:
+                        break
+                if level > 6:
+                    warnings.append({
+                        "code": "INVALID_HEADING_LEVEL",
+                        "message": f"标题层级超过 6: '{stripped[:30]}'",
+                        "severity": "warning",
+                    })
+                if prev_level > 0 and level > prev_level + 1:
+                    warnings.append({
+                        "code": "HEADING_LEVEL_SKIP",
+                        "message": f"标题层级跳跃: 从 H{prev_level} 直接到 H{level}: '{stripped[:30]}'",
+                        "severity": "warning",
+                    })
+                prev_level = level
+                heading_count += 1
+        stats["heading_count"] = heading_count
+
+        # 检查4: 行尾空白
+        trailing_ws_lines = [i + 1 for i, line in enumerate(lines) if line != line.rstrip()]
+        if trailing_ws_lines:
+            warnings.append({
+                "code": "TRAILING_WHITESPACE",
+                "message": f"检测到 {len(trailing_ws_lines)} 行行尾空白: 行号 {trailing_ws_lines[:5]}{'...' if len(trailing_ws_lines) > 5 else ''}",
+                "severity": "warning",
+            })
+
+        # 检查5: 连续空行过多（>3）
+        blank_run = 0
+        max_blank_run = 0
+        for line in lines:
+            if not line.strip():
+                blank_run += 1
+                max_blank_run = max(max_blank_run, blank_run)
+            else:
+                blank_run = 0
+        if max_blank_run > 3:
+            warnings.append({
+                "code": "EXCESSIVE_BLANK_LINES",
+                "message": f"检测到连续 {max_blank_run} 个空行（建议不超过 3）",
+                "severity": "warning",
+            })
+
+        # 检查6: 链接和图片语法统计
+        link_pattern = re.compile(r"\[([^\]]*)\]\(([^)]*)\)")
+        links = link_pattern.findall(content)
+        stats["link_count"] = len(links)
+
+        image_pattern = re.compile(r"!\[([^\]]*)\]\(([^)]*)\)")
+        images = image_pattern.findall(content)
+        stats["image_count"] = len(images)
+
+        # 检查7: 表格行统计（以 | 开头且包含 | 的行）
+        table_lines = [line for line in lines if line.strip().startswith("|") and "|" in line[1:]]
+        stats["table_line_count"] = len(table_lines)
+
+        return warnings, stats
+
+    def _validate_txt(self, file_path: str, options: dict) -> tuple:
+        """验证纯文本文档
+
+        检查项：空文档、编码、行尾空白、制表符/空格混用缩进、
+        CRLF/LF 混用、连续空行、单行过长
+        """
+        warnings = []
+        stats = {}
+
+        # 尝试多种编码读取（utf-8 优先，回退 gbk/latin-1）
+        content = None
+        used_encoding = None
+        for encoding in ("utf-8", "gbk", "latin-1"):
+            try:
+                with open(file_path, "r", encoding=encoding) as f:
+                    content = f.read()
+                used_encoding = encoding
+                break
+            except UnicodeDecodeError:
+                continue
+
+        if content is None:
+            warnings.append({
+                "code": "READ_ERROR",
+                "message": "无法以 utf-8/gbk/latin-1 编码读取文件",
+                "severity": "error",
+            })
+            return warnings, stats
+
+        lines = content.split("\n")
+        line_count = len(lines)
+        char_count = len(content)
+        word_count = len(content.split())
+
+        stats["line_count"] = line_count
+        stats["char_count"] = char_count
+        stats["word_count"] = word_count
+        stats["encoding"] = used_encoding
+
+        # 检查1: 文档是否为空
+        if not content.strip():
+            warnings.append({"code": "EMPTY_DOCUMENT", "message": "文档内容为空", "severity": "error"})
+            return warnings, stats
+
+        # 检查2: 行尾空白
+        trailing_ws_count = sum(1 for line in lines if line != line.rstrip())
+        if trailing_ws_count > 0:
+            warnings.append({
+                "code": "TRAILING_WHITESPACE",
+                "message": f"检测到 {trailing_ws_count} 行行尾空白",
+                "severity": "warning",
+            })
+
+        # 检查3: 制表符和空格混用缩进
+        mixed_indent_lines = []
+        for i, line in enumerate(lines, 1):
+            leading = line[:len(line) - len(line.lstrip())]
+            if "\t" in leading and " " in leading:
+                mixed_indent_lines.append(i)
+        if mixed_indent_lines:
+            warnings.append({
+                "code": "MIXED_INDENT",
+                "message": f"检测到 {len(mixed_indent_lines)} 行制表符和空格混用缩进: 行号 {mixed_indent_lines[:5]}{'...' if len(mixed_indent_lines) > 5 else ''}",
+                "severity": "warning",
+            })
+
+        # 检查4: 行尾换行符混用（CRLF/LF）
+        crlf_count = content.count("\r\n")
+        lf_only_count = content.count("\n") - crlf_count
+        if crlf_count > 0 and lf_only_count > 0:
+            warnings.append({
+                "code": "MIXED_LINE_ENDINGS",
+                "message": f"行尾换行符混用: CRLF {crlf_count} 行, LF {lf_only_count} 行",
+                "severity": "warning",
+            })
+        stats["crlf_count"] = crlf_count
+        stats["lf_count"] = lf_only_count
+
+        # 检查5: 连续空行过多（>5）
+        blank_run = 0
+        max_blank_run = 0
+        for line in lines:
+            if not line.strip():
+                blank_run += 1
+                max_blank_run = max(max_blank_run, blank_run)
+            else:
+                blank_run = 0
+        if max_blank_run > 5:
+            warnings.append({
+                "code": "EXCESSIVE_BLANK_LINES",
+                "message": f"检测到连续 {max_blank_run} 个空行（建议不超过 5）",
+                "severity": "warning",
+            })
+
+        # 检查6: 单行过长（>500 字符，可能影响阅读）
+        long_lines = [(i + 1, len(line)) for i, line in enumerate(lines) if len(line) > 500]
+        if long_lines:
+            warnings.append({
+                "code": "LONG_LINES",
+                "message": f"检测到 {len(long_lines)} 行超过 500 字符: 行号 {long_lines[:3]}{'...' if len(long_lines) > 3 else ''}",
                 "severity": "warning",
             })
 

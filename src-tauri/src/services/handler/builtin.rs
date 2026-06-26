@@ -1,4 +1,4 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
@@ -86,7 +86,7 @@ async fn execute_read(
             success: false,
             output: None,
             error: Some(e),
-            duration_ms: start.elapsed().as_millis() as u64,
+            duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::DOC_PERMISSION_DENIED),
         };
     }
 
@@ -168,13 +168,13 @@ async fn execute_read(
             success: true,
             output: Some(data),
             error: None,
-            duration_ms: start.elapsed().as_millis() as u64,
+            duration_ms: start.elapsed().as_millis() as u64, error_code: None,
         },
         Err(e) => HandlerResult {
             success: false,
             output: None,
             error: Some(e.message),
-            duration_ms: start.elapsed().as_millis() as u64,
+            duration_ms: start.elapsed().as_millis() as u64, error_code: None,
         },
     }
 }
@@ -200,7 +200,7 @@ async fn execute_convert(
             success: false,
             output: None,
             error: Some(e),
-            duration_ms: start.elapsed().as_millis() as u64,
+            duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::DOC_PERMISSION_DENIED),
         };
     }
 
@@ -227,7 +227,7 @@ async fn execute_convert(
             success: false,
             output: None,
             error: Some(e),
-            duration_ms: start.elapsed().as_millis() as u64,
+            duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::DOC_PERMISSION_DENIED),
         };
     }
 
@@ -247,13 +247,13 @@ async fn execute_convert(
             success: true,
             output: Some(data),
             error: None,
-            duration_ms: start.elapsed().as_millis() as u64,
+            duration_ms: start.elapsed().as_millis() as u64, error_code: None,
         },
         Err(e) => HandlerResult {
             success: false,
             output: None,
             error: Some(e.message),
-            duration_ms: start.elapsed().as_millis() as u64,
+            duration_ms: start.elapsed().as_millis() as u64, error_code: None,
         },
     }
 }
@@ -276,7 +276,7 @@ async fn execute_analyze(
             success: false,
             output: None,
             error: Some(e),
-            duration_ms: start.elapsed().as_millis() as u64,
+            duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::DOC_PERMISSION_DENIED),
         };
     }
 
@@ -289,13 +289,13 @@ async fn execute_analyze(
             success: true,
             output: Some(data),
             error: None,
-            duration_ms: start.elapsed().as_millis() as u64,
+            duration_ms: start.elapsed().as_millis() as u64, error_code: None,
         },
         Err(e) => HandlerResult {
             success: false,
             output: None,
             error: Some(e.message),
-            duration_ms: start.elapsed().as_millis() as u64,
+            duration_ms: start.elapsed().as_millis() as u64, error_code: None,
         },
     }
 }
@@ -334,7 +334,7 @@ impl DocxHandler {
 impl Handler for DocxHandler {
     fn handler_name(&self) -> &str { "docx_handler" }
     fn description(&self) -> &str {
-        "Word文档(.docx)处理器，支持读取、格式转换、分析三种操作。转换支持docx/pdf/md/txt/html等格式。"
+        "Word文档(.docx)处理器，支持读取、格式转换、分析三种操作。转换支持 md/txt/pdf 格式（与 sidecar word_handler.convert 实际支持一致）。"
     }
     fn category(&self) -> &str { "document" }
     fn is_builtin(&self) -> bool { true }
@@ -381,8 +381,8 @@ impl Handler for DocxHandler {
                 },
                 "target_format": {
                     "type": "string",
-                    "enum": ["docx", "xlsx", "pptx", "pdf", "md", "txt", "csv", "html"],
-                    "description": "[convert] 目标格式"
+                    "enum": ["md", "txt", "pdf"],
+                    "description": "[convert] 目标格式（与 sidecar word_handler.convert 实际支持格式一致）"
                 },
                 "output_path": {
                     "type": "string",
@@ -402,7 +402,7 @@ impl Handler for DocxHandler {
                 success: false,
                 output: None,
                 error: Some(format!("DocxHandler 不支持的操作类型: {}", action)),
-                duration_ms: 0,
+                duration_ms: 0, error_code: None,
             },
         }
     }
@@ -428,7 +428,7 @@ impl XlsxHandler {
 impl Handler for XlsxHandler {
     fn handler_name(&self) -> &str { "xlsx_handler" }
     fn description(&self) -> &str {
-        "Excel文档(.xlsx)处理器，支持读取、格式转换、分析三种操作。转换支持xlsx/pdf/csv/html等格式。"
+        "Excel文档(.xlsx)处理器，支持读取、格式转换、分析三种操作。转换支持 csv/pdf/html/txt 格式（与 sidecar excel_handler.convert 实际支持一致）。"
     }
     fn category(&self) -> &str { "document" }
     fn is_builtin(&self) -> bool { true }
@@ -483,8 +483,8 @@ impl Handler for XlsxHandler {
                 },
                 "target_format": {
                     "type": "string",
-                    "enum": ["docx", "xlsx", "pptx", "pdf", "md", "txt", "csv", "html"],
-                    "description": "[convert] 目标格式"
+                    "enum": ["csv", "pdf", "html", "txt"],
+                    "description": "[convert] 目标格式（与 sidecar excel_handler.convert 实际支持格式一致）"
                 },
                 "output_path": {
                     "type": "string",
@@ -504,7 +504,7 @@ impl Handler for XlsxHandler {
                 success: false,
                 output: None,
                 error: Some(format!("XlsxHandler 不支持的操作类型: {}", action)),
-                duration_ms: 0,
+                duration_ms: 0, error_code: None,
             },
         }
     }
@@ -530,7 +530,7 @@ impl PptxHandler {
 impl Handler for PptxHandler {
     fn handler_name(&self) -> &str { "pptx_handler" }
     fn description(&self) -> &str {
-        "PPT演示文稿(.pptx)处理器，支持读取、格式转换、分析三种操作。转换支持pptx/pdf等格式。"
+        "PPT演示文稿(.pptx)处理器，支持读取、格式转换、分析三种操作。转换支持 pdf 格式（需 LibreOffice headless 模式）。"
     }
     fn category(&self) -> &str { "document" }
     fn is_builtin(&self) -> bool { true }
@@ -562,8 +562,8 @@ impl Handler for PptxHandler {
                 },
                 "target_format": {
                     "type": "string",
-                    "enum": ["docx", "xlsx", "pptx", "pdf", "md", "txt", "csv", "html"],
-                    "description": "[convert] 目标格式"
+                    "enum": ["pdf"],
+                    "description": "[convert] 目标格式（仅支持 pdf，需 LibreOffice headless 模式）"
                 },
                 "output_path": {
                     "type": "string",
@@ -583,7 +583,7 @@ impl Handler for PptxHandler {
                 success: false,
                 output: None,
                 error: Some(format!("PptxHandler 不支持的操作类型: {}", action)),
-                duration_ms: 0,
+                duration_ms: 0, error_code: None,
             },
         }
     }
@@ -609,7 +609,7 @@ impl PdfHandler {
 impl Handler for PdfHandler {
     fn handler_name(&self) -> &str { "pdf_handler" }
     fn description(&self) -> &str {
-        "PDF文档(.pdf)处理器，支持读取、格式转换、分析三种操作。转换支持pdf/txt/md/html等格式。"
+        "PDF文档(.pdf)处理器，支持读取、格式转换、分析三种操作。转换支持 txt/md/html 格式（与 sidecar pdf_handler.convert 实际支持一致）。"
     }
     fn category(&self) -> &str { "document" }
     fn is_builtin(&self) -> bool { true }
@@ -681,7 +681,7 @@ impl Handler for PdfHandler {
                 success: false,
                 output: None,
                 error: Some(format!("PdfHandler 不支持的操作类型: {}", action)),
-                duration_ms: 0,
+                duration_ms: 0, error_code: None,
             },
         }
     }
@@ -774,7 +774,7 @@ impl Handler for CodeInterpreterHandler {
                     success: false,
                     output: None,
                     error: Some("patches 数组不能为空".to_string()),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                 };
             }
             // patch 模式：从 base_code 获取基准（由 executor 注入）
@@ -784,7 +784,7 @@ impl Handler for CodeInterpreterHandler {
                     success: false,
                     output: None,
                     error: Some("使用 patch 模式但没有可用的 base_code（上一次代码不存在或为空）".to_string()),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                 };
             }
             // 应用所有搜索替换块
@@ -794,7 +794,7 @@ impl Handler for CodeInterpreterHandler {
                     success: false,
                     output: None,
                     error: Some(e),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                 },
             }
         } else {
@@ -805,7 +805,7 @@ impl Handler for CodeInterpreterHandler {
                     success: false,
                     output: None,
                     error: Some("缺少代码内容".to_string()),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                 };
             }
             code
@@ -830,7 +830,7 @@ impl Handler for CodeInterpreterHandler {
                     success: true,
                     output: Some(output),
                     error: None,
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                 }
             }
             Err(e) => HandlerResult {
@@ -838,7 +838,7 @@ impl Handler for CodeInterpreterHandler {
                 // 关键：失败时也返回完整代码，供 executor 保存为 last_code 和构造错误反馈
                 output: Some(json!({ "_executed_code": final_code })),
                 error: Some(e.message),
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms: start.elapsed().as_millis() as u64, error_code: None,
             },
         }
     }

@@ -67,6 +67,11 @@ def register_chinese_font() -> str:
             except Exception as e:
                 logger.debug("register_chinese_font: 注册字体失败 %s (%s): %s", name, fp, e)
                 continue
+
+    # 全部字体注册失败时，记录警告而非静默回退
+    # 返回 Helvetica 会导致 PDF 中文显示为方块，调用方应检查返回值并决定是否中止
+    if font_name == "Helvetica":
+        logger.warning("register_chinese_font: 所有中文字体注册失败，回退到 Helvetica（中文将显示为方块）")
     return font_name
 
 

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+﻿use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde_json::{json, Value};
@@ -99,7 +99,7 @@ mod tests {
                 success: true,
                 output: None,
                 error: None,
-                duration_ms: 0,
+                duration_ms: 0, error_code: None,
             }
         }
     }

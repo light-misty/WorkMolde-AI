@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+﻿use std::collections::HashMap;
 use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -94,7 +94,7 @@ impl HandlerRegistry {
                     success: false,
                     output: None,
                     error: Some(format!("处理器不存在: {}", name)),
-                    duration_ms: 0,
+                    duration_ms: 0, error_code: None,
                 }
             }
         }
@@ -160,7 +160,7 @@ mod tests {
         fn is_builtin(&self) -> bool { false }
         async fn execute(&self, _params: Value) -> crate::models::handler::HandlerResult {
             crate::models::handler::HandlerResult {
-                success: true, output: None, error: None, duration_ms: 0,
+                success: true, output: None, error: None, duration_ms: 0, error_code: None,
             }
         }
     }

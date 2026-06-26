@@ -135,7 +135,7 @@ impl TaskType {
             TaskType::Markdown => vec![],
             TaskType::FileSystem => vec![],
             TaskType::General => vec![],
-            TaskType::Unknown => vec!["docx"], // 默认注入最常见类型
+            TaskType::Unknown => vec![], // 未知类型不注入设计规范，避免浪费 Token 和误导 LLM
         }
     }
 
@@ -227,7 +227,7 @@ mod tests {
         assert_eq!(TaskType::Pdf.required_guide_types(), vec!["pdf"]);
         assert_eq!(TaskType::Markdown.required_guide_types(), Vec::<&str>::new());
         assert_eq!(TaskType::FileSystem.required_guide_types(), Vec::<&str>::new());
-        assert_eq!(TaskType::Unknown.required_guide_types(), vec!["docx"]);
+        assert_eq!(TaskType::Unknown.required_guide_types(), Vec::<&str>::new());
     }
 
     #[test]
