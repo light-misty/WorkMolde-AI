@@ -15,7 +15,13 @@ class MarkdownHandler:
     logger = logging.getLogger(__name__)
 
     def read(self, params: dict) -> dict:
-        """读取 Markdown 文档"""
+        """读取 Markdown 文档
+
+        params:
+            path: 文件路径
+            include_front_matter: 是否解析 front-matter（YAML 元数据），默认 true
+            include_structure: 是否识别 GFM 表格/任务列表/脚注等结构，默认 true
+        """
         path = params.get("path", "")
         if not path:
             self.logger.error("read: 缺少文件路径")
@@ -25,24 +31,180 @@ class MarkdownHandler:
 
         self.logger.info("read: 开始读取 Markdown 文档, path=%s", path)
 
+        # 解析扩展参数（默认开启，保持增强行为）
+        include_front_matter = params.get("include_front_matter", True)
+        include_structure = params.get("include_structure", True)
+
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
 
-        # 解析标题结构
+        # ------------------------------------------------------------------ #
+        #  Front-matter 解析（YAML 格式，位于文档开头的 --- ... --- 之间）
+        # ------------------------------------------------------------------ #
+        front_matter = None
+        body_content = content
+        if include_front_matter:
+            # 匹配文档开头的 front-matter 块
+            fm_match = re.match(r"^---\s*\n(.*?)\n---\s*\n", content, re.DOTALL)
+            if fm_match:
+                fm_text = fm_match.group(1)
+                body_content = content[fm_match.end():]
+                # 简单 YAML 键值对解析（不依赖 PyYAML，支持常见格式）
+                front_matter = self._parse_simple_yaml(fm_text)
+
+        # ------------------------------------------------------------------ #
+        #  标题结构解析
+        # ------------------------------------------------------------------ #
         headings = []
-        for match in re.finditer(r"^(#{1,6})\s+(.+)$", content, re.MULTILINE):
+        for match in re.finditer(r"^(#{1,6})\s+(.+)$", body_content, re.MULTILINE):
             level = len(match.group(1))
             text = match.group(2).strip()
             headings.append({"level": level, "text": text})
 
+        # ------------------------------------------------------------------ #
+        #  GFM 结构识别（表格/任务列表/脚注/代码块）
+        # ------------------------------------------------------------------ #
+        structure = None
+        if include_structure:
+            structure = {
+                # GFM 表格（管道符分隔，第二行为分隔线）
+                "tables": self._extract_tables(body_content),
+                # 任务列表（- [x] 或 - [ ]）
+                "task_list_items": self._extract_task_list_items(body_content),
+                # 脚注（[^id]: 内容）
+                "footnotes": self._extract_footnotes(body_content),
+                # 代码块数量和语言统计
+                "code_blocks": self._extract_code_blocks(body_content),
+            }
+
         self.logger.info("read: Markdown 文档读取完成, path=%s, 标题数=%d", path, len(headings))
-        return {
+
+        # 构建返回结果
+        result = {
             "content": content,
             "headings": headings,
             "heading_count": len(headings),
             "line_count": content.count("\n") + 1,
             "char_count": len(content),
         }
+        if include_front_matter and front_matter is not None:
+            result["front_matter"] = front_matter
+        if include_structure:
+            result["structure"] = structure
+        return result
+
+    @staticmethod
+    def _parse_simple_yaml(yaml_text: str) -> dict:
+        """简单 YAML 键值对解析（不依赖 PyYAML）
+
+        支持格式：
+            key: value
+            key: [item1, item2]
+            key: "value"
+        """
+        result = {}
+        for line in yaml_text.split("\n"):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            # 匹配 key: value 格式
+            match = re.match(r"^([\w\-]+):\s*(.*)$", line)
+            if match:
+                key = match.group(1)
+                value = match.group(2).strip()
+                # 去除引号
+                if value.startswith('"') and value.endswith('"'):
+                    value = value[1:-1]
+                elif value.startswith("'") and value.endswith("'"):
+                    value = value[1:-1]
+                # 解析列表 [item1, item2]
+                if value.startswith("[") and value.endswith("]"):
+                    inner = value[1:-1]
+                    items = [item.strip().strip('"\'') for item in inner.split(",") if item.strip()]
+                    result[key] = items
+                else:
+                    result[key] = value
+        return result
+
+    @staticmethod
+    def _extract_tables(content: str) -> list:
+        """提取 GFM 表格信息（表头行数和位置）"""
+        tables = []
+        lines = content.split("\n")
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            # 表格行：包含管道符且非代码块内
+            if "|" in line and not line.strip().startswith("```"):
+                # 检查下一行是否为分隔线（|---|---|）
+                if i + 1 < len(lines):
+                    next_line = lines[i + 1].strip()
+                    if re.match(r"^\|?[\s\-:|]+\|[\s\-:|]*$", next_line):
+                        # 找到表格，统计行数
+                        table_start = i
+                        i += 2  # 跳过表头和分隔线
+                        while i < len(lines) and "|" in lines[i] and lines[i].strip():
+                            i += 1
+                        table_end = i
+                        # 提取表头列名
+                        header_line = lines[table_start].strip()
+                        headers = [h.strip() for h in header_line.split("|") if h.strip()]
+                        tables.append({
+                            "start_line": table_start + 1,  # 1-based
+                            "row_count": table_end - table_start,
+                            "headers": headers,
+                        })
+                        continue
+            i += 1
+        return tables
+
+    @staticmethod
+    def _extract_task_list_items(content: str) -> list:
+        """提取任务列表项（- [x] 或 - [ ]）"""
+        items = []
+        for match in re.finditer(r"^[-*+]\s+\[([xX ])\]\s+(.+)$", content, re.MULTILINE):
+            checked = match.group(1).lower() == "x"
+            text = match.group(2).strip()
+            items.append({"checked": checked, "text": text})
+        return items
+
+    @staticmethod
+    def _extract_footnotes(content: str) -> list:
+        """提取脚注定义（[^id]: 内容）"""
+        footnotes = []
+        for match in re.finditer(r"^\[\^([^\]]+)\]:\s+(.+)$", content, re.MULTILINE):
+            footnotes.append({
+                "id": match.group(1),
+                "text": match.group(2).strip(),
+            })
+        return footnotes
+
+    @staticmethod
+    def _extract_code_blocks(content: str) -> list:
+        """提取代码块信息（语言和行数）"""
+        blocks = []
+        in_block = False
+        current_lang = None
+        current_start = None
+        lines = content.split("\n")
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith("```"):
+                if not in_block:
+                    # 代码块开始
+                    in_block = True
+                    current_lang = stripped[3:].strip() or None
+                    current_start = i + 1  # 1-based
+                else:
+                    # 代码块结束
+                    in_block = False
+                    blocks.append({
+                        "language": current_lang,
+                        "start_line": current_start,
+                        "end_line": i + 1,  # 1-based
+                        "line_count": i - current_start + 1,
+                    })
+        return blocks
 
     def convert(self, params: dict) -> dict:
         """格式转换

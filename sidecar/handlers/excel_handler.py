@@ -24,6 +24,11 @@ class ExcelHandler:
             path: 文件路径
             sheet: 工作表名称（可选，默认读取所有）
             range: 读取范围（可选，如 "A1:D10"）
+            include_formatting: 是否提取单元格格式（字体/填充/边框/对齐/数字格式）
+            include_formulas: 是否分离公式与计算结果值（同时加载 data_only=True 工作簿）
+            include_charts: 是否提取图表信息
+            include_merged_cells: 是否提取合并单元格范围列表
+            include_comments: 是否提取单元格批注
         """
         path = params.get("path", "")
         sheet_name = params.get("sheet", None)
@@ -36,7 +41,23 @@ class ExcelHandler:
 
         self.logger.info("read: 开始读取 Excel 文档, path=%s", path)
 
+        # 解析扩展参数
+        include_formatting = params.get("include_formatting", False)
+        include_formulas = params.get("include_formulas", False)
+        include_charts = params.get("include_charts", False)
+        include_merged_cells = params.get("include_merged_cells", False)
+        include_comments = params.get("include_comments", False)
+
+        # 公式分离需要同时加载 data_only=True 工作簿以获取计算结果值
         wb = load_workbook(path, data_only=False)
+        wb_values = None
+        if include_formulas:
+            try:
+                wb_values = load_workbook(path, data_only=True)
+            except Exception as e:
+                self.logger.warning("read: 加载 data_only 工作簿失败，公式值分离将不可用: %s", e)
+                wb_values = None
+
         result = {"sheets": {}}
 
         if sheet_name:
@@ -48,31 +69,211 @@ class ExcelHandler:
             if name not in wb.sheetnames:
                 continue
             ws = wb[name]
+            # 对应的 data_only 工作表（用于公式值分离）
+            ws_values = wb_values[name] if wb_values and name in wb_values.sheetnames else None
 
+            # ------------------------------------------------------------------ #
+            #  读取单元格数据
+            # ------------------------------------------------------------------ #
             if read_range:
                 rows = []
                 for row in ws[read_range]:
-                    rows.append([cell.value for cell in row])
+                    row_data = []
+                    for cell in row:
+                        # 获取 data_only 工作簿中对应位置的单元格
+                        value_cell = None
+                        if ws_values:
+                            try:
+                                value_cell = ws_values.cell(row=cell.row, column=cell.column)
+                            except Exception:
+                                value_cell = None
+                        row_data.append(self._extract_cell_value(
+                            cell, value_cell, include_formulas, include_formatting, include_comments
+                        ))
+                    rows.append(row_data)
             else:
                 rows = []
                 for row in ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=ws.max_column, values_only=False):
                     row_data = []
                     for cell in row:
-                        val = cell.value
-                        if val is None and cell.data_type == "f":
-                            val = cell.internal_value
-                        row_data.append(val)
+                        # 获取 data_only 工作簿中对应位置的单元格
+                        value_cell = None
+                        if ws_values:
+                            try:
+                                value_cell = ws_values.cell(row=cell.row, column=cell.column)
+                            except Exception:
+                                value_cell = None
+                        row_data.append(self._extract_cell_value(
+                            cell, value_cell, include_formulas, include_formatting, include_comments
+                        ))
                     rows.append(row_data)
 
-            result["sheets"][name] = {
+            sheet_info = {
                 "data": rows,
                 "row_count": ws.max_row,
                 "col_count": ws.max_column,
             }
 
+            # ------------------------------------------------------------------ #
+            #  合并单元格范围列表
+            # ------------------------------------------------------------------ #
+            if include_merged_cells:
+                merged_ranges = []
+                try:
+                    for merged_range in ws.merged_cells.ranges:
+                        merged_ranges.append(str(merged_range))
+                except Exception as e:
+                    self.logger.warning("read: 提取合并单元格失败: %s", e)
+                sheet_info["merged_cells"] = merged_ranges
+
+            # ------------------------------------------------------------------ #
+            #  图表信息
+            # ------------------------------------------------------------------ #
+            if include_charts:
+                charts_info = []
+                try:
+                    for chart in ws._charts:
+                        chart_info = {
+                            # 图表类型（BarChart/LineChart/PieChart 等）
+                            "type": type(chart).__name__,
+                            # 标题（可能为 None）
+                            "title": self._extract_chart_title(chart),
+                        }
+                        charts_info.append(chart_info)
+                except Exception as e:
+                    self.logger.warning("read: 提取图表信息失败: %s", e)
+                sheet_info["charts"] = charts_info
+
+            result["sheets"][name] = sheet_info
+
         result["sheet_names"] = wb.sheetnames
         self.logger.info("read: Excel 文档读取完成, path=%s, 工作表数=%d", path, len(result["sheets"]))
         return result
+
+    @staticmethod
+    def _extract_cell_value(cell, value_cell, include_formulas: bool, include_formatting: bool, include_comments: bool) -> dict:
+        """提取单元格值，可选包含公式、格式、批注
+
+        Args:
+            cell: 原始单元格（data_only=False，显示公式）
+            value_cell: data_only=True 工作簿中对应位置的单元格（显示计算结果值）
+            include_formulas: 是否分离公式与值
+            include_formatting: 是否提取单元格格式
+            include_comments: 是否提取批注
+        """
+        # 简化模式：仅返回值（向后兼容）
+        if not include_formulas and not include_formatting and not include_comments:
+            val = cell.value
+            if val is None and cell.data_type == "f":
+                val = cell.internal_value
+            return val
+
+        # 详细模式：返回字典结构
+        cell_info = {}
+
+        # 值与公式分离
+        if include_formulas:
+            # data_type == 'f' 表示该单元格包含公式
+            if cell.data_type == "f":
+                cell_info["formula"] = cell.value
+                # 计算结果值来自 data_only 工作簿
+                cell_info["value"] = value_cell.value if value_cell else None
+            else:
+                cell_info["value"] = cell.value
+                cell_info["formula"] = None
+        else:
+            val = cell.value
+            if val is None and cell.data_type == "f":
+                val = cell.internal_value
+            cell_info["value"] = val
+
+        # 单元格格式
+        if include_formatting:
+            cell_info["formatting"] = ExcelHandler._extract_cell_formatting(cell)
+
+        # 批注
+        if include_comments:
+            if cell.comment:
+                cell_info["comment"] = {
+                    "text": cell.comment.text,
+                    "author": cell.comment.author or "",
+                }
+            else:
+                cell_info["comment"] = None
+
+        return cell_info
+
+    @staticmethod
+    def _extract_cell_formatting(cell) -> dict:
+        """提取单元格格式信息（字体/填充/边框/对齐/数字格式）"""
+        fmt = {}
+
+        # 字体
+        font = cell.font
+        if font:
+            fmt["font"] = {
+                "name": font.name,
+                "size": font.size,
+                "bold": font.bold,
+                "italic": font.italic,
+                "underline": font.underline,
+                # 颜色：可能是 RGBColor 或 ThemeColor
+                "color": str(font.color.rgb) if font.color and font.color.rgb else None,
+            }
+
+        # 填充
+        fill = cell.fill
+        if fill:
+            fill_info = {"pattern_type": fill.pattern_type}
+            if fill.fgColor and fill.fgColor.rgb:
+                fill_info["fg_color"] = str(fill.fgColor.rgb)
+            if fill.bgColor and fill.bgColor.rgb:
+                fill_info["bg_color"] = str(fill.bgColor.rgb)
+            fmt["fill"] = fill_info
+
+        # 边框
+        border = cell.border
+        if border:
+            fmt["border"] = {
+                "left_style": border.left.style if border.left else None,
+                "right_style": border.right.style if border.right else None,
+                "top_style": border.top.style if border.top else None,
+                "bottom_style": border.bottom.style if border.bottom else None,
+            }
+
+        # 对齐
+        alignment = cell.alignment
+        if alignment:
+            fmt["alignment"] = {
+                "horizontal": alignment.horizontal,
+                "vertical": alignment.vertical,
+                "wrap_text": alignment.wrap_text,
+                "indent": alignment.indent,
+            }
+
+        # 数字格式
+        if cell.number_format:
+            fmt["number_format"] = cell.number_format
+
+        return fmt
+
+    @staticmethod
+    def _extract_chart_title(chart) -> str:
+        """尝试从图表对象提取标题，失败返回空字符串"""
+        try:
+            if hasattr(chart, "title") and chart.title:
+                # 标题可能是 RichText 或字符串
+                if hasattr(chart.title, "tx") and chart.title.tx:
+                    if hasattr(chart.title.tx, "rich") and chart.title.tx.rich:
+                        paragraphs = chart.title.tx.rich.paragraphs
+                        if paragraphs:
+                            runs = paragraphs[0].runs
+                            if runs:
+                                return runs[0].text
+                return str(chart.title)
+        except Exception:
+            pass
+        return ""
 
     def convert(self, params: dict) -> dict:
         """格式转换

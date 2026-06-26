@@ -32,3 +32,5 @@ log = { version = "0.4", features = ["std"] }
 notify = "7"
 base64 = "0.22"
 dunce = "1"
+# 编码转换：支持 GBK/GB2312/Big5/Shift_JIS/Latin1 等多种编码的读取和写入
+encoding_rs = "0.8"

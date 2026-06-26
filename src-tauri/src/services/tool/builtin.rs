@@ -72,6 +72,16 @@ impl Tool for ListDirectoryTool {
         let max_depth = params["depth"].as_u64().unwrap_or(1) as u32;
         let workspace_root = params["workspace_root"].as_str().unwrap_or("");
 
+        // 入参校验：depth 必须 >= 1，否则会导致递归条件 u32 下溢（0-1=4294967295）无限递归
+        if max_depth == 0 {
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some("depth 参数必须大于等于 1".to_string()),
+                duration_ms: start.elapsed().as_millis() as u64,
+            };
+        }
+
         let extensions: Vec<String> = params["extensions"]
             .as_array()
             .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
@@ -219,7 +229,9 @@ fn tool_list_dir(
             }
         }
 
-        if is_dir && current_depth < max_depth - 1 {
+        // 递归条件使用加法避免 u32 下溢：max_depth=0 时 current_depth+1 < max_depth 为 false
+        // 与原条件 current_depth < max_depth - 1 在 max_depth >= 1 时等价
+        if is_dir && current_depth + 1 < max_depth {
             let children = tool_list_dir(&path, root, max_depth, current_depth + 1, extensions);
             node["children"] = json!(children);
         }
@@ -419,9 +431,27 @@ fn tool_search_files(
                     if content.to_lowercase().contains(query) {
                         name_matched = true;
                         if let Some(pos) = content.to_lowercase().find(query) {
-                            let start = pos.saturating_sub(30);
-                            let end = (pos + query.len() + 30).min(content.len());
-                            content_preview = Some(format!("...{}...", &content[start..end]));
+                            // 修复：直接按字节切片可能切到非 UTF-8 字符边界导致 panic
+                            // 使用 is_char_boundary 调整 start/end 到字符边界
+                            let raw_start = pos.saturating_sub(30);
+                            let raw_end = (pos + query.len() + 30).min(content.len());
+
+                            // 调整 start 到字符边界（向后移动直到遇到边界）
+                            let mut start = raw_start;
+                            while start < raw_end && !content.is_char_boundary(start) {
+                                start += 1;
+                            }
+
+                            // 调整 end 到字符边界（向前移动直到遇到边界）
+                            let mut end = raw_end;
+                            while end > start && !content.is_char_boundary(end) {
+                                end -= 1;
+                            }
+
+                            // 仅在有效区间内生成预览，避免空切片
+                            if start < end {
+                                content_preview = Some(format!("...{}...", &content[start..end]));
+                            }
                         }
                     }
                 }
@@ -505,6 +535,8 @@ impl Tool for ReadFileTool {
         let file_path = params["path"].as_str().unwrap_or("");
         let workspace_root = params["workspace_root"].as_str().unwrap_or("");
         let max_size = params["max_size"].as_u64().unwrap_or(1048576) as usize;
+        // 读取 encoding 参数（默认 utf-8），支持 GBK/GB2312/Big5/Shift_JIS/Latin1 等
+        let encoding_label = params["encoding"].as_str().unwrap_or("utf-8");
 
         if file_path.is_empty() {
             return ToolResult {
@@ -592,8 +624,17 @@ impl Tool for ReadFileTool {
             };
         }
 
-        match tokio::fs::read_to_string(&resolved_path).await {
-            Ok(content) => {
+        // 读取文件字节，根据 encoding 参数解码
+        // 支持 UTF-8/GBK/GB2312/Big5/Shift_JIS/Latin1 等多种编码
+        match tokio::fs::read(&resolved_path).await {
+            Ok(bytes) => {
+                // 根据 encoding 标签解析编码器
+                let encoding = encoding_rs::Encoding::for_label(encoding_label.as_bytes())
+                    .unwrap_or(encoding_rs::UTF_8);
+                // 解码字节为字符串（encoding_rs 自动处理 BOM 和无效字节）
+                let (content, _actual_encoding, _had_errors) = encoding.decode(&bytes);
+                let content = content.into_owned();
+
                 let ext = path.extension()
                     .and_then(|e| e.to_str())
                     .unwrap_or("")
@@ -605,6 +646,7 @@ impl Tool for ReadFileTool {
                         "content": content,
                         "size": metadata.len(),
                         "extension": ext,
+                        "encoding": encoding.name(),
                     })),
                     error: None,
                     duration_ms: start.elapsed().as_millis() as u64,
@@ -813,6 +855,123 @@ mod tests {
         assert!(!result.success);
         assert!(result.error.is_some());
         assert!(result.error.unwrap().contains("缺少文件路径"));
+    }
+
+    /// 测试 encoding 参数：使用 GBK 编码写入中文内容，再用 GBK 编码读取
+    /// 验证 encoding_rs 集成是否正确工作
+    #[tokio::test]
+    async fn test_write_and_read_file_with_gbk_encoding() {
+        let mut registry = ToolRegistry::new();
+        register_builtin_tools(&mut registry);
+
+        // 创建临时工作区目录
+        let temp_dir = std::env::temp_dir().join("docagent_encoding_test");
+        tokio::fs::create_dir_all(&temp_dir).await.unwrap();
+
+        let test_content = "你好，世界！这是 GBK 编码测试。";
+        let file_path = "gbk_test.txt";
+
+        // 使用 GBK 编码写入文件
+        let write_tool = registry.get_arc("write_text_file").unwrap();
+        let write_result = write_tool.execute(json!({
+            "path": file_path,
+            "content": test_content,
+            "workspace_root": temp_dir.to_string_lossy(),
+            "encoding": "gbk"
+        })).await;
+
+        assert!(write_result.success, "GBK 编码写入失败: {:?}", write_result.error);
+        let output = write_result.output.unwrap();
+        // encoding_rs 返回规范化的编码名（大写）
+        assert_eq!(output["encoding"], "GBK");
+
+        // 使用 GBK 编码读取文件
+        let read_tool = registry.get_arc("read_file").unwrap();
+        let read_result = read_tool.execute(json!({
+            "path": file_path,
+            "workspace_root": temp_dir.to_string_lossy(),
+            "encoding": "gbk"
+        })).await;
+
+        assert!(read_result.success, "GBK 编码读取失败: {:?}", read_result.error);
+        let read_output = read_result.output.unwrap();
+        assert_eq!(read_output["encoding"], "GBK");
+        assert_eq!(read_output["content"].as_str().unwrap(), test_content);
+
+        // 清理临时文件
+        let abs_path = temp_dir.join(file_path);
+        let _ = tokio::fs::remove_file(&abs_path).await;
+        let _ = tokio::fs::remove_dir(&temp_dir).await;
+    }
+
+    /// 测试 encoding 参数：UTF-8 默认编码应保持向后兼容
+    #[tokio::test]
+    async fn test_read_file_default_utf8_encoding() {
+        let mut registry = ToolRegistry::new();
+        register_builtin_tools(&mut registry);
+
+        // 创建临时工作区目录
+        let temp_dir = std::env::temp_dir().join("docagent_utf8_test");
+        tokio::fs::create_dir_all(&temp_dir).await.unwrap();
+
+        let test_content = "Hello, 世界！UTF-8 默认编码测试。";
+        let file_path = "utf8_test.txt";
+        let abs_path = temp_dir.join(file_path);
+
+        // 直接用 UTF-8 写入文件（模拟已存在的 UTF-8 文件）
+        tokio::fs::write(&abs_path, test_content).await.unwrap();
+
+        // 不传 encoding 参数读取（应默认 UTF-8）
+        let read_tool = registry.get_arc("read_file").unwrap();
+        let read_result = read_tool.execute(json!({
+            "path": file_path,
+            "workspace_root": temp_dir.to_string_lossy()
+        })).await;
+
+        assert!(read_result.success, "UTF-8 默认读取失败: {:?}", read_result.error);
+        let read_output = read_result.output.unwrap();
+        // encoding_rs 返回规范化的编码名（大写）
+        assert_eq!(read_output["encoding"], "UTF-8");
+        assert_eq!(read_output["content"].as_str().unwrap(), test_content);
+
+        // 清理临时文件
+        let _ = tokio::fs::remove_file(&abs_path).await;
+        let _ = tokio::fs::remove_dir(&temp_dir).await;
+    }
+
+    /// 测试 encoding 参数：不支持的编码标签应回退到 UTF-8
+    #[tokio::test]
+    async fn test_read_file_unsupported_encoding_fallback() {
+        let mut registry = ToolRegistry::new();
+        register_builtin_tools(&mut registry);
+
+        // 创建临时工作区目录
+        let temp_dir = std::env::temp_dir().join("docagent_fallback_test");
+        tokio::fs::create_dir_all(&temp_dir).await.unwrap();
+
+        let test_content = "Fallback test 你好";
+        let file_path = "fallback_test.txt";
+        let abs_path = temp_dir.join(file_path);
+
+        tokio::fs::write(&abs_path, test_content).await.unwrap();
+
+        // 传入不支持的编码标签
+        let read_tool = registry.get_arc("read_file").unwrap();
+        let read_result = read_tool.execute(json!({
+            "path": file_path,
+            "workspace_root": temp_dir.to_string_lossy(),
+            "encoding": "nonexistent-encoding"
+        })).await;
+
+        assert!(read_result.success, "不支持的编码应回退到 UTF-8，但读取失败: {:?}", read_result.error);
+        let read_output = read_result.output.unwrap();
+        // 不支持的编码回退到 UTF-8（encoding_rs 返回大写名称）
+        assert_eq!(read_output["encoding"], "UTF-8");
+        assert_eq!(read_output["content"].as_str().unwrap(), test_content);
+
+        // 清理临时文件
+        let _ = tokio::fs::remove_file(&abs_path).await;
+        let _ = tokio::fs::remove_dir(&temp_dir).await;
     }
 }
 
@@ -1264,10 +1423,9 @@ impl Tool for CreateDirectoryTool {
                                 } else {
                                     std::path::Path::new(workspace_root).join(dir_path)
                                 };
-                                // 简单前缀检查（因为路径可能不存在，无法 canonicalize）
-                                let resolved_str = resolved_abs.to_string_lossy();
-                                let root_str = root.to_string_lossy();
-                                if !resolved_str.starts_with(root_str.as_ref()) {
+                                // 修复：使用 Path::starts_with 进行路径组件级别比较
+                                // 字符串 starts_with 会将 "C:\workspace-evil" 误判为在 "C:\workspace" 内
+                                if !resolved_abs.starts_with(&root) {
                                     return ToolResult {
                                         success: false,
                                         output: None,
@@ -1410,6 +1568,8 @@ impl Tool for WriteTextFileTool {
         let content = params["content"].as_str().unwrap_or("");
         let workspace_root = params["workspace_root"].as_str().unwrap_or("");
         let append = params["append"].as_bool().unwrap_or(false);
+        // 读取 encoding 参数（默认 utf-8），支持 GBK/GB2312/Big5/Shift_JIS/Latin1 等
+        let encoding_label = params["encoding"].as_str().unwrap_or("utf-8");
 
         if file_path.is_empty() {
             return ToolResult {
@@ -1464,9 +1624,9 @@ impl Tool for WriteTextFileTool {
                                 } else {
                                     std::path::Path::new(workspace_root).join(file_path)
                                 };
-                                let resolved_str = resolved_abs.to_string_lossy();
-                                let root_str = root.to_string_lossy();
-                                if !resolved_str.starts_with(root_str.as_ref()) {
+                                // 修复：使用 Path::starts_with 进行路径组件级别比较
+                                // 字符串 starts_with 会将 "C:\workspace-evil" 误判为在 "C:\workspace" 内
+                                if !resolved_abs.starts_with(&root) {
                                     return ToolResult {
                                         success: false,
                                         output: None,
@@ -1537,6 +1697,14 @@ impl Tool for WriteTextFileTool {
             }
         }
 
+        // 根据 encoding 参数编码内容为字节
+        // 支持 UTF-8/GBK/GB2312/Big5/Shift_JIS/Latin1 等多种编码
+        let encoding = encoding_rs::Encoding::for_label(encoding_label.as_bytes())
+            .unwrap_or(encoding_rs::UTF_8);
+        // 编码字符串为字节（encoding_rs 自动处理无法编码的字符）
+        let (encoded_bytes, _actual_encoding, _had_errors) = encoding.encode(content);
+        let encoded_bytes = encoded_bytes.into_owned();
+
         let write_result = if append {
             // 追加模式：使用 OpenOptions
             match tokio::fs::OpenOptions::new()
@@ -1545,22 +1713,23 @@ impl Tool for WriteTextFileTool {
                 .open(&resolved_path)
                 .await
             {
-                Ok(mut file) => tokio::io::AsyncWriteExt::write_all(&mut file, content.as_bytes()).await,
+                Ok(mut file) => tokio::io::AsyncWriteExt::write_all(&mut file, &encoded_bytes).await,
                 Err(e) => Err(e),
             }
         } else {
-            tokio::fs::write(&resolved_path, content).await
+            tokio::fs::write(&resolved_path, &encoded_bytes).await
         };
 
         match write_result {
             Ok(_) => {
-                log::info!("文件已写入: {}", file_path);
+                log::info!("文件已写入: {}, 编码: {}", file_path, encoding.name());
                 ToolResult {
                     success: true,
                     output: Some(json!({
                         "path": file_path,
                         "message": format!("文件已{}: {}", if append { "追加" } else { "写入" }, file_path),
-                        "size": content.len(),
+                        "size": encoded_bytes.len(),
+                        "encoding": encoding.name(),
                     })),
                     error: None,
                     duration_ms: start.elapsed().as_millis() as u64,

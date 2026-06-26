@@ -21,6 +21,53 @@ fn resolve_path(path: &str, workspace_root: &str) -> String {
     root.join(path).to_string_lossy().to_string()
 }
 
+/// 验证路径是否在工作区内
+/// 防止路径遍历攻击：LLM 可能构造绝对路径或 ..\..\ 越界路径读取/覆盖工作区外文件
+/// 返回 Ok(()) 表示通过校验，Err(error_message) 表示路径越权
+/// 对于不存在的路径（如 convert 的 output_path），规范化父目录后校验
+fn validate_workspace_path(resolved_path: &str, workspace_root: &str) -> Result<(), String> {
+    if workspace_root.is_empty() {
+        return Err("workspace_root 为空，无法校验路径边界".to_string());
+    }
+    if resolved_path.is_empty() {
+        return Err("待校验路径为空".to_string());
+    }
+
+    // 规范化工作区根目录（必须存在）
+    let canonical_root = crate::utils::canonicalize(workspace_root)
+        .map_err(|e| format!("工作区根目录无效: {} ({})", workspace_root, e))?;
+
+    // 尝试规范化待校验路径
+    // 路径可能不存在（如 convert 的 output_path），此时规范化父目录
+    let canonical_path = match crate::utils::canonicalize(resolved_path) {
+        Ok(p) => p,
+        Err(_) => {
+            // 路径不存在，规范化父目录后拼接文件名
+            let path = std::path::Path::new(resolved_path);
+            let parent = path.parent().unwrap_or(std::path::Path::new(""));
+            if parent.as_os_str().is_empty() {
+                // 没有父目录（如 "file.txt"），直接用工作区根目录
+                canonical_root.join(path.file_name().unwrap_or_default())
+            } else {
+                let canonical_parent = crate::utils::canonicalize(parent)
+                    .map_err(|e| format!("路径父目录无效: {} ({})", parent.display(), e))?;
+                canonical_parent.join(path.file_name().unwrap_or_default())
+            }
+        }
+    };
+
+    // 路径组件级别的 starts_with 比较（避免字符串前缀匹配的绕过风险）
+    if !canonical_path.starts_with(&canonical_root) {
+        return Err(format!(
+            "路径不在工作区内，拒绝访问: {} (工作区: {})",
+            canonical_path.display(),
+            canonical_root.display()
+        ));
+    }
+
+    Ok(())
+}
+
 /// 执行 read 操作的通用逻辑
 async fn execute_read(
     doc_service: &DocumentService,
@@ -32,6 +79,17 @@ async fn execute_read(
     let workspace_root = params["workspace_root"].as_str().unwrap_or("");
     let resolved_path = resolve_path(file_path, workspace_root);
 
+    // 路径安全校验：防止 LLM 构造越界路径读取工作区外文件
+    if let Err(e) = validate_workspace_path(&resolved_path, workspace_root) {
+        log::warn!("Handler read 操作路径校验失败: {}", e);
+        return HandlerResult {
+            success: false,
+            output: None,
+            error: Some(e),
+            duration_ms: start.elapsed().as_millis() as u64,
+        };
+    }
+
     let mut sidecar_params = json!({
         "path": resolved_path,
     });
@@ -41,12 +99,68 @@ async fn execute_read(
         sidecar_params["include_formatting"] = json!(params["include_formatting"].as_bool().unwrap_or(false));
     }
 
+    // Word read 专用参数（include_formatting=true 时等价于 include_runs=true）
+    if !params["include_runs"].is_null() {
+        sidecar_params["include_runs"] = json!(params["include_runs"].as_bool().unwrap_or(false));
+    }
+    if !params["include_tables_detailed"].is_null() {
+        sidecar_params["include_tables_detailed"] = json!(params["include_tables_detailed"].as_bool().unwrap_or(false));
+    }
+    if !params["include_sections"].is_null() {
+        sidecar_params["include_sections"] = json!(params["include_sections"].as_bool().unwrap_or(false));
+    }
+    if !params["include_headers_footers"].is_null() {
+        sidecar_params["include_headers_footers"] = json!(params["include_headers_footers"].as_bool().unwrap_or(false));
+    }
+
     // Excel read 专用参数
     if let Some(sheet) = params["sheet"].as_str() {
         sidecar_params["sheet"] = json!(sheet);
     }
     if let Some(range) = params["range"].as_str() {
         sidecar_params["range"] = json!(range);
+    }
+
+    // PDF read 专用参数
+    if let Some(pages) = params["pages"].as_str() {
+        sidecar_params["pages"] = json!(pages);
+    }
+    if !params["include_layout"].is_null() {
+        sidecar_params["include_layout"] = json!(params["include_layout"].as_bool().unwrap_or(false));
+    }
+    if !params["include_forms"].is_null() {
+        sidecar_params["include_forms"] = json!(params["include_forms"].as_bool().unwrap_or(false));
+    }
+    if !params["include_annotations"].is_null() {
+        sidecar_params["include_annotations"] = json!(params["include_annotations"].as_bool().unwrap_or(false));
+    }
+    if !params["extract_tables"].is_null() {
+        sidecar_params["extract_tables"] = json!(params["extract_tables"].as_bool().unwrap_or(false));
+    }
+    if !params["include_images"].is_null() {
+        sidecar_params["include_images"] = json!(params["include_images"].as_bool().unwrap_or(false));
+    }
+
+    // PPT read 专用参数
+    if !params["include_notes"].is_null() {
+        sidecar_params["include_notes"] = json!(params["include_notes"].as_bool().unwrap_or(false));
+    }
+    if !params["include_shapes_detailed"].is_null() {
+        sidecar_params["include_shapes_detailed"] = json!(params["include_shapes_detailed"].as_bool().unwrap_or(false));
+    }
+
+    // Excel 扩展 read 专用参数（P1-2）
+    if !params["include_formulas"].is_null() {
+        sidecar_params["include_formulas"] = json!(params["include_formulas"].as_bool().unwrap_or(false));
+    }
+    if !params["include_charts"].is_null() {
+        sidecar_params["include_charts"] = json!(params["include_charts"].as_bool().unwrap_or(false));
+    }
+    if !params["include_merged_cells"].is_null() {
+        sidecar_params["include_merged_cells"] = json!(params["include_merged_cells"].as_bool().unwrap_or(false));
+    }
+    if !params["include_comments"].is_null() {
+        sidecar_params["include_comments"] = json!(params["include_comments"].as_bool().unwrap_or(false));
     }
 
     match doc_service.process("read", doc_type, sidecar_params).await {
@@ -79,6 +193,17 @@ async fn execute_convert(
 
     let resolved_source = resolve_path(file_path, workspace_root);
 
+    // 路径安全校验：源文件必须在工作区内
+    if let Err(e) = validate_workspace_path(&resolved_source, workspace_root) {
+        log::warn!("Handler convert 操作源路径校验失败: {}", e);
+        return HandlerResult {
+            success: false,
+            output: None,
+            error: Some(e),
+            duration_ms: start.elapsed().as_millis() as u64,
+        };
+    }
+
     let output_path = if output_path.is_empty() {
         // 自动生成输出路径：与源文件同目录（源文件已通过 resolve_path 解析为工作区内的绝对路径）
         let source_path = std::path::Path::new(&resolved_source);
@@ -94,6 +219,17 @@ async fn execute_convert(
     } else {
         resolve_path(output_path, workspace_root)
     };
+
+    // 路径安全校验：输出路径必须在工作区内（防止 LLM 覆盖工作区外文件）
+    if let Err(e) = validate_workspace_path(&output_path, workspace_root) {
+        log::warn!("Handler convert 操作输出路径校验失败: {}", e);
+        return HandlerResult {
+            success: false,
+            output: None,
+            error: Some(e),
+            duration_ms: start.elapsed().as_millis() as u64,
+        };
+    }
 
     let mut sidecar_params = json!({
         "path": resolved_source,
@@ -132,6 +268,17 @@ async fn execute_analyze(
     let file_path = params["path"].as_str().unwrap_or("");
     let workspace_root = params["workspace_root"].as_str().unwrap_or("");
     let resolved_path = resolve_path(file_path, workspace_root);
+
+    // 路径安全校验：防止 LLM 构造越界路径读取工作区外文件
+    if let Err(e) = validate_workspace_path(&resolved_path, workspace_root) {
+        log::warn!("Handler analyze 操作路径校验失败: {}", e);
+        return HandlerResult {
+            success: false,
+            output: None,
+            error: Some(e),
+            duration_ms: start.elapsed().as_millis() as u64,
+        };
+    }
 
     let sidecar_params = json!({
         "path": resolved_path,
@@ -209,7 +356,27 @@ impl Handler for DocxHandler {
                 },
                 "include_formatting": {
                     "type": "boolean",
-                    "description": "[read] 是否包含格式信息，默认 false",
+                    "description": "[read] 是否包含格式信息（等价于 include_runs=true），默认 false",
+                    "default": false
+                },
+                "include_runs": {
+                    "type": "boolean",
+                    "description": "[read] 是否提取 Run 级字符属性（字体名/字号/粗体/斜体/下划线/颜色），默认 false",
+                    "default": false
+                },
+                "include_tables_detailed": {
+                    "type": "boolean",
+                    "description": "[read] 是否提取表格详细结构（合并单元格/列宽/行高/表格样式），默认 false",
+                    "default": false
+                },
+                "include_sections": {
+                    "type": "boolean",
+                    "description": "[read] 是否提取节信息（页面尺寸/方向/边距），默认 false",
+                    "default": false
+                },
+                "include_headers_footers": {
+                    "type": "boolean",
+                    "description": "[read] 是否提取页眉页脚内容，默认 false",
                     "default": false
                 },
                 "target_format": {
@@ -291,7 +458,27 @@ impl Handler for XlsxHandler {
                 },
                 "include_formatting": {
                     "type": "boolean",
-                    "description": "[read] 是否包含格式信息，默认 false",
+                    "description": "[read] 是否提取单元格格式（字体/填充/边框/对齐/数字格式），默认 false",
+                    "default": false
+                },
+                "include_formulas": {
+                    "type": "boolean",
+                    "description": "[read] 是否分离公式与计算结果值（同时加载 data_only=True 工作簿），默认 false",
+                    "default": false
+                },
+                "include_charts": {
+                    "type": "boolean",
+                    "description": "[read] 是否提取图表信息（类型/标题/数据范围），默认 false",
+                    "default": false
+                },
+                "include_merged_cells": {
+                    "type": "boolean",
+                    "description": "[read] 是否提取合并单元格范围列表，默认 false",
+                    "default": false
+                },
+                "include_comments": {
+                    "type": "boolean",
+                    "description": "[read] 是否提取单元格批注，默认 false",
                     "default": false
                 },
                 "target_format": {
@@ -363,6 +550,16 @@ impl Handler for PptxHandler {
                     "type": "string",
                     "description": "文件路径（相对于工作区）"
                 },
+                "include_notes": {
+                    "type": "boolean",
+                    "description": "[read] 是否提取幻灯片备注内容，默认 false",
+                    "default": false
+                },
+                "include_shapes_detailed": {
+                    "type": "boolean",
+                    "description": "[read] 是否提取形状详细信息（位置/尺寸/填充/边框/版式/表格/图表识别），默认 false",
+                    "default": false
+                },
                 "target_format": {
                     "type": "string",
                     "enum": ["docx", "xlsx", "pptx", "pdf", "md", "txt", "csv", "html"],
@@ -431,6 +628,35 @@ impl Handler for PdfHandler {
                 "path": {
                     "type": "string",
                     "description": "文件路径（相对于工作区）"
+                },
+                "pages": {
+                    "type": "string",
+                    "description": "[read] 页码范围，如 \"1-5,8,10-12\"，默认读取所有页"
+                },
+                "include_layout": {
+                    "type": "boolean",
+                    "description": "[read] 是否提取文本位置和样式（字号/字体/颜色），使用 PyMuPDF get_text(\"dict\")，默认 false",
+                    "default": false
+                },
+                "include_forms": {
+                    "type": "boolean",
+                    "description": "[read] 是否提取表单字段（AcroForm），使用 pypdf，默认 false",
+                    "default": false
+                },
+                "include_annotations": {
+                    "type": "boolean",
+                    "description": "[read] 是否提取注释（高亮/批注/签名等），使用 pypdf，默认 false",
+                    "default": false
+                },
+                "extract_tables": {
+                    "type": "boolean",
+                    "description": "[read] 是否提取表格结构，使用 pdfplumber extract_tables()，默认 false",
+                    "default": false
+                },
+                "include_images": {
+                    "type": "boolean",
+                    "description": "[read] 是否提取图片信息（数量/位置/尺寸），使用 PyMuPDF，默认 false",
+                    "default": false
                 },
                 "target_format": {
                     "type": "string",
