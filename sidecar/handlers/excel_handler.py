@@ -224,7 +224,9 @@ class ExcelHandler:
         # 填充
         fill = cell.fill
         if fill:
-            fill_info = {"pattern_type": fill.pattern_type}
+            # openpyxl 不同版本的 PatternFill 属性名不一致：
+            # 新版为 fill_type，旧版为 patternType；pattern_type（snake_case）是无效属性
+            fill_info = {"pattern_type": getattr(fill, "fill_type", None) or getattr(fill, "patternType", None)}
             if fill.fgColor and fill.fgColor.rgb:
                 fill_info["fg_color"] = str(fill.fgColor.rgb)
             if fill.bgColor and fill.bgColor.rgb:
