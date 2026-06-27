@@ -5,8 +5,6 @@ Based on python-pptx, supports read/convert/analyze operations.
 
 import os
 import logging
-import shutil
-import subprocess
 
 from pptx import Presentation
 
@@ -148,22 +146,8 @@ class PptHandler:
         except (TypeError, ValueError):
             return None
 
-    def _find_libreoffice(self):
-        """检测系统是否安装 LibreOffice，返回可执行文件路径或 None"""
-        # Windows 常见安装路径
-        win_paths = [
-            r"C:\Program Files\LibreOffice\program\soffice.exe",
-            r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
-        ]
-        for p in win_paths:
-            if os.path.exists(p):
-                return p
-        # macOS / Linux 使用 shutil.which 查找
-        return shutil.which("soffice") or shutil.which("libreoffice")
-
     def convert(self, params: dict) -> dict:
         path = params.get("path", "")
-        output_path = params.get("output_path", "")
         target = params.get("format", "pdf")
         if not path:
             self.logger.error("convert: missing path")
@@ -171,39 +155,11 @@ class PptHandler:
         if not os.path.exists(path):
             raise FileNotFoundError(path)
         self.logger.info("convert: %s -> %s", path, target)
-        if target == "pdf":
-            out = output_path or os.path.splitext(path)[0] + ".pdf"
-            # 尝试使用 LibreOffice 进行转换
-            soffice = self._find_libreoffice()
-            if soffice:
-                try:
-                    # 使用 LibreOffice headless 模式转换
-                    out_dir = os.path.dirname(out) or "."
-                    cmd = [soffice, "--headless", "--convert-to", "pdf",
-                           "--outdir", out_dir, path]
-                    self.logger.info("convert: calling LibreOffice: %s", " ".join(cmd))
-                    result = subprocess.run(
-                        cmd, capture_output=True, text=True, timeout=120,
-                        encoding="utf-8", errors="replace"
-                    )
-                    if result.returncode == 0:
-                        # LibreOffice 输出文件名与源文件同名但扩展名为 .pdf
-                        generated = os.path.splitext(path)[0] + ".pdf"
-                        if output_path and os.path.abspath(generated) != os.path.abspath(out):
-                            # 若指定了 output_path 且与生成的文件名不同，则重命名
-                            os.rename(generated, out)
-                        return {"path": out, "format": target, "message": "Converted via LibreOffice"}
-                    else:
-                        err_msg = result.stderr or result.stdout or "unknown error"
-                        return {"error": f"LibreOffice 转换失败: {err_msg}"}
-                except subprocess.TimeoutExpired:
-                    return {"error": "LibreOffice 转换超时（120 秒）"}
-                except Exception as e:
-                    return {"error": f"LibreOffice 转换异常: {type(e).__name__}: {e}"}
-            else:
-                # 修复 P0-5：未安装 LibreOffice 时返回明确错误，而非假成功
-                return {"error": "PPT 转 PDF 需要 LibreOffice 支持，但当前环境未安装。请安装 LibreOffice，或使用 code_interpreter_handler 编写 Python 代码进行转换。"}
-        return {"error": "unsupported format: " + target}
+        # 系统不再支持 PPT 转 PDF
+        # 如需 PPT 转 PDF，请使用 code_interpreter_handler 编写 Python 代码自行实现
+        return {
+            "error": "PPT 转 PDF 不再被支持。请使用 code_interpreter_handler 编写 Python 代码进行转换（如使用 reportlab 重新生成 PDF，或调用其他可用库）。"
+        }
 
     def analyze(self, params: dict) -> dict:
         path = params.get("path", "")

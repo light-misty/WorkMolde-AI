@@ -443,11 +443,13 @@ class DocumentValidator:
         stats = {}
 
         # 尝试多种编码读取（utf-8 优先，回退 gbk/latin-1）
+        # 关键：使用 newline='' 保留原始换行符，避免 universal newlines 模式将 \r\n 转换为 \n
+        # 否则无法检测 CRLF/LF 混用问题
         content = None
         used_encoding = None
         for encoding in ("utf-8", "gbk", "latin-1"):
             try:
-                with open(file_path, "r", encoding=encoding) as f:
+                with open(file_path, "r", encoding=encoding, newline="") as f:
                     content = f.read()
                 used_encoding = encoding
                 break
@@ -462,7 +464,22 @@ class DocumentValidator:
             })
             return warnings, stats
 
-        lines = content.split("\n")
+        # 检查4: 行尾换行符混用（CRLF/LF）
+        # 必须在 split 前基于原始 content 检测，否则 \r\n 被拆分后无法识别
+        crlf_count = content.count("\r\n")
+        lf_only_count = content.count("\n") - crlf_count
+        if crlf_count > 0 and lf_only_count > 0:
+            warnings.append({
+                "code": "MIXED_LINE_ENDINGS",
+                "message": f"行尾换行符混用: CRLF {crlf_count} 行, LF {lf_only_count} 行",
+                "severity": "warning",
+            })
+        stats["crlf_count"] = crlf_count
+        stats["lf_count"] = lf_only_count
+
+        # 使用 splitlines() 拆分行，避免 \r 残留导致行尾空白误报
+        # splitlines() 会移除所有换行符（\r\n、\n、\r），返回纯行内容
+        lines = content.splitlines()
         line_count = len(lines)
         char_count = len(content)
         word_count = len(content.split())
@@ -498,18 +515,6 @@ class DocumentValidator:
                 "message": f"检测到 {len(mixed_indent_lines)} 行制表符和空格混用缩进: 行号 {mixed_indent_lines[:5]}{'...' if len(mixed_indent_lines) > 5 else ''}",
                 "severity": "warning",
             })
-
-        # 检查4: 行尾换行符混用（CRLF/LF）
-        crlf_count = content.count("\r\n")
-        lf_only_count = content.count("\n") - crlf_count
-        if crlf_count > 0 and lf_only_count > 0:
-            warnings.append({
-                "code": "MIXED_LINE_ENDINGS",
-                "message": f"行尾换行符混用: CRLF {crlf_count} 行, LF {lf_only_count} 行",
-                "severity": "warning",
-            })
-        stats["crlf_count"] = crlf_count
-        stats["lf_count"] = lf_only_count
 
         # 检查5: 连续空行过多（>5）
         blank_run = 0
