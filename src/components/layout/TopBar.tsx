@@ -34,7 +34,7 @@ export function TopBar({ onToggleHistory, onNewSession }: TopBarProps) {
   };
 
   return (
-    <div role="banner" data-tauri-drag-region className="flex items-center h-[52px] pr-4 border-b border-border bg-bg flex-shrink-0 gap-3 z-[100]" style={{ paddingLeft: '24px' }}>
+    <div role="banner" data-tauri-drag-region className="flex items-center h-[52px] pr-4 bg-bg-sub flex-shrink-0 gap-3 z-[100]" style={{ paddingLeft: '24px' }}>
       {/* 工作区选择器 */}
       <WorkspaceSelector />
 

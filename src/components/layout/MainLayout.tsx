@@ -8,10 +8,12 @@ interface MainLayoutProps {
 
 export function MainLayout({ mainArea, sidebar, sidebarVisible = true }: MainLayoutProps) {
   return (
-    <div className="flex flex-1 overflow-hidden">
-      {/* 主界面区 */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {mainArea}
+    <div className="flex flex-1 overflow-hidden bg-bg-sub">
+      {/* 主界面区 - 白色圆角卡片 */}
+      <div className="flex-1 flex flex-col min-w-0 pt-0 pl-2 pr-0 pb-1">
+        <div className="flex-1 flex flex-col bg-bg rounded-xl shadow-sm overflow-hidden">
+          {mainArea}
+        </div>
       </div>
 
       {/* 右侧栏 */}
@@ -38,6 +40,8 @@ export function MainLayout({ mainArea, sidebar, sidebarVisible = true }: MainLay
           flex: 1;
           overflow-y: auto;
           overflow-x: hidden;
+          mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
+          -webkit-mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
         }
         @media (max-width: 900px) {
           .sb-container {
