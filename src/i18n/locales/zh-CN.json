@@ -52,7 +52,7 @@
   "workspace": {
     "selectWorkspace": "选择工作区",
     "noWorkspace": "暂无工作区",
-    "confirmRemove": "确定移除此工作区？（不会删除本地文件）",
+    "confirmRemove": "确定移除此工作区？该工作区下的所有会话历史将被永久删除（不会删除本地文件）",
     "confirmRemoveBtn": "确认移除",
     "cancel": "取消",
     "addWorkspace": "添加工作区",
@@ -124,7 +124,7 @@
     "creating": "创建中..."
   },
   "agentInfo": {
-    "sectionTitle": "Agent 信息",
+    "sectionTitle": "智能体信息",
     "currentModel": "当前模型",
     "modelConnected": "模型已连接",
     "modelDisconnected": "模型未连接",
@@ -140,12 +140,9 @@
   },
   "contextWindow": {
     "sectionTitle": "上下文窗口",
-    "usedTotal": "已使用 / 总窗口",
-    "totalWindow": "总窗口",
     "approachingLimit": "接近上限",
     "compressed": "已压缩",
     "normal": "正常",
-    "unused": "未使用",
     "systemPrompt": "系统提示词",
     "toolDefinitions": "工具定义",
     "conversationHistory": "对话历史",
@@ -695,6 +692,14 @@
   },
   "session": {
     "newSession": "新会话"
+  },
+  "sessionList": {
+    "title": "会话列表",
+    "newSessionForWorkspace": "为 {{workspace}} 新建会话",
+    "showFiles": "查看工作区文件",
+    "backToSessions": "返回会话列表",
+    "noSessionsInWorkspace": "该工作区暂无会话",
+    "untitledWorkspace": "其他"
   },
   "inputArea.removeAttachment": "移除 {{name}}",
   "update.checkFailedWithError": "检查更新失败: {{error}}"

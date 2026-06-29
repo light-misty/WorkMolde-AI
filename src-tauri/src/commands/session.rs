@@ -167,3 +167,17 @@ pub async fn clear_all_sessions(
 
     Ok(count)
 }
+
+/// 更新会话的工作区 ID（用于修复旧数据中 workspace_id 为空的会话）
+#[tauri::command]
+pub async fn update_session_workspace(
+    session_id: String,
+    workspace_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), CommandError> {
+    log::info!("update_session_workspace 请求: session_id={}, workspace_id={}", session_id, workspace_id);
+    let conn = state.db.conn()?;
+    session_repo::update_session_workspace(&conn, &session_id, &workspace_id)?;
+    log::info!("update_session_workspace 成功: session_id={}, workspace_id={}", session_id, workspace_id);
+    Ok(())
+}

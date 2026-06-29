@@ -52,7 +52,7 @@
   "workspace": {
     "selectWorkspace": "Select workspace",
     "noWorkspace": "No workspace",
-    "confirmRemove": "Are you sure you want to remove this workspace? (Local files will not be deleted)",
+    "confirmRemove": "Are you sure you want to remove this workspace? All session history in this workspace will be permanently deleted. (Local files will not be deleted)",
     "confirmRemoveBtn": "Confirm Remove",
     "cancel": "Cancel",
     "addWorkspace": "Add Workspace",
@@ -140,12 +140,9 @@
   },
   "contextWindow": {
     "sectionTitle": "Context Window",
-    "usedTotal": "Used / Total Window",
-    "totalWindow": "Total Window",
     "approachingLimit": "Near Limit",
     "compressed": "Compressed",
     "normal": "Normal",
-    "unused": "Unused",
     "systemPrompt": "System Prompt",
     "toolDefinitions": "Tool Definitions",
     "conversationHistory": "Conversation History",
@@ -695,6 +692,14 @@
   },
   "session": {
     "newSession": "New Session"
+  },
+  "sessionList": {
+    "title": "Session List",
+    "newSessionForWorkspace": "New session for {{workspace}}",
+    "showFiles": "View workspace files",
+    "backToSessions": "Back to sessions",
+    "noSessionsInWorkspace": "No sessions in this workspace",
+    "untitledWorkspace": "Other"
   },
   "inputArea.removeAttachment": "Remove {{name}}",
   "update.checkFailedWithError": "Update check failed: {{error}}"

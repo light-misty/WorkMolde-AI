@@ -35,6 +35,8 @@ export const useSessionStore = create<SessionState>((set) => ({
           {
             id: session.id,
             title: session.title,
+            // 从后端返回值获取 workspaceId，确保本地状态与数据库一致
+            workspaceId: session.workspaceId,
             status: session.status,
             messageCount: 0,
             createdAt: session.createdAt,
@@ -62,20 +64,15 @@ export const useSessionStore = create<SessionState>((set) => ({
   },
 
   // 删除会话，调用后端 API
+  // 注意：不自动切换 currentSessionId，由调用方（App.tsx handleDeleteCurrentSession）统一管理
   deleteSession: async (sessionId) => {
     try {
       await tauriCmd.deleteSession(sessionId);
-      set((state) => {
-        // 先过滤得到剩余列表，再从剩余列表中取回退值，避免回退到已删除的会话
-        const remaining = state.sessions.filter((s) => s.id !== sessionId);
-        return {
-          sessions: remaining,
-          currentSessionId:
-            state.currentSessionId === sessionId
-              ? remaining[0]?.id ?? null
-              : state.currentSessionId,
-        };
-      });
+      set((state) => ({
+        sessions: state.sessions.filter((s) => s.id !== sessionId),
+        currentSessionId:
+          state.currentSessionId === sessionId ? null : state.currentSessionId,
+      }));
     } catch (error) {
       console.error("[SessionStore] 删除会话失败:", error);
       throw error;

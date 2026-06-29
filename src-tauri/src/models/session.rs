@@ -43,6 +43,7 @@ pub struct SessionFilter {
 pub struct SessionSummary {
     pub id: String,
     pub title: String,
+    pub workspace_id: Option<String>,
     pub status: String,
     pub message_count: u32,
     pub last_message_preview: Option<String>,

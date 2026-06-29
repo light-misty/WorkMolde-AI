@@ -59,7 +59,7 @@ pub fn list_sessions(
     offset: u32,
 ) -> Vec<SessionSummary> {
     let mut sql = String::from(
-        "SELECT s.id, s.title, s.updated_at, s.created_at,
+        "SELECT s.id, s.title, s.updated_at, s.created_at, s.workspace_id,
                 (SELECT COUNT(*) FROM session_messages WHERE session_id = s.id) AS message_count,
                 (SELECT content FROM session_messages WHERE session_id = s.id ORDER BY created_at DESC LIMIT 1) AS last_message_preview
          FROM sessions s WHERE 1=1"
@@ -101,6 +101,7 @@ pub fn list_sessions(
 
     let mut result = Vec::new();
     while let Ok(Some(row)) = rows.next() {
+        let workspace_id: String = row.get(4).unwrap_or_default();
         let summary = SessionSummary {
             id: match row.get(0) {
                 Ok(v) => v,
@@ -110,9 +111,14 @@ pub fn list_sessions(
                 Ok(v) => v,
                 Err(_) => continue,
             },
+            workspace_id: if workspace_id.is_empty() {
+                None
+            } else {
+                Some(workspace_id)
+            },
             status: String::from("active"),
-            message_count: row.get(4).unwrap_or_default(),
-            last_message_preview: row.get(5).ok(),
+            message_count: row.get(5).unwrap_or_default(),
+            last_message_preview: row.get(6).ok(),
             created_at: match row.get(3) {
                 Ok(v) => v,
                 Err(_) => continue,
@@ -125,6 +131,21 @@ pub fn list_sessions(
         result.push(summary);
     }
     result
+}
+
+/// 更新会话的工作区 ID（用于修复旧数据中 workspace_id 为空的会话）
+pub fn update_session_workspace(conn: &Connection, id: &str, workspace_id: &str) -> Result<(), CommandError> {
+    let affected = conn.execute(
+        "UPDATE sessions SET workspace_id = ?1 WHERE id = ?2",
+        rusqlite::params![workspace_id, id],
+    )?;
+    if affected == 0 {
+        return Err(CommandError::db(
+            crate::errors::DB_RECORD_NOT_FOUND,
+            format!("会话不存在: {}", id),
+        ));
+    }
+    Ok(())
 }
 
 /// 更新会话标题
@@ -177,6 +198,42 @@ pub fn delete_session(conn: &Connection, id: &str) -> Result<(), CommandError> {
         ));
     }
     Ok(())
+}
+
+/// 删除指定工作区下的所有会话（同时删除关联的消息记录）
+/// 用于删除工作区时清理关联会话，避免出现孤儿会话导致前端分组错乱
+/// 返回被删除的会话 ID 列表，供前端清理本地状态使用
+pub fn delete_sessions_by_workspace(conn: &Connection, workspace_id: &str) -> Result<Vec<String>, CommandError> {
+    // 先查询将被删除的会话 ID 列表，用于事件通知
+    let session_ids: Vec<String> = {
+        let mut stmt = conn.prepare("SELECT id FROM sessions WHERE workspace_id = ?1")?;
+        let rows = stmt.query_map(rusqlite::params![workspace_id], |row| row.get::<_, String>(0))?;
+        rows.filter_map(|r| r.ok()).collect()
+    };
+
+    if session_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // 删除关联消息记录（使用子查询匹配 workspace_id 对应的会话）
+    conn.execute(
+        "DELETE FROM session_messages WHERE session_id IN (SELECT id FROM sessions WHERE workspace_id = ?1)",
+        rusqlite::params![workspace_id],
+    )?;
+
+    // 删除会话记录
+    let deleted = conn.execute(
+        "DELETE FROM sessions WHERE workspace_id = ?1",
+        rusqlite::params![workspace_id],
+    )?;
+
+    log::info!(
+        "delete_sessions_by_workspace: workspace_id={}, 删除了 {} 条会话",
+        workspace_id,
+        deleted
+    );
+
+    Ok(session_ids)
 }
 
 /// 清除所有会话（同时删除所有关联的消息记录）

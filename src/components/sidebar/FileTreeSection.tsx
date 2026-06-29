@@ -1,9 +1,9 @@
 import { useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from 'react-i18next';
 import { useFileTreeStore } from "../../stores/useFileTreeStore";
 import { useWorkspaceStore } from "../../stores/useWorkspaceStore";
 import { Icon } from "../common/Icon";
-import { SidebarSection } from "../layout/Sidebar";
 import { ContextMenu, type ContextMenuItem } from "../common/ContextMenu";
 import { DeleteConfirmDialog } from "../common/DeleteConfirmDialog";
 import * as tauriCmd from "../../services/tauri";
@@ -582,7 +582,7 @@ export function FileTreeSection({ onOpenPreview, onOpenVersionHistory }: { onOpe
   }, [contextMenu, activeWorkspaceId, handleCopyPath, onOpenPreview, onOpenVersionHistory]);
 
   return (
-    <SidebarSection title={t('fileTree.sectionTitle')}>
+    <div className="ft-section">
       {/* 搜索栏 */}
       <div className="ft-search">
         <Icon name="search" size={14} className="ft-search-icon" />
@@ -649,24 +649,26 @@ export function FileTreeSection({ onOpenPreview, onOpenVersionHistory }: { onOpe
       )}
 
       {/* 删除确认对话框 */}
-      {deleteTarget && (
+      {deleteTarget && createPortal(
         <DeleteConfirmDialog
           name={deleteTarget.name}
           isDir={deleteTarget.isDir}
           onConfirm={handleDeleteConfirm}
           onCancel={() => setDeleteTarget(null)}
-        />
+        />,
+        document.body
       )}
 
       {/* 新建文件/文件夹输入弹窗 */}
-      {newItemState && activeWorkspaceId && (
+      {newItemState && activeWorkspaceId && createPortal(
         <NewItemInput
           type={newItemState.type}
           parentPath={newItemState.parentPath}
           workspaceId={activeWorkspaceId}
           onCreated={handleNewItemCreated}
           onCancel={() => setNewItemState(null)}
-        />
+        />,
+        document.body
       )}
 
       <style>{`
@@ -847,7 +849,14 @@ export function FileTreeSection({ onOpenPreview, onOpenVersionHistory }: { onOpe
           gap: 7px;
           padding: 4px 8px;
         }
+        .ft-section {
+          display: flex;
+          flex-direction: column;
+          flex: 1;
+          min-height: 0;
+          padding: 0 12px 12px;
+        }
       `}</style>
-    </SidebarSection>
+    </div>
   );
 }

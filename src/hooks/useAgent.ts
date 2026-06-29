@@ -321,7 +321,9 @@ export function useAgent(): UseAgentReturn {
       try {
         let sid = sessionId;
         if (!sid) {
-          const session = await tauriCmd.createSession({});
+          // 创建会话时携带当前工作区 ID，使会话可以按工作区分组
+          const workspaceId = options?.workspaceId as string | undefined;
+          const session = await tauriCmd.createSession({ workspaceId });
           sid = session.id;
           setSessionId(sid);
           sessionIdRef.current = sid;

@@ -6,9 +6,7 @@ import { MainLayout } from "./components/layout/MainLayout";
 import { MainArea } from "./components/layout/MainArea";
 import { InputArea } from "./components/layout/InputArea";
 import { WorkflowTimeline } from "./components/workflow/WorkflowTimeline";
-import { FileTreeSection } from "./components/sidebar/FileTreeSection";
-import { AgentInfoSection } from "./components/sidebar/AgentInfoSection";
-import { ContextWindowSection } from "./components/sidebar/ContextWindowSection";
+import { RightSidebar } from "./components/layout/RightSidebar";
 
 import { ToastContainer } from "./components/common/Toast";
 import { NetworkStatusBanner } from "./components/layout/NetworkStatusBanner";
@@ -23,7 +21,7 @@ import { useToastStore } from "./stores/useToastStore";
 import { useAgent } from "./hooks/useAgent";
 import { parseError } from "./services/errorHandler";
 import { generateToolBrief } from "./utils/format";
-import type { ToolNodeData } from "./types";
+import type { NodeStatus, ToolNodeData } from "./types";
 import { onSessionUpdated, onWorkspaceDirectoryDeleted } from "./services/event";
 import * as tauriCmd from "./services/tauri";
 
@@ -33,9 +31,6 @@ const PreviewOverlay = lazy(() =>
 );
 const SettingsDialog = lazy(() =>
   import("./components/settings/SettingsDialog").then((m) => ({ default: m.SettingsDialog }))
-);
-const HistoryPanel = lazy(() =>
-  import("./components/session/HistoryPanel").then((m) => ({ default: m.HistoryPanel }))
 );
 const VersionHistoryPanel = lazy(() =>
   import("./components/preview/VersionHistoryPanel").then((m) => ({ default: m.VersionHistoryPanel }))
@@ -51,7 +46,6 @@ function LazyFallback() {
 
 export default function App() {
   const { t } = useTranslation();
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [updateNotificationOpen, setUpdateNotificationOpen] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(true);
@@ -72,11 +66,11 @@ export default function App() {
   const [versionHistoryFileName, setVersionHistoryFileName] = useState("");
 
   const { addNode, updateNode, setExecutionStatus, clearNodes, setConfirmHandler, loadFromMessages, executionStatus, initContextUsageListener, loadContextUsage, clearContextUsage, saveSessionToCache, restoreSessionFromCache, clearSessionCache, getCachedStreamingRefs } = useWorkflowStore();
-  const { switchSession, loadSessions, clearCurrentSession, currentSessionId } = useSessionStore();
+  const { switchSession, loadSessions, clearCurrentSession, currentSessionId, createSession, sessions } = useSessionStore();
   const updateSessionTitleLocal = useSessionStore((s) => s.updateSessionTitleLocal);
   const { loadSettings, initThemeListener } = useSettingsStore();
   const settings = useSettingsStore((s) => s.settings);
-  const { loadWorkspaces, currentWorkspaceId, workspaces, handleWorkspaceDirectoryDeleted } = useWorkspaceStore();
+  const { loadWorkspaces, switchWorkspace, currentWorkspaceId, workspaces, handleWorkspaceDirectoryDeleted } = useWorkspaceStore();
   const { loadTree, clearTree, initFileChangeListener, destroyFileChangeListener } = useFileTreeStore();
 
   const {
@@ -117,6 +111,40 @@ export default function App() {
   const lastSentTextRef = useRef<string | null>(null);
   // 保存最后一次发送的选项，用于错误重试
   const lastSentOptionsRef = useRef<Record<string, unknown> | undefined>(undefined);
+
+  // 关闭 thinking 节点并设置状态
+  function closeThinkingNode(status: NodeStatus) {
+    if (thinkingNodeIdRef.current) {
+      const node = useWorkflowStore.getState().nodes.find((n) => n.id === thinkingNodeIdRef.current);
+      updateNode(thinkingNodeIdRef.current, {
+        status,
+        data: { content: (node?.data as { content: string })?.content ?? "", duration: 0, isStreaming: false },
+      });
+      thinkingNodeIdRef.current = null;
+    }
+  }
+
+  // 关闭 streaming 节点并设置状态，支持可选回退内容（用于 doneResult）
+  function closeStreamingNode(status: NodeStatus, fallbackContent?: string) {
+    if (streamingNodeIdRef.current) {
+      const node = useWorkflowStore.getState().nodes.find((n) => n.id === streamingNodeIdRef.current);
+      updateNode(streamingNodeIdRef.current, {
+        status,
+        data: { content: (node?.data as { content: string })?.content ?? fallbackContent ?? "", isStreaming: false },
+      });
+      streamingNodeIdRef.current = null;
+    }
+  }
+
+  // 重置所有工作流引用
+  function resetRefs() {
+    streamingNodeIdRef.current = null;
+    thinkingNodeIdRef.current = null;
+    confirmNodeIdRef.current = null;
+    currentIterationRef.current = undefined;
+    lastToolCallIterationRef.current = null;
+    lastClosedStreamingNodeIdRef.current = null;
+  }
 
   useEffect(() => {
     loadSettings();
@@ -161,6 +189,45 @@ export default function App() {
       if (closeUnlisten) closeUnlisten();
     };
   }, []);
+
+  // 数据修复：将 workspaceId 为空的旧会话归入第一个工作区
+  // 避免多工作区场景下这些会话在分组列表中消失
+  useEffect(() => {
+    if (workspaces.length === 0 || sessions.length === 0) return;
+    const wsId = workspaces[0].id;
+    const needFix = sessions.filter((s) => !s.workspaceId);
+    if (needFix.length === 0) return;
+    // 后台异步修复，不阻塞 UI
+    (async () => {
+      for (const s of needFix) {
+        try {
+          await tauriCmd.updateSessionWorkspace(s.id, wsId);
+        } catch (err) {
+          console.warn("[App] 修复会话 workspace_id 失败:", s.id, err);
+        }
+      }
+      // 修复后重新加载会话列表，使本地状态与数据库一致
+      loadSessions();
+    })();
+  }, [workspaces, sessions, loadSessions]);
+
+  // 检测当前会话是否失效（例如删除工作区时连同该工作区下的会话一起被删除）
+  // 失效时清空工作流和 Agent 状态，避免 UI 残留已删除会话的内容
+  useEffect(() => {
+    if (!currentSessionId) return;
+    // sessions 为空时不触发（避免初始化阶段误清空）
+    if (sessions.length === 0) return;
+    const stillExists = sessions.some((s) => s.id === currentSessionId);
+    if (stillExists) return;
+
+    // 当前会话已不在列表中，说明已被外部删除（如工作区删除）
+    console.warn("[App] 当前会话已失效，清空状态:", currentSessionId);
+    clearNodes();
+    resetAgent();
+    clearContextUsage();
+    clearCurrentSession();
+    resetRefs();
+  }, [currentSessionId, sessions, clearNodes, resetAgent, clearContextUsage, clearCurrentSession]);
 
   // 监听会话标题自动更新事件（后端生成标题后通知前端）
   useEffect(() => {
@@ -255,14 +322,7 @@ export default function App() {
       if (!deepThinking.isStreaming && !thinkingNodeIdRef.current) {
         return;
       }
-      if (streamingNodeIdRef.current) {
-        const node = useWorkflowStore.getState().nodes.find((n) => n.id === streamingNodeIdRef.current);
-        updateNode(streamingNodeIdRef.current, {
-          status: "completed",
-          data: { content: (node?.data as { content: string })?.content ?? "", isStreaming: false },
-        });
-        streamingNodeIdRef.current = null;
-      }
+      closeStreamingNode("completed");
       if (!thinkingNodeIdRef.current) {
         const nodeId = addNode("thinking", {
           content: deepThinking.thought,
@@ -314,23 +374,10 @@ export default function App() {
         });
       } else {
         // 首次收到 tool_call：关闭当前 thinking/streaming 节点，创建工具节点
-        if (thinkingNodeIdRef.current) {
-          const node = useWorkflowStore.getState().nodes.find((n) => n.id === thinkingNodeIdRef.current);
-          updateNode(thinkingNodeIdRef.current, {
-            status: "completed",
-            data: { content: (node?.data as { content: string })?.content ?? "", duration: 0, isStreaming: false },
-          });
-          thinkingNodeIdRef.current = null;
-        }
+        closeThinkingNode("completed");
         if (streamingNodeIdRef.current) {
-          // 保存被关闭的 streaming 节点 ID，用于后续最终内容事件更新（修复截断）
           lastClosedStreamingNodeIdRef.current = streamingNodeIdRef.current;
-          const node = useWorkflowStore.getState().nodes.find((n) => n.id === streamingNodeIdRef.current);
-          updateNode(streamingNodeIdRef.current, {
-            status: "completed",
-            data: { content: (node?.data as { content: string })?.content ?? "", isStreaming: false },
-          });
-          streamingNodeIdRef.current = null;
+          closeStreamingNode("completed");
         }
         const toolIteration = currentToolCall.iteration ?? currentIterationRef.current;
         // 检查是否有暂存的 code_streaming 数据，在创建节点时一并注入
@@ -458,21 +505,9 @@ export default function App() {
 
   useEffect(() => {
     if (doneResult) {
-      if (thinkingNodeIdRef.current) {
-        const node = useWorkflowStore.getState().nodes.find((n) => n.id === thinkingNodeIdRef.current);
-        updateNode(thinkingNodeIdRef.current, {
-          status: "completed",
-          data: { content: (node?.data as { content: string })?.content ?? "", duration: 0, isStreaming: false },
-        });
-        thinkingNodeIdRef.current = null;
-      }
+      closeThinkingNode("completed");
       if (streamingNodeIdRef.current) {
-        const node = useWorkflowStore.getState().nodes.find((n) => n.id === streamingNodeIdRef.current);
-        updateNode(streamingNodeIdRef.current, {
-          status: "completed",
-          data: { content: (node?.data as { content: string })?.content ?? doneResult.summary ?? "", isStreaming: false },
-        });
-        streamingNodeIdRef.current = null;
+        closeStreamingNode("completed", doneResult.summary);
       } else if (doneResult.summary) {
         addNode("content", {
           content: doneResult.summary,
@@ -507,20 +542,8 @@ export default function App() {
 
   useEffect(() => {
     if (agentError) {
-      if (thinkingNodeIdRef.current) {
-        const node = useWorkflowStore.getState().nodes.find((n) => n.id === thinkingNodeIdRef.current);
-        updateNode(thinkingNodeIdRef.current, {
-          status: "failed",
-          data: { content: (node?.data as { content: string })?.content ?? "", duration: 0, isStreaming: false },
-        });
-        thinkingNodeIdRef.current = null;
-      }
-      if (streamingNodeIdRef.current) {
-        updateNode(streamingNodeIdRef.current, {
-          status: "failed",
-        });
-        streamingNodeIdRef.current = null;
-      }
+      closeThinkingNode("failed");
+      closeStreamingNode("failed");
       const parsed = parseError(agentError);
       addNode("error", {
         code: parsed.code,
@@ -534,20 +557,8 @@ export default function App() {
 
   useEffect(() => {
     if (isStopped) {
-      if (thinkingNodeIdRef.current) {
-        const node = useWorkflowStore.getState().nodes.find((n) => n.id === thinkingNodeIdRef.current);
-        updateNode(thinkingNodeIdRef.current, {
-          status: "cancelled",
-          data: { content: (node?.data as { content: string })?.content ?? "", duration: 0, isStreaming: false },
-        });
-        thinkingNodeIdRef.current = null;
-      }
-      if (streamingNodeIdRef.current) {
-        updateNode(streamingNodeIdRef.current, {
-          status: "cancelled",
-        });
-        streamingNodeIdRef.current = null;
-      }
+      closeThinkingNode("cancelled");
+      closeStreamingNode("cancelled");
       setExecutionStatus("cancelled");
     }
   }, [isStopped, updateNode, setExecutionStatus]);
@@ -610,12 +621,7 @@ export default function App() {
       return;
     }
 
-    streamingNodeIdRef.current = null;
-    thinkingNodeIdRef.current = null;
-    confirmNodeIdRef.current = null;
-    lastToolCallIterationRef.current = null;
-    lastClosedStreamingNodeIdRef.current = null;
-
+    resetRefs();
     lastSentTextRef.current = text;
 
     // 从附件 store 获取当前附件，映射为工作流节点附件格式
@@ -677,16 +683,16 @@ export default function App() {
     resetAgent();
     clearCurrentSession();
     clearContextUsage();
-    streamingNodeIdRef.current = null;
-    thinkingNodeIdRef.current = null;
-    confirmNodeIdRef.current = null;
-    currentIterationRef.current = undefined;
-    lastToolCallIterationRef.current = null;
-    lastClosedStreamingNodeIdRef.current = null;
+    resetRefs();
   }, [clearNodes, resetAgent, clearCurrentSession, clearContextUsage, saveSessionToCache, currentSessionId]);
 
   // 切换到历史会话：先保存当前会话状态到缓存，再从缓存或后端恢复目标会话
-  const handleSwitchSession = useCallback(async (sessionId: string) => {
+  const handleSwitchSession = useCallback(async (sessionId: string, workspaceId?: string) => {
+    // 仅当 workspaceId 是真实工作区且与当前不同时才切换
+    if (workspaceId && workspaceId !== currentWorkspaceId && workspaces.some((w) => w.id === workspaceId)) {
+      await switchWorkspace(workspaceId);
+    }
+
     // 如果当前有会话，保存其状态到缓存
     if (currentSessionId) {
       saveSessionToCache(currentSessionId, {
@@ -699,12 +705,8 @@ export default function App() {
 
     clearNodes();
     resetAgent();
-    streamingNodeIdRef.current = null;
-    thinkingNodeIdRef.current = null;
-    confirmNodeIdRef.current = null;
-    currentIterationRef.current = undefined;
-    lastToolCallIterationRef.current = null;
-    lastClosedStreamingNodeIdRef.current = null;
+    clearContextUsage();
+    resetRefs();
 
     // 更新 session store 中的当前会话 ID
     switchSession(sessionId);
@@ -724,8 +726,10 @@ export default function App() {
     }
 
     // 无论是否缓存命中，都从后端加载最新消息以确保数据一致性
+    let hasMessages = false;
     try {
       const detail = await tauriCmd.getSession(sessionId);
+      hasMessages = detail.messages.length > 0;
       // 仅在缓存未命中时使用后端数据覆盖（缓存命中时后端数据作为补充验证）
       if (!cacheHit) {
         loadFromMessages(detail.messages);
@@ -744,9 +748,28 @@ export default function App() {
       // 查询失败时不影响主流程
     }
 
-    // 加载该会话的上下文窗口使用信息
-    loadContextUsage(sessionId);
-  }, [clearNodes, resetAgent, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, saveSessionToCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId]);
+    // 仅当会话有消息时才加载上下文窗口使用信息
+    // 新会话无消息，后端会回退计算系统提示词 token 数导致显示残留数据，应跳过
+    if (hasMessages) {
+      loadContextUsage(sessionId);
+    }
+  }, [clearNodes, resetAgent, clearContextUsage, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, saveSessionToCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId, switchWorkspace, currentWorkspaceId, workspaces]);
+
+  // 为指定工作区新建会话并切换过去
+  const handleCreateSessionForWorkspace = useCallback(async (workspaceId: string) => {
+    const newSessionId = await createSession(undefined, workspaceId);
+    if (workspaceId !== currentWorkspaceId) {
+      await switchWorkspace(workspaceId);
+    }
+    await handleSwitchSession(newSessionId, workspaceId);
+  }, [createSession, switchWorkspace, currentWorkspaceId, handleSwitchSession]);
+
+  // 查看指定工作区的文件树
+  const handleShowFilesForWorkspace = useCallback(async (workspaceId: string) => {
+    if (workspaceId !== currentWorkspaceId) {
+      await switchWorkspace(workspaceId);
+    }
+  }, [switchWorkspace, currentWorkspaceId]);
 
   // 删除当前会话后的处理：清空缓存，切换到其他会话或清空工作流
   const handleDeleteCurrentSession = useCallback(async (nextSessionId: string | null) => {
@@ -757,12 +780,7 @@ export default function App() {
 
     clearNodes();
     resetAgent();
-    streamingNodeIdRef.current = null;
-    thinkingNodeIdRef.current = null;
-    confirmNodeIdRef.current = null;
-    currentIterationRef.current = undefined;
-    lastToolCallIterationRef.current = null;
-    lastClosedStreamingNodeIdRef.current = null;
+    resetRefs();
 
     if (nextSessionId) {
       // 切换到下一个可用会话
@@ -885,11 +903,7 @@ export default function App() {
     const text = lastSentTextRef.current;
     if (!text) return;
 
-    streamingNodeIdRef.current = null;
-    thinkingNodeIdRef.current = null;
-    confirmNodeIdRef.current = null;
-    lastToolCallIterationRef.current = null;
-    lastClosedStreamingNodeIdRef.current = null;
+    resetRefs();
     addNode("user", { content: text, attachments: [] }); // 重试时不带附件
     setExecutionStatus("running");
 
@@ -941,10 +955,7 @@ export default function App() {
   return (
     <div className="app flex flex-col h-screen">
       <NetworkStatusBanner />
-      <TopBar
-        onToggleHistory={() => setHistoryOpen(!historyOpen)}
-        onNewSession={handleNewSession}
-      />
+      <TopBar onNewSession={handleNewSession} />
 
       <MainLayout
         mainArea={
@@ -961,11 +972,14 @@ export default function App() {
         }
         sidebarVisible={sidebarVisible}
         sidebar={
-          <>
-            <FileTreeSection onOpenPreview={handleOpenPreview} onOpenVersionHistory={handleOpenVersionHistory} />
-            <AgentInfoSection />
-            <ContextWindowSection />
-          </>
+          <RightSidebar
+            onOpenPreview={handleOpenPreview}
+            onOpenVersionHistory={handleOpenVersionHistory}
+            onSwitchSession={handleSwitchSession}
+            onCreateSession={handleCreateSessionForWorkspace}
+            onShowFiles={handleShowFilesForWorkspace}
+            onDeleteCurrentSession={handleDeleteCurrentSession}
+          />
         }
       />
 
@@ -994,9 +1008,6 @@ export default function App() {
       )}
       <Suspense fallback={<LazyFallback />}>
         <SettingsDialog />
-      </Suspense>
-      <Suspense fallback={<LazyFallback />}>
-        <HistoryPanel open={historyOpen} onClose={() => setHistoryOpen(false)} onSwitchSession={handleSwitchSession} onDeleteCurrentSession={handleDeleteCurrentSession} />
       </Suspense>
       <Suspense fallback={<LazyFallback />}>
         {versionHistoryOpen && currentWorkspaceId && (

@@ -35,6 +35,7 @@ export interface Session {
 export interface SessionSummary {
   id: string;
   title: string;
+  workspaceId?: string;
   status: string;
   messageCount: number;
   lastMessagePreview?: string;

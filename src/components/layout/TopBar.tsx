@@ -6,11 +6,10 @@ import { WorkspaceSelector } from "./WorkspaceSelector";
 import type { ThemeMode } from "../../types";
 
 interface TopBarProps {
-  onToggleHistory: () => void;
   onNewSession: () => void;
 }
 
-export function TopBar({ onToggleHistory, onNewSession }: TopBarProps) {
+export function TopBar({ onNewSession }: TopBarProps) {
   const { t } = useTranslation();
   const { openSettings, llmProviders, activeProviderId, settings, updateSettings } = useSettingsStore();
   const activeProvider = llmProviders.find((p) => p.id === activeProviderId);
@@ -55,14 +54,6 @@ export function TopBar({ onToggleHistory, onNewSession }: TopBarProps) {
           onClick={toggleTheme}
         >
           <Icon name={isDarkMode ? "theme" : "moon"} />
-        </button>
-        <button
-          className="topbar-btn"
-          title={t('topBar.history')}
-          aria-label={t('topBar.history')}
-          onClick={onToggleHistory}
-        >
-          <Icon name="history" />
         </button>
         <button
           className="topbar-btn"

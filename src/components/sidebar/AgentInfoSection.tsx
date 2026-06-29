@@ -1,12 +1,66 @@
 import { useState } from "react";
 import { useTranslation } from 'react-i18next';
-import { SidebarSection } from "../layout/Sidebar";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useWorkflowStore } from "../../stores/useWorkflowStore";
 import { Icon } from "../common/Icon";
+
+/** 格式化 Token 数量为可读字符串 */
+function formatTokens(tokens: number): string {
+  if (tokens >= 1_000_000) {
+    return `${(tokens / 1_000_000).toFixed(1)}M`;
+  }
+  if (tokens >= 1000) {
+    return `${(tokens / 1000).toFixed(1)}K`;
+  }
+  return String(tokens);
+}
+
+/** 根据压缩状态返回对应的显示信息 */
+function getCompressionInfo(status: string, t: (key: string) => string): { label: string; color: string } {
+  switch (status) {
+    case "critical":
+      return { label: t('contextWindow.approachingLimit'), color: "var(--color-error)" };
+    case "compressed":
+      return { label: t('contextWindow.compressed'), color: "var(--color-warning)" };
+    default:
+      return { label: t('contextWindow.normal'), color: "var(--color-success)" };
+  }
+}
+
+/** 上下文各部分定义：key（用于翻译）、颜色变量名、对应字段 */
+const CONTEXT_SECTIONS = [
+  { key: "system", labelKey: "contextWindow.systemPrompt", colorVar: "--color-context-system" },
+  { key: "functions", labelKey: "contextWindow.toolDefinitions", colorVar: "--color-context-functions" },
+  { key: "history", labelKey: "contextWindow.conversationHistory", colorVar: "--color-context-history" },
+  { key: "response", labelKey: "contextWindow.llmResponse", colorVar: "--color-context-response" },
+] as const;
+
+/** 缓存命中率文字显示 */
+function CacheHitRateBar({ hitRate }: { hitRate: number }) {
+  const { t } = useTranslation();
+  const percent = Math.round(hitRate * 100);
+  const color =
+    percent >= 70
+      ? "var(--color-success)"
+      : percent >= 40
+        ? "var(--color-warning)"
+        : "var(--color-error)";
+
+  return (
+    <div className="ai-cache-simple">
+      <span className="ai-cache-label">{t('contextWindow.cacheHitRate')}</span>
+      <span className="ai-cache-value" style={{ color }}>{percent}%</span>
+    </div>
+  );
+}
 
 export function AgentInfoSection() {
   const { t } = useTranslation();
   const { settings, llmProviders, activeProviderId, updateSettings, openSettings } = useSettingsStore();
+  const { contextUsage } = useWorkflowStore();
+
+  // 默认收缩状态
+  const [open, setOpen] = useState(false);
 
   // 确认级别选项（移入组件内部以使用 t() 翻译）
   const confirmationLevelOptions: { value: string; label: string }[] = [
@@ -26,73 +80,228 @@ export function AgentInfoSection() {
     setEditing(false);
   };
 
-  return (
-    <SidebarSection title={t('agentInfo.sectionTitle')}>
-      <div className="ai-grid" role="region" aria-label={t('agentInfo.sectionTitle')}>
-        {/* 当前模型 */}
-        <div className="ai-field">
-          <span className="ai-field-label">{t('agentInfo.currentModel')}</span>
-          <div className={`ai-model-badge ${activeProvider ? "online" : "offline"}`} aria-label={activeProvider ? t('agentInfo.modelConnected') : t('agentInfo.modelDisconnected')}>
-            <span className="ai-status-dot" />
-            <span className="ai-model-name">
-              {activeProvider?.model ?? t('agentInfo.notConfigured')}
+  // 计算上下文使用数据
+  // 仅当后端返回了实际的上下文使用数据时才显示，新会话（无消息）不显示
+  const hasContextInfo = !!contextUsage;
+
+  let contextBar = null;
+  if (contextUsage) {
+    const {
+      contextWindow,
+      systemPromptTokens,
+      functionDefinitionsTokens,
+      conversationTokens,
+      responseTokens,
+      totalUsedTokens,
+      compressionStatus,
+      retainedMessageCount,
+      totalMessageCount,
+      cacheHitRate,
+      providerCacheType,
+    } = contextUsage;
+
+    const usagePercent = contextWindow > 0 ? Math.round((totalUsedTokens / contextWindow) * 100) : 0;
+    const compressionInfo = getCompressionInfo(compressionStatus, t);
+    const systemPct = contextWindow > 0 ? (systemPromptTokens / contextWindow) * 100 : 0;
+    const funcPct = contextWindow > 0 ? (functionDefinitionsTokens / contextWindow) * 100 : 0;
+    const convPct = contextWindow > 0 ? (conversationTokens / contextWindow) * 100 : 0;
+    const respPct = contextWindow > 0 ? (responseTokens / contextWindow) * 100 : 0;
+    const sectionTokens = [systemPromptTokens, functionDefinitionsTokens, conversationTokens, responseTokens];
+    const sectionPcts = [systemPct, funcPct, convPct, respPct];
+
+    contextBar = (
+      <div className="ai-context-block">
+        <div className="ai-context-header">
+          <span className="ai-context-label">{t('contextWindow.sectionTitle')}</span>
+          <span className="ai-context-value" style={compressionStatus === "critical" ? { color: "var(--color-error)" } : undefined}>
+            {formatTokens(totalUsedTokens)} / {formatTokens(contextWindow)}
+          </span>
+        </div>
+
+        <div className="ai-context-bar-track">
+          {CONTEXT_SECTIONS.map((section, i) => (
+            <div
+              key={section.key}
+              className="ai-context-bar-segment"
+              style={{ width: `${sectionPcts[i]}%`, background: `var(${section.colorVar})` }}
+              title={`${t(section.labelKey)}: ${formatTokens(sectionTokens[i])} (${sectionPcts[i].toFixed(1)}%)`}
+            />
+          ))}
+        </div>
+
+        <div className="ai-context-footer">
+          <span className="ai-context-status" style={{ color: compressionInfo.color }}>
+            {compressionInfo.label}
+          </span>
+          <span className="ai-context-percent">{usagePercent}%</span>
+        </div>
+
+        {(compressionStatus === "compressed" || compressionStatus === "critical") && (
+          <div className="ai-context-compressed">
+            <span className="ai-context-dot" />
+            <span>
+              {compressionStatus === "critical"
+                ? t('contextWindow.approachingLimitDetail', { retained: retainedMessageCount, total: totalMessageCount })
+                : t('contextWindow.compressedDetail', { retained: retainedMessageCount, total: totalMessageCount })}
             </span>
           </div>
-        </div>
-
-        {/* 未配置 Provider 时的引导提示 */}
-        {!activeProvider && (
-          <button className="ai-setup-hint" onClick={() => openSettings("llm")}>
-            <Icon name="settings" size={12} />
-            <span>{t('agentInfo.configureLLM')}</span>
-          </button>
         )}
 
-        {/* 作者名 */}
-        <div className="ai-field">
-          <span className="ai-field-label">{t('agentInfo.authorName')}</span>
-          {editing ? (
-            <input
-              className="ai-field-edit"
-              aria-label={t('agentInfo.authorName')}
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              onBlur={handleSave}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
-              autoFocus
-            />
-          ) : (
-            <button
-              className="ai-field-value-btn"
-              aria-label={t('agentInfo.editAuthorName')}
-              onClick={() => { setEditValue(settings.general.authorName); setEditing(true); }}
-            >
-              <span>{settings.general.authorName || t('agentInfo.notSet')}</span>
+        {providerCacheType !== "none" && <CacheHitRateBar hitRate={cacheHitRate} />}
+      </div>
+    );
+  }
+
+  return (
+    <div className="agent-info-section">
+      {/* 标题栏：样式与会话列表标题一致，可点击折叠 */}
+      <div
+        className="agent-info-header"
+        role="button"
+        aria-expanded={open}
+        aria-label={t('agentInfo.sectionTitle')}
+        tabIndex={0}
+        onClick={() => setOpen(!open)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen(!open);
+          }
+        }}
+      >
+        <span className="agent-info-title">{t('agentInfo.sectionTitle')}</span>
+        {/* 折叠箭头：默认隐藏，鼠标悬停时在右侧显示 */}
+        <span
+          className="agent-info-chevron"
+          style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)" }}
+        >
+          <Icon name="chevron-down" size={12} />
+        </span>
+      </div>
+
+      {/* 可折叠内容区 */}
+      <div
+        className="agent-info-body"
+        role="region"
+        aria-label={t('agentInfo.sectionTitle')}
+        style={{
+          maxHeight: open ? "2000px" : "0px",
+          opacity: open ? 1 : 0,
+        }}
+      >
+        <div className="agent-info-content" role="region" aria-label={t('agentInfo.sectionTitle')}>
+          {/* 当前模型 */}
+          <div className="ai-field">
+            <span className="ai-field-label">{t('agentInfo.currentModel')}</span>
+            <div className={`ai-model-badge ${activeProvider ? "online" : "offline"}`} aria-label={activeProvider ? t('agentInfo.modelConnected') : t('agentInfo.modelDisconnected')}>
+              <span className="ai-status-dot" />
+              <span className="ai-model-name">
+                {activeProvider?.model ?? t('agentInfo.notConfigured')}
+              </span>
+            </div>
+          </div>
+
+          {/* 未配置 Provider 时的引导提示 */}
+          {!activeProvider && (
+            <button className="ai-setup-hint" onClick={() => openSettings("llm")}>
+              <Icon name="settings" size={12} />
+              <span>{t('agentInfo.configureLLM')}</span>
             </button>
           )}
-        </div>
 
-        {/* 确认级别 */}
-        <div className="ai-field">
-          <span className="ai-field-label">{t('agentInfo.confirmLevel')}</span>
-          <select
-            className="ai-field-select"
-            aria-label={t('agentInfo.confirmLevel')}
-            value={settings.general.confirmationLevel}
-            onChange={(e) => updateSettings({ general: { confirmationLevel: e.target.value as "always" | "editOnly" | "never" } })}
-          >
-            {confirmationLevelOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+          {/* 作者名 */}
+          <div className="ai-field">
+            <span className="ai-field-label">{t('agentInfo.authorName')}</span>
+            {editing ? (
+              <input
+                className="ai-field-edit"
+                aria-label={t('agentInfo.authorName')}
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onBlur={handleSave}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
+                autoFocus
+              />
+            ) : (
+              <button
+                className="ai-field-value-btn"
+                aria-label={t('agentInfo.editAuthorName')}
+                onClick={() => { setEditValue(settings.general.authorName); setEditing(true); }}
+              >
+                <span>{settings.general.authorName || t('agentInfo.notSet')}</span>
+              </button>
+            )}
+          </div>
+
+          {/* 确认级别 */}
+          <div className="ai-field">
+            <span className="ai-field-label">{t('agentInfo.confirmLevel')}</span>
+            <select
+              className="ai-field-select"
+              aria-label={t('agentInfo.confirmLevel')}
+              value={settings.general.confirmationLevel}
+              onChange={(e) => updateSettings({ general: { confirmationLevel: e.target.value as "always" | "editOnly" | "never" } })}
+            >
+              {confirmationLevelOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 上下文窗口使用（合并自原 ContextWindowSection） */}
+          {hasContextInfo && <div className="ai-context-divider" />}
+          {contextBar}
         </div>
       </div>
 
       <style>{`
-        .ai-grid {
+        .agent-info-section {
+          display: flex;
+          flex-direction: column;
+          flex-shrink: 0;
+        }
+        /* 标题栏样式与会话列表标题（session-list-header / session-list-title）保持一致 */
+        .agent-info-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 10px 16px;
+          cursor: pointer;
+          user-select: none;
+          transition: background 0.15s;
+        }
+        .agent-info-header:hover {
+          background: var(--color-accent-bg);
+        }
+        .agent-info-title {
+          font-size: 11px;
+          font-weight: 600;
+          color: var(--color-text-secondary);
+          letter-spacing: 0.6px;
+          text-transform: uppercase;
+        }
+        /* 折叠箭头：默认隐藏，鼠标悬停时在右侧显示 */
+        .agent-info-chevron {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--color-text-quaternary);
+          transition: transform 0.2s, opacity 0.15s;
+          flex-shrink: 0;
+          opacity: 0;
+        }
+        .agent-info-header:hover .agent-info-chevron {
+          opacity: 1;
+        }
+        .agent-info-body {
+          overflow: hidden;
+          transition: max-height 0.25s ease, opacity 0.2s ease;
+        }
+        .agent-info-content {
           display: flex;
           flex-direction: column;
           gap: 2px;
+          padding: 0 16px 12px;
         }
         .ai-field {
           display: flex;
@@ -219,7 +428,93 @@ export function AgentInfoSection() {
           background: var(--color-accent-light);
           border-color: var(--color-accent);
         }
+
+        /* 合并后的上下文窗口区域 */
+        .ai-context-divider {
+          height: 1px;
+          background: var(--color-border-light);
+          margin: 6px 0 4px;
+        }
+        .ai-context-block {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          padding: 2px 0;
+        }
+        .ai-context-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .ai-context-label {
+          font-size: 11px;
+          color: var(--color-text-quaternary);
+          font-weight: 500;
+        }
+        .ai-context-value {
+          font-size: 11px;
+          font-weight: 600;
+          color: var(--color-text-secondary);
+          font-variant-numeric: tabular-nums;
+        }
+        .ai-context-bar-track {
+          height: 4px;
+          background: var(--color-context-idle);
+          border-radius: 2px;
+          overflow: hidden;
+          display: flex;
+        }
+        .ai-context-bar-segment {
+          height: 100%;
+          transition: width 0.5s ease;
+          min-width: 0;
+        }
+        .ai-context-footer {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .ai-context-status {
+          font-size: 10px;
+          font-weight: 500;
+        }
+        .ai-context-percent {
+          font-size: 10px;
+          color: var(--color-text-quaternary);
+          font-variant-numeric: tabular-nums;
+        }
+        .ai-context-compressed {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 3px 6px;
+          background: var(--color-warning-bg, rgba(250, 173, 20, 0.1));
+          border-radius: var(--radius-sm);
+          font-size: 10px;
+          color: var(--color-warning, #faad14);
+        }
+        .ai-context-dot {
+          width: 5px;
+          height: 5px;
+          border-radius: 50%;
+          background: var(--color-warning, #faad14);
+          flex-shrink: 0;
+        }
+        .ai-cache-simple {
+          display: flex;
+          gap: 4px;
+          align-items: baseline;
+        }
+        .ai-cache-label {
+          font-size: 10px;
+          color: var(--color-text-tertiary);
+        }
+        .ai-cache-value {
+          font-size: 11px;
+          font-weight: 600;
+          font-variant-numeric: tabular-nums;
+        }
       `}</style>
-    </SidebarSection>
+    </div>
   );
 }

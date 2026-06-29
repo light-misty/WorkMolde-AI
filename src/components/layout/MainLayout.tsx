@@ -10,8 +10,8 @@ export function MainLayout({ mainArea, sidebar, sidebarVisible = true }: MainLay
   return (
     <div className="flex flex-1 overflow-hidden bg-bg-sub">
       {/* 主界面区 - 白色圆角卡片 */}
-      <div className="flex-1 flex flex-col min-w-0 pt-0 pl-2 pr-0 pb-1">
-        <div className="flex-1 flex flex-col bg-bg rounded-xl shadow-sm overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 p-0">
+        <div className="flex-1 flex flex-col bg-bg rounded-xl border-[0.5px] border-border overflow-hidden">
           {mainArea}
         </div>
       </div>

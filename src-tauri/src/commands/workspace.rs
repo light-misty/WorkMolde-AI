@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use tauri::{AppHandle, State};
 
+use crate::db::session_repo;
 use crate::errors::{CommandError, FS_PATH_NOT_FOUND, FS_NOT_A_DIRECTORY};
 use crate::events::AgentEmitter;
 use crate::events::types;
@@ -106,6 +107,7 @@ pub async fn add_workspace(
 }
 
 /// 移除工作区
+/// 同时删除该工作区下的所有会话（包括消息），避免出现孤儿会话导致前端分组错乱
 #[tauri::command]
 pub async fn remove_workspace(
     workspace_id: String,
@@ -122,6 +124,29 @@ pub async fn remove_workspace(
     cfg_manager.remove_workspace(&mut ws_config, &workspace_id)?;
     cfg_manager.save_workspaces(&ws_config)?;
     log::info!("remove_workspace: 工作区移除成功, id={}", workspace_id);
+
+    // 删除该工作区下的所有会话（包括消息），避免孤儿会话
+    // 孤儿会话会被前端 SessionListSection 的兜底逻辑错误归入第一个工作区，造成"会话转移"
+    let deleted_session_ids = {
+        let conn = state.db.conn()?;
+        session_repo::delete_sessions_by_workspace(&conn, &workspace_id)?
+    };
+    if !deleted_session_ids.is_empty() {
+        log::info!(
+            "remove_workspace: 已清理工作区 {} 下的 {} 条关联会话",
+            workspace_id,
+            deleted_session_ids.len()
+        );
+        // 通知前端这些会话已被删除，使其清理本地状态
+        let emitter = AgentEmitter::new(app_handle.clone());
+        for session_id in &deleted_session_ids {
+            let _ = emitter.emit_session_updated(types::SessionUpdatePayload {
+                session_id: session_id.clone(),
+                change_type: "deleted".to_string(),
+                data: None,
+            });
+        }
+    }
 
     // 如果被移除的工作区是当前活动工作区，清除默认工作区设置
     let mut settings = cfg_manager.load_app_settings()?;
