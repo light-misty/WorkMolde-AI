@@ -444,6 +444,10 @@ export function SessionListSection({
         }
         .session-list-body {
           flex: 1;
+          /* min-height: 0 必需：允许 flex 子元素缩小到小于内容高度，
+             否则会话列表内容会撑大 session-list-section，
+             进而撑大 sb-scroll 导致 overflow-y: auto 失效 */
+          min-height: 0;
           overflow-y: auto;
           padding: 0 8px 12px;
           transition: max-height 0.25s ease, opacity 0.2s ease, padding 0.25s ease;

@@ -33,6 +33,12 @@ export function MainArea({ workflow, inputArea, isEmpty = false }: MainAreaProps
           flex: 0 0 auto;
           width: 100%;
         }
+        /* min-height: 0 必需：允许 workflow-area 在 flex 列布局中缩小到小于内容高度，
+           否则 WorkflowTimeline 的虚拟滚动容器会撑大 workflow-area，
+           导致 overflow-y: auto 失效并挤压输入框 */
+        .workflow-area {
+          min-height: 0;
+        }
       `}</style>
     </div>
   );

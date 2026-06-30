@@ -18,7 +18,7 @@ export function MainLayout({ mainArea, sidebar, sidebarVisible = true }: MainLay
 
       {/* 主界面区：通过 margin-left 留出侧边栏空间，收缩时扩张覆盖侧边栏 */}
       <div className={`main-area-wrap${sidebarVisible ? '' : ' sb-collapsed'}`}>
-        <div className={`flex-1 flex flex-col min-w-0 pr-3 pb-3${!sidebarVisible ? ' pl-3' : ''}`}>
+        <div className={`flex-1 flex flex-col min-w-0 min-h-0 pr-3 pb-3${!sidebarVisible ? ' pl-3' : ''}`}>
           <div className="flex-1 flex flex-col bg-bg rounded-xl border-[0.5px] border-border overflow-hidden">
             {mainArea}
           </div>
@@ -40,6 +40,10 @@ export function MainLayout({ mainArea, sidebar, sidebarVisible = true }: MainLay
         }
         .sb-scroll {
           flex: 1;
+          /* min-height: 0 必需：允许 flex 子元素缩小到小于内容高度，
+             否则内容会撑大容器导致 overflow-y: auto 失效，
+             切换会话时 scrollTop 无法自动调整，内容会向上移动甚至消失 */
+          min-height: 0;
           overflow-y: auto;
           overflow-x: hidden;
           width: 260px;
