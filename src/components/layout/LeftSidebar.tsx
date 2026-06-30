@@ -89,8 +89,14 @@ export function LeftSidebar({
     setView("files");
   };
 
+  const [fileTreeExiting, setFileTreeExiting] = useState(false);
+
   const handleBackToSessions = () => {
-    setView("sessions");
+    setFileTreeExiting(true);
+    setTimeout(() => {
+      setView("sessions");
+      setFileTreeExiting(false);
+    }, 280);
   };
 
   // 点击外部或 Escape 关闭更多下拉菜单
@@ -127,8 +133,8 @@ export function LeftSidebar({
 
   return (
     <div className="left-sidebar">
-      {view === "files" ? (
-        <div className="file-tree-enter">
+      {(view === "files" || fileTreeExiting) ? (
+        <div className={`file-tree-panel ${fileTreeExiting ? 'exit' : 'enter'}`}>
           <div className="file-tree-header">
             <button
               className="file-tree-back-btn"
@@ -187,6 +193,7 @@ export function LeftSidebar({
               onClick={() => setMoreOpen((prev) => !prev)}
             >
               <span>{t('sidebar.more')}</span>
+              <Icon name="menu" size={14} style={{ marginLeft: 'auto' }} />
             </button>
 
             {moreOpen && (
@@ -230,6 +237,7 @@ export function LeftSidebar({
 
       <style>{`
         .left-sidebar {
+          position: relative;
           display: flex;
           flex-direction: column;
           height: 100%;
@@ -312,13 +320,20 @@ export function LeftSidebar({
           min-height: 0;
           overflow-y: auto;
         }
-        .file-tree-enter {
+        .file-tree-panel {
+          position: absolute;
+          inset: 0;
           display: flex;
           flex-direction: column;
-          height: 100%;
-          width: 100%;
+          background: var(--color-bg-primary);
+          z-index: 10;
           overflow: hidden;
+        }
+        .file-tree-panel.enter {
           animation: file-tree-slide-in 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .file-tree-panel.exit {
+          animation: file-tree-slide-out 0.28s cubic-bezier(0.4, 0, 0.2, 1) forwards;
         }
         @keyframes file-tree-slide-in {
           from {
@@ -328,6 +343,16 @@ export function LeftSidebar({
           to {
             opacity: 1;
             transform: translateX(0);
+          }
+        }
+        @keyframes file-tree-slide-out {
+          from {
+            opacity: 1;
+            transform: translateX(0);
+          }
+          to {
+            opacity: 0;
+            transform: translateX(-100%);
           }
         }
         /* 更多按钮区：固定在底部，不与会话列表重叠 */
