@@ -70,16 +70,6 @@ export function AgentInfoSection() {
   ];
   const activeProvider = llmProviders.find((p) => p.id === activeProviderId);
 
-  const [editing, setEditing] = useState(false);
-  const [editValue, setEditValue] = useState(settings.general.authorName);
-
-  const handleSave = () => {
-    if (editValue.trim()) {
-      updateSettings({ general: { authorName: editValue.trim() } });
-    }
-    setEditing(false);
-  };
-
   // 计算上下文使用数据
   // 仅当后端返回了实际的上下文使用数据时才显示，新会话（无消息）不显示
   const hasContextInfo = !!contextUsage;
@@ -215,28 +205,22 @@ export function AgentInfoSection() {
             </button>
           )}
 
-          {/* 作者名 */}
+          {/* 作者信息 */}
           <div className="ai-field">
-            <span className="ai-field-label">{t('agentInfo.authorName')}</span>
-            {editing ? (
-              <input
-                className="ai-field-edit"
-                aria-label={t('agentInfo.authorName')}
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                onBlur={handleSave}
-                onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
-                autoFocus
-              />
-            ) : (
+            <span className="ai-field-label">{t('agentInfo.authorInfo')}</span>
+            <div className="ai-field-author-info">
+              <span className="ai-field-author-summary">
+                {settings.general.authorName || t('agentInfo.notSet')}
+              </span>
               <button
-                className="ai-field-value-btn"
-                aria-label={t('agentInfo.editAuthorName')}
-                onClick={() => { setEditValue(settings.general.authorName); setEditing(true); }}
+                className="ai-field-edit-btn"
+                aria-label={t('agentInfo.editAuthorInfo')}
+                onClick={() => openSettings("general")}
+                title={t('agentInfo.editAuthorInfo')}
               >
-                <span>{settings.general.authorName || t('agentInfo.notSet')}</span>
+                <Icon name="edit" size={14} />
               </button>
-            )}
+            </div>
           </div>
 
           {/* 确认级别 */}
@@ -424,6 +408,42 @@ export function AgentInfoSection() {
         .ai-field-select:focus {
           border-color: var(--color-accent);
           box-shadow: 0 0 0 2px var(--color-accent-lighter);
+        }
+        .ai-field-author-info {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          min-width: 0;
+          flex: 1;
+          justify-content: flex-end;
+        }
+        .ai-field-author-summary {
+          font-size: 12px;
+          color: var(--color-text-secondary);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          max-width: 160px;
+        }
+        .ai-field-edit-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 24px;
+          height: 24px;
+          border-radius: var(--radius-sm);
+          color: var(--color-text-quaternary);
+          background: none;
+          border: 1px solid transparent;
+          cursor: pointer;
+          transition: all 0.15s;
+          flex-shrink: 0;
+          padding: 0;
+        }
+        .ai-field-edit-btn:hover {
+          color: var(--color-accent);
+          border-color: var(--color-border);
+          background: var(--color-bg);
         }
         .ai-setup-hint {
           display: flex;
