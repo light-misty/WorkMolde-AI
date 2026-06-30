@@ -110,9 +110,9 @@ function FileTreeItem({
           ) : (
             <span className="ft-name">{node.name}</span>
           )}
-          <span className="ft-chevron" style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}>
-            <Icon name="chevron-down" size={12} />
-          </span>
+<span className="ft-chevron" style={{ transform: isExpanded ? "rotate(0deg)" : "rotate(-90deg)" }}>
+  <Icon name="chevron-down" size={12} />
+</span>
         </div>
         {isExpanded && node.children && (
           <div className="ft-indent">
@@ -639,13 +639,14 @@ export function FileTreeSection({ onOpenPreview, onOpenVersionHistory }: { onOpe
       )}
 
       {/* 右键菜单 */}
-      {contextMenu && (
+      {contextMenu && createPortal(
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
           items={contextMenuItems()}
           onClose={() => setContextMenu(null)}
-        />
+        />,
+        document.body
       )}
 
       {/* 删除确认对话框 */}
@@ -756,6 +757,7 @@ export function FileTreeSection({ onOpenPreview, onOpenVersionHistory }: { onOpe
           padding: 4px 8px;
           border-radius: var(--radius-sm);
           cursor: pointer;
+          user-select: none;
           transition: all 0.15s;
           color: var(--color-text-primary);
           position: relative;
