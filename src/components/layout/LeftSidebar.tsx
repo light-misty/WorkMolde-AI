@@ -8,7 +8,9 @@ import { SessionListSection } from "../sidebar/SessionListSection";
 import { Icon } from "../common/Icon";
 import { useWorkspaceStore } from "../../stores/useWorkspaceStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useToastStore } from "../../stores/useToastStore";
 import type { ThemeMode } from "../../types";
+import * as tauriCmd from "../../services/tauri";
 
 interface LeftSidebarProps {
   /** 文件预览回调 */
@@ -56,6 +58,8 @@ export function LeftSidebar({
   // 语言子菜单 portal 容器 ref（用于点击外部关闭判定，子菜单通过 createPortal 渲染到 body，
   // 脱离了 langRef/moreRef 的 DOM 树，需要单独跟踪）
   const langDropdownRef = useRef<HTMLDivElement>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const addToast = useToastStore((s) => s.addToast);
 
   // 判断当前是否处于深色模式
   const isDarkMode = (() => {
@@ -71,6 +75,25 @@ export function LeftSidebar({
     updateSettings({ appearance: { themeMode: nextMode } });
     setLangOpen(false);
   }, [isDarkMode, updateSettings]);
+
+  // 检查更新
+  const checkForUpdates = useCallback(async () => {
+    if (checkingUpdate) return;
+    setCheckingUpdate(true);
+    try {
+      const result = await tauriCmd.checkUpdate();
+      if (result) {
+        addToast("success", t('update.newVersionFound', { version: result.version }));
+      } else {
+        addToast("success", t('settings.general.upToDate'));
+      }
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      addToast("error", t('update.checkFailedWithError', { error: errMsg }));
+    } finally {
+      setCheckingUpdate(false);
+    }
+  }, [checkingUpdate, addToast, t]);
 
   // 切换语言
   const switchLanguage = useCallback((lang: string) => {
@@ -224,6 +247,10 @@ export function LeftSidebar({
                 <div className="more-dropdown-item" onClick={toggleTheme}>
                   <Icon name={isDarkMode ? "theme" : "moon"} size={14} />
                   <span>{isDarkMode ? t('topBar.switchToLight') : t('topBar.switchToDark')}</span>
+                </div>
+                <div className="more-dropdown-item" onClick={() => { checkForUpdates(); setMoreOpen(false); setLangOpen(false); }}>
+                  <Icon name="refresh" size={14} />
+                  <span>{t('sidebar.checkUpdate')}</span>
                 </div>
                 <div className="more-dropdown-item" onClick={() => { openSettings("appearance"); setMoreOpen(false); setLangOpen(false); }}>
                   <Icon name="settings" size={14} />

@@ -700,7 +700,8 @@
     "more": "More",
     "darkMode": "Dark Mode",
     "lightMode": "Light Mode",
-    "language": "Language"
+    "language": "Language",
+    "checkUpdate": "Check for Updates"
   },
   "sessionList": {
     "title": "Session List",

@@ -700,7 +700,8 @@
     "more": "更多",
     "darkMode": "深色模式",
     "lightMode": "浅色模式",
-    "language": "语言"
+    "language": "语言",
+    "checkUpdate": "检查更新"
   },
   "sessionList": {
     "title": "会话列表",
