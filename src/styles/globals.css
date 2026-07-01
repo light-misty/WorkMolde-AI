@@ -575,7 +575,6 @@
   user-select: none;
   color: var(--color-text-tertiary);
   font-size: 12px;
-  font-style: italic;
 }
 
 .wf-thinking-toggle:hover {

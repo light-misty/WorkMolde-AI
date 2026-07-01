@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import type { WorkflowNode, ThinkingNodeData } from "../../types";
 import { Icon } from "../common/Icon";
 
@@ -7,6 +8,7 @@ interface ThinkingNodeProps {
 }
 
 export function ThinkingNode({ node }: ThinkingNodeProps) {
+  const { t } = useTranslation();
   const data = node.data as ThinkingNodeData;
   const isStreaming = data.isStreaming || node.status === "running";
   const [expanded, setExpanded] = useState(isStreaming);
@@ -26,12 +28,11 @@ export function ThinkingNode({ node }: ThinkingNodeProps) {
           className="wf-thinking-toggle"
           onClick={() => setExpanded((prev) => !prev)}
         >
+          <span>{t("workflow.thinking")}</span>
           <Icon
             name={expanded ? "chevron-down" : "chevron-right"}
             size={12}
           />
-          {/* 思考链标签始终使用Thinking文字表示，不跟随i18n切换 */}
-          <span>Thinking...</span>
         </div>
 
         {expanded && (

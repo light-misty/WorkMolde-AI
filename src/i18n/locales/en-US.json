@@ -69,7 +69,8 @@
   "workflow": {
     "startNewSession": "Work with DocAgent",
     "emptySession": "Empty Session",
-    "timeline": "Workflow Timeline"
+    "timeline": "Workflow Timeline",
+    "thinking": "Thinking"
   },
   "provider": {
     "selectModel": "Select Model",

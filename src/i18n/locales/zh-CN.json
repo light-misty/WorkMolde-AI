@@ -69,7 +69,8 @@
   "workflow": {
     "startNewSession": "Work with DocAgent",
     "emptySession": "空会话",
-    "timeline": "工作流时间线"
+    "timeline": "工作流时间线",
+    "thinking": "思考过程"
   },
   "provider": {
     "selectModel": "选择模型",
