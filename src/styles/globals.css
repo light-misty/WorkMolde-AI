@@ -515,6 +515,22 @@
   border-color: var(--color-border-strong);
 }
 
+.wf-user-node {
+  justify-content: flex-end;
+}
+
+.wf-user-node .wf-node-card {
+  width: auto;
+  flex: none;
+  max-width: 66.67%;
+  border: none;
+  background: #eeeeee;
+}
+
+.wf-user-node .wf-user-text {
+  color: #333333;
+}
+
 .wf-node-body {
   padding: 10px 14px;
 }

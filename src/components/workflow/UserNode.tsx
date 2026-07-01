@@ -11,7 +11,7 @@ export function UserNode({ node }: UserNodeProps) {
   const hasAttachments = data.attachments && data.attachments.length > 0;
 
   return (
-    <div className="wf-node animate-node-in">
+    <div className="wf-node wf-user-node animate-node-in">
       <div className="wf-node-card">
         <div className="wf-node-body">
           <div className="wf-user-text">{data.content}</div>
