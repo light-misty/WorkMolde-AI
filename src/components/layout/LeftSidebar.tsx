@@ -60,6 +60,7 @@ export function LeftSidebar({
   const langDropdownRef = useRef<HTMLDivElement>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const addToast = useToastStore((s) => s.addToast);
+  const removeToast = useToastStore((s) => s.removeToast);
 
   // 判断当前是否处于深色模式
   const isDarkMode = (() => {
@@ -80,20 +81,23 @@ export function LeftSidebar({
   const checkForUpdates = useCallback(async () => {
     if (checkingUpdate) return;
     setCheckingUpdate(true);
+    const toastId = addToast("info", t('update.checking'));
     try {
       const result = await tauriCmd.checkUpdate();
+      removeToast(toastId);
       if (result) {
         addToast("success", t('update.newVersionFound', { version: result.version }));
       } else {
         addToast("success", t('settings.general.upToDate'));
       }
     } catch (err) {
+      removeToast(toastId);
       const errMsg = err instanceof Error ? err.message : String(err);
       addToast("error", t('update.checkFailedWithError', { error: errMsg }));
     } finally {
       setCheckingUpdate(false);
     }
-  }, [checkingUpdate, addToast, t]);
+  }, [checkingUpdate, addToast, removeToast, t]);
 
   // 切换语言
   const switchLanguage = useCallback((lang: string) => {

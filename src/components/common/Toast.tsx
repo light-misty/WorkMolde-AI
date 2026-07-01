@@ -25,17 +25,25 @@ const typeIcons: Record<ToastType, ReactElement> = {
       <circle cx="8" cy="11" r="0.75" fill="currentColor" />
     </svg>
   ),
+  info: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M8 7V11.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="8" cy="5" r="0.75" fill="currentColor" />
+    </svg>
+  ),
 };
 
 /** 单条 Toast 组件 */
 function ToastItem({ id, type, message }: { id: string; type: ToastType; message: string }) {
   const removeToast = useToastStore((s) => s.removeToast);
 
-  // 自动消失定时器
+  // 自动消失定时器（info 类型需要手动关闭）
   useEffect(() => {
+    if (type === "info") return;
     const timer = setTimeout(() => removeToast(id), AUTO_DISMISS_MS);
     return () => clearTimeout(timer);
-  }, [id, removeToast]);
+  }, [id, type, removeToast]);
 
   // 手动关闭
   const handleClose = useCallback(() => {
@@ -118,6 +126,13 @@ export function ToastContainer() {
         }
         .toast-warning .toast-icon {
           color: var(--color-warning);
+        }
+
+        .toast-info {
+          border-left: 3px solid var(--color-info);
+        }
+        .toast-info .toast-icon {
+          color: var(--color-info);
         }
 
         .toast-icon {

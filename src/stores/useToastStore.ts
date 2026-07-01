@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 /** Toast 类型 */
-export type ToastType = "error" | "success" | "warning";
+export type ToastType = "error" | "success" | "warning" | "info";
 
 /** 单条 Toast 数据 */
 export interface ToastItem {
@@ -19,7 +19,7 @@ let toastCounter = 0;
 
 interface ToastState {
   toasts: ToastItem[];
-  addToast: (type: ToastType, message: string) => void;
+  addToast: (type: ToastType, message: string) => string;
   removeToast: (id: string) => void;
 }
 
@@ -37,6 +37,7 @@ export const useToastStore = create<ToastState>((set) => ({
       }
       return { toasts: next };
     });
+    return id;
   },
 
   // 移除指定 Toast

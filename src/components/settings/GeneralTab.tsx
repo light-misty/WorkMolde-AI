@@ -11,6 +11,7 @@ export function GeneralTab() {
   const { settings, updateSettings } = useSettingsStore();
   const { clearAllSessions } = useSessionStore();
   const addToast = useToastStore((s) => s.addToast);
+  const removeToast = useToastStore((s) => s.removeToast);
   const [clearConfirm, setClearConfirm] = useState(false);
   // 日志路径信息
   const [logPathInfo, setLogPathInfo] = useState<{ logSource: string } | null>(null);
@@ -227,8 +228,10 @@ export function GeneralTab() {
             onClick={async () => {
               setCheckingUpdate(true);
               setUpdateCheckResult(null);
+              const toastId = addToast("info", t('update.checking'));
               try {
                 const result = await tauriCmd.checkUpdate();
+                removeToast(toastId);
                 if (result) {
                   setUpdateCheckResult("available");
                   addToast("success", t('update.newVersionFound', { version: result.version }));
@@ -237,6 +240,7 @@ export function GeneralTab() {
                   addToast("success", t('settings.general.upToDate'));
                 }
               } catch (err) {
+                removeToast(toastId);
                 console.error("[GeneralTab] 检查更新失败:", err);
                 setUpdateCheckResult("error");
                 // 提取具体错误信息，帮助用户排查问题
