@@ -117,11 +117,6 @@ impl<R: Runtime> AgentEmitter<R> {
         self.emit_event(types::SESSION_UPDATED, payload, true, false)
     }
 
-    /// 发射工作区变更事件（关键 - 前端依赖此事件刷新文件树）
-    pub fn emit_workspace_change(&self, payload: types::WorkspaceChangePayload) -> Result<(), CommandError> {
-        self.emit_event(types::WORKSPACE_CHANGE, payload, true, false)
-    }
-
     /// 发射 LLM Provider 切换通知事件（非关键）
     pub fn emit_provider_switch(&self, payload: types::ProviderSwitchPayload) -> Result<(), CommandError> {
         self.emit_event(types::LLM_PROVIDER_SWITCH, payload, false, false)

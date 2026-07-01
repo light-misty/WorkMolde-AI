@@ -9,8 +9,9 @@ interface TopBarProps {
 
 export function TopBar({ sidebarVisible, onToggleSidebar }: TopBarProps) {
   const { t } = useTranslation();
-  const { llmProviders, activeProviderId } = useSettingsStore();
-  const activeProvider = llmProviders.find((p) => p.id === activeProviderId);
+  const { llmProviders, activeProviderId, preferredProviderId } = useSettingsStore();
+  // 优先显示用户选择的首选 Provider，回退到默认 Provider，与 InputArea 发送逻辑一致
+  const activeProvider = llmProviders.find((p) => p.id === (preferredProviderId || activeProviderId));
 
   const hasProvider = !!activeProvider;
   const statusText = hasProvider ? activeProvider.model : t('topBar.disconnected');

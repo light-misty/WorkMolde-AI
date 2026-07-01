@@ -218,6 +218,9 @@ pub struct AppSettings {
     /// 用于处理 PDF 大文件、Excel 复杂计算、matplotlib 绘图等耗时操作
     #[serde(default)]
     pub sidecar_timeout_secs: u64,
+    /// 用户首选 Provider ID（持久化，跨会话保持；为空表示使用列表第一个 Provider）
+    #[serde(default)]
+    pub preferred_provider_id: Option<String>,
 }
 
 /// Sidecar 默认请求超时时间（秒）
@@ -344,5 +347,7 @@ pub fn merge_with_defaults(
         } else {
             user_settings.sidecar_timeout_secs
         },
+        // 首选 Provider ID 直接保留用户设置（None 表示未指定，使用列表第一个）
+        preferred_provider_id: user_settings.preferred_provider_id.clone(),
     }
 }

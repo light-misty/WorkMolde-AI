@@ -130,6 +130,7 @@ export function WorkspaceSelector() {
                   <button
                     className="ws-selector-remove-btn"
                     title={t('workspace.removeWorkspace')}
+                    aria-label={t('workspace.removeWorkspace')}
                     onClick={(e) => { e.stopPropagation(); setDeleteWorkspaceId(ws.id); setDeleteWorkspaceName(ws.name); }}
                   >
                     <Icon name="close" size={12} />

@@ -82,6 +82,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       await useSessionStore.getState().loadSessions();
     } catch (error) {
       console.error("[WorkspaceStore] 移除工作区失败:", error);
+      // 重新抛出，让调用方感知失败并提示用户（避免静默失败导致 UI 误以为成功）
+      throw error;
     }
   },
 

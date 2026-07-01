@@ -51,14 +51,6 @@ impl ConfigManager {
         result
     }
 
-    /// 获取默认 Provider
-    pub fn get_default_provider<'a>(
-        &self,
-        config: &'a llm_config::LlmConfig,
-    ) -> Option<&'a llm_config::LlmProvider> {
-        llm_config::get_default_provider(config)
-    }
-
     /// 添加 Provider
     pub fn add_provider(
         &self,
@@ -98,20 +90,6 @@ impl ConfigManager {
         let result = llm_config::delete_provider(config, id);
         if let Err(ref e) = result {
             log::error!("删除 Provider 失败: {}", e);
-        }
-        result
-    }
-
-    /// 设置默认 Provider
-    pub fn set_default_provider(
-        &self,
-        config: &mut llm_config::LlmConfig,
-        id: &str,
-    ) -> Result<(), CommandError> {
-        log::info!("设置默认 Provider: id={}", id);
-        let result = llm_config::set_default_provider(config, id);
-        if let Err(ref e) = result {
-            log::error!("设置默认 Provider 失败: {}", e);
         }
         result
     }

@@ -296,12 +296,16 @@ pub async fn get_context_usage(
     use crate::services::agent::prompts::task_type::TaskType;
 
     // 获取当前活跃 Provider 的上下文窗口大小、模型名称和缓存类型
+    // 通过 Router 的主 Provider ID 精确查找（避免 list_providers 顺序不确定）
     let (context_window, model_name, provider_cache_type) = {
         let router = state.llm_router.read().await;
         let providers = router.list_providers();
-        let default_provider = providers.iter().find(|p| p.is_default);
+        let main_provider_id = router.default_provider_id();
+        let main_provider = main_provider_id
+            .and_then(|id| providers.iter().find(|p| p.id == id))
+            .or_else(|| providers.first());
         let cache_type = router.current_cache_type();
-        match default_provider {
+        match main_provider {
             Some(p) => (p.context_window, p.model.clone(), cache_type.to_string()),
             None => (128_000, String::new(), cache_type.to_string()),
         }
@@ -784,14 +788,14 @@ async fn run_agent(
         let cfg = tokio::task::block_in_place(|| config.blocking_lock());
         match cfg.load_llm_config() {
             Ok(llm_config) => {
-                match crate::config::llm_config::get_default_provider(&llm_config) {
+                match llm_config.providers.first() {
                     Some(provider) => {
                         let cw = provider.resolve_context_window();
-                        log::info!("从默认 Provider 解析上下文窗口: {} tokens (模型: {})", cw, provider.model);
+                        log::info!("从主 Provider 解析上下文窗口: {} tokens (模型: {})", cw, provider.model);
                         cw
                     }
                     None => {
-                        log::warn!("无默认 Provider，使用默认上下文窗口 128K");
+                        log::warn!("无可用 Provider，使用默认上下文窗口 128K");
                         128_000
                     }
                 }
@@ -904,9 +908,14 @@ async fn run_agent(
     let has_image_attachments = AttachmentService::has_image_attachments(attachments);
 
     // 获取当前 Provider 是否支持视觉（提前获取，用于数据层面处理）
+    // 通过 Router 的主 Provider ID 精确查找（避免 list_providers 顺序不确定）
     let supports_vision = if has_image_attachments {
         let providers = llm_router.list_providers();
-        providers.iter().find(|p| p.is_default)
+        let main_provider_id = llm_router.default_provider_id();
+        let main_provider = main_provider_id
+            .and_then(|id| providers.iter().find(|p| p.id == id))
+            .or_else(|| providers.first());
+        main_provider
             .map(|p| p.supports_vision)
             .unwrap_or(false)
     } else {

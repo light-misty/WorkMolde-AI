@@ -56,7 +56,7 @@ function CacheHitRateBar({ hitRate }: { hitRate: number }) {
 
 export function AgentInfoSection() {
   const { t } = useTranslation();
-  const { settings, llmProviders, activeProviderId, updateSettings, openSettings } = useSettingsStore();
+  const { settings, llmProviders, activeProviderId, preferredProviderId, updateSettings, openSettings } = useSettingsStore();
   const { contextUsage } = useWorkflowStore();
 
   // 默认收缩状态
@@ -68,7 +68,8 @@ export function AgentInfoSection() {
     { value: "editOnly", label: t('agentInfo.confirmEditOnly') },
     { value: "never", label: t('agentInfo.confirmNever') },
   ];
-  const activeProvider = llmProviders.find((p) => p.id === activeProviderId);
+  // 优先显示用户选择的首选 Provider，回退到默认 Provider，与 InputArea/TopBar 显示逻辑一致
+  const activeProvider = llmProviders.find((p) => p.id === (preferredProviderId || activeProviderId));
 
   // 计算上下文使用数据
   // 仅当后端返回了实际的上下文使用数据时才显示，新会话（无消息）不显示
@@ -239,7 +240,6 @@ export function AgentInfoSection() {
             </select>
           </div>
 
-          {/* 上下文窗口使用（合并自原 ContextWindowSection） */}
           {hasContextInfo && <div className="ai-context-divider" />}
           {contextBar}
         </div>

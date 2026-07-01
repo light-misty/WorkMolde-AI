@@ -70,7 +70,6 @@ pub const CONFIG_INVALID_VALUE: u32 = 5003;
 pub const CONFIG_IMPORT_FAILED: u32 = 5004;
 pub const CONFIG_EXPORT_FAILED: u32 = 5005;
 pub const CONFIG_PROVIDER_NOT_FOUND: u32 = 5006;
-pub const CONFIG_DEFAULT_PROVIDER_REQUIRED: u32 = 5007;
 pub const CONFIG_WORKSPACE_PATH_EXISTS: u32 = 5008;
 
 // ============================================================

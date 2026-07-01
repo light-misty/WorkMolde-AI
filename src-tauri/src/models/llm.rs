@@ -52,7 +52,6 @@ pub struct ProviderInfo {
     pub provider_type: String,
     pub api_base: String,
     pub model: String,
-    pub is_default: bool,
     pub is_available: bool,
     /// ISO 8601 格式
     pub created_at: String,

@@ -9,9 +9,8 @@ export function ProviderSelector({ dropdownUp = false }: { dropdownUp?: boolean 
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // 当前有效 Provider：优先使用用户选择，否则使用默认 Provider
+  // 当前有效 Provider：优先使用用户选择，否则取列表第一个
   const currentProvider = llmProviders.find((p) => p.id === preferredProviderId)
-    || llmProviders.find((p) => p.isDefault)
     || llmProviders[0];
 
   /* 点击外部关闭下拉框 */

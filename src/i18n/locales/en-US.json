@@ -64,7 +64,8 @@
     "noWorkspace": "No workspace",
     "addWorkspace": "Add Workspace",
     "removeWorkspace": "Remove workspace",
-    "directoryDeleted": "Directory deleted"
+    "directoryDeleted": "Directory deleted",
+    "directoryDeletedToast": "The directory of workspace \"{{name}}\" has been deleted, automatically removed"
   },
   "workflow": {
     "startNewSession": "Work with DocAgent",
@@ -329,15 +330,6 @@
       "noTools": "No Tools"
     },
     "templates": {
-      "sectionTitle": "Prompt Templates",
-      "addTemplate": "Add Template",
-      "editTemplate": "Edit Template",
-      "deleteTemplate": "Delete Template",
-      "noTemplates": "No templates",
-      "name": "Name",
-      "category": "Category",
-      "content": "Content",
-      "variables": "Variables",
       "builtin": "Built-in",
       "searchPlaceholder": "Search templates...",
       "all": "All",
@@ -347,7 +339,6 @@
       "noCustomTemplates": "No custom templates",
       "noBuiltinTemplates": "No built-in templates",
       "variableCount": "{{count}} variables",
-      "noMatch": "No matching templates",
       "use": "Use",
       "categoryDocument": "Document Generation",
       "categoryAnalysis": "Document Analysis",
@@ -453,41 +444,15 @@
     }
   },
   "history": {
-    "title": "Session History",
-    "searchPlaceholder": "Search sessions...",
-    "noSessions": "No sessions",
     "deleteSession": "Delete Session",
-    "deleteConfirm": "Are you sure you want to delete this session? This action cannot be undone.",
-    "today": "Today",
-    "yesterday": "Yesterday",
-    "thisWeek": "This Week",
-    "earlier": "Earlier",
-    "deleteConfirmTitle": "Confirm Delete Session",
-    "deleteConfirmMessage": "Are you sure you want to delete session \"{{name}}\"? This action cannot be undone.",
-    "clearAllConfirmTitle": "Confirm Clear All Session Data",
-    "clearAllConfirmMessage": "Are you sure you want to clear all session records and messages? This action cannot be undone.",
-    "clearSuccess": "All session data cleared",
-    "clearFailed": "Failed to clear session data",
-    "confirmClear": "Confirm Clear",
-    "clearAllData": "Clear all session data",
-    "closePanel": "Close history panel",
     "rename": "Rename",
     "renameSession": "Rename session"
   },
   "preview": {
-    "title": "Preview",
-    "close": "Close",
     "loading": "Loading preview...",
     "previewFailed": "Preview failed",
     "versionHistory": "Version History",
     "versionDiff": "Version Diff",
-    "rollback": "Rollback",
-    "rollbackConfirm": "Are you sure you want to rollback to this version? The current version will be replaced.",
-    "noVersions": "No version records",
-    "page": "Page",
-    "of": "/",
-    "zoomIn": "Zoom In",
-    "zoomOut": "Zoom Out",
     "fitWidth": "Fit Width",
     "fitPage": "Fit Page",
     "documentPreview": "Document Preview",
@@ -535,16 +500,7 @@
     "loadingPdf": "Loading PDF..."
   },
   "update": {
-    "newVersionAvailable": "New Version Available",
-    "version": "Version",
-    "releaseNotes": "Release Notes",
-    "downloadAndInstall": "Download and Install",
-    "downloading": "Downloading...",
-    "downloadProgress": "Download Progress",
-    "installing": "Installing...",
     "later": "Remind Later",
-    "checkFailed": "Update check failed",
-    "alreadyLatest": "Already on the latest version",
     "checking": "Checking for updates...",
     "newVersionFound": "New version available v{{version}}",
     "currentVersionLabel": "Current version: v{{version}}",
@@ -652,8 +608,7 @@
       "invalidValue": "Invalid configuration value",
       "importFailed": "Configuration import failed",
       "exportFailed": "Configuration export failed",
-      "providerNotFound": "Specified AI service configuration not found",
-      "noDefaultProvider": "Please set a default AI service first"
+      "providerNotFound": "Specified AI service configuration not found"
     },
     "fs": {
       "pathNotFound": "Path not found",
@@ -707,7 +662,10 @@
     "noSessionsInWorkspace": "No workspaces and sessions",
     "untitledWorkspace": "Other",
     "collapse": "Collapse session list",
-    "expand": "Expand session list"
+    "expand": "Expand session list",
+    "renameFailed": "Failed to rename session, please retry",
+    "deleteFailed": "Failed to delete session, please retry",
+    "deleteWorkspaceFailed": "Failed to delete workspace, please retry"
   },
   "inputArea.removeAttachment": "Remove {{name}}",
   "update.checkFailedWithError": "Update check failed: {{error}}"

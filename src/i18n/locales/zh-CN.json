@@ -64,7 +64,8 @@
     "noWorkspace": "暂无工作区",
     "addWorkspace": "添加工作区",
     "removeWorkspace": "移除工作区",
-    "directoryDeleted": "目录已删除"
+    "directoryDeleted": "目录已删除",
+    "directoryDeletedToast": "工作区 \"{{name}}\" 的目录已被删除，已自动移除"
   },
   "workflow": {
     "startNewSession": "Work with DocAgent",
@@ -329,15 +330,6 @@
       "noTools": "暂无 Tool"
     },
     "templates": {
-      "sectionTitle": "Prompt 模板",
-      "addTemplate": "添加模板",
-      "editTemplate": "编辑模板",
-      "deleteTemplate": "删除模板",
-      "noTemplates": "暂无模板",
-      "name": "名称",
-      "category": "分类",
-      "content": "内容",
-      "variables": "变量",
       "builtin": "内置",
       "searchPlaceholder": "搜索模板...",
       "all": "全部",
@@ -347,7 +339,6 @@
       "noCustomTemplates": "暂无自定义模板",
       "noBuiltinTemplates": "暂无内置模板",
       "variableCount": "{{count}} 个变量",
-      "noMatch": "无匹配模板",
       "use": "使用",
       "categoryDocument": "文档生成",
       "categoryAnalysis": "文档分析",
@@ -453,41 +444,15 @@
     }
   },
   "history": {
-    "title": "历史会话",
-    "searchPlaceholder": "搜索会话...",
-    "noSessions": "暂无历史会话",
     "deleteSession": "删除会话",
-    "deleteConfirm": "确定删除此会话？此操作不可撤销。",
-    "today": "今天",
-    "yesterday": "昨天",
-    "thisWeek": "本周",
-    "earlier": "更早",
-    "deleteConfirmTitle": "确认删除会话",
-    "deleteConfirmMessage": "确定要删除会话 \"{{name}}\" 吗？此操作无法撤销。",
-    "clearAllConfirmTitle": "确认清除所有会话数据",
-    "clearAllConfirmMessage": "确定要清除所有会话记录和消息吗？此操作不可撤销。",
-    "clearSuccess": "已清除所有会话数据",
-    "clearFailed": "清除会话数据失败",
-    "confirmClear": "确认清除",
-    "clearAllData": "清除所有会话数据",
-    "closePanel": "关闭历史面板",
     "rename": "重命名",
     "renameSession": "重命名会话"
   },
   "preview": {
-    "title": "预览",
-    "close": "关闭",
     "loading": "加载预览中...",
     "previewFailed": "预览失败",
     "versionHistory": "版本历史",
     "versionDiff": "版本差异对比",
-    "rollback": "回滚",
-    "rollbackConfirm": "确定回滚到此版本？当前版本将被替换。",
-    "noVersions": "暂无版本记录",
-    "page": "页",
-    "of": "/",
-    "zoomIn": "放大",
-    "zoomOut": "缩小",
     "fitWidth": "适合宽度",
     "fitPage": "适合页面",
     "documentPreview": "文档预览",
@@ -535,16 +500,7 @@
     "loadingPdf": "加载 PDF 中..."
   },
   "update": {
-    "newVersionAvailable": "发现新版本",
-    "version": "版本",
-    "releaseNotes": "更新说明",
-    "downloadAndInstall": "下载并安装",
-    "downloading": "下载中...",
-    "downloadProgress": "下载进度",
-    "installing": "安装中...",
     "later": "稍后提醒",
-    "checkFailed": "检查更新失败",
-    "alreadyLatest": "当前已是最新版本",
     "checking": "正在检查更新...",
     "newVersionFound": "发现新版本 v{{version}}",
     "currentVersionLabel": "当前版本: v{{version}}",
@@ -652,8 +608,7 @@
       "invalidValue": "配置值无效",
       "importFailed": "配置导入失败",
       "exportFailed": "配置导出失败",
-      "providerNotFound": "未找到指定的 AI 服务配置",
-      "noDefaultProvider": "请先设置默认 AI 服务"
+      "providerNotFound": "未找到指定的 AI 服务配置"
     },
     "fs": {
       "pathNotFound": "路径不存在",
@@ -707,7 +662,10 @@
     "noSessionsInWorkspace": "暂无工作区和会话",
     "untitledWorkspace": "其他",
     "collapse": "收起会话列表",
-    "expand": "展开会话列表"
+    "expand": "展开会话列表",
+    "renameFailed": "重命名会话失败，请重试",
+    "deleteFailed": "删除会话失败，请重试",
+    "deleteWorkspaceFailed": "删除工作区失败，请重试"
   },
   "inputArea.removeAttachment": "移除 {{name}}",
   "update.checkFailedWithError": "检查更新失败: {{error}}"

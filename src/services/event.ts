@@ -119,13 +119,6 @@ export interface SessionUpdatePayload {
   data?: unknown;
 }
 
-/** 工作区变更事件 */
-export interface WorkspaceChangePayload {
-  workspaceId: string;
-  workspaceName: string;
-  workspacePath: string;
-}
-
 /** 工作区目录被外部删除事件 */
 export interface WorkspaceDirectoryDeletedPayload {
   workspaceId: string;
@@ -284,15 +277,6 @@ export function onSessionUpdated(
   handler: (payload: SessionUpdatePayload) => void,
 ): Promise<UnlistenFn> {
   return listen<SessionUpdatePayload>("session:updated", (event) => {
-    handler(event.payload);
-  });
-}
-
-/** 监听工作区变更事件 */
-export function onWorkspaceChange(
-  handler: (payload: WorkspaceChangePayload) => void,
-): Promise<UnlistenFn> {
-  return listen<WorkspaceChangePayload>("workspace:change", (event) => {
     handler(event.payload);
   });
 }

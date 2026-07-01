@@ -264,7 +264,7 @@ export default function App() {
       // 调用 store 方法处理：移除工作区、切换活动工作区、清理后端配置
       await handleWorkspaceDirectoryDeleted(payload.workspaceId);
       // 显示 Toast 通知用户
-      useToastStore.getState().addToast("warning", `工作区 "${payload.workspaceName}" 的目录已被删除，已自动移除`);
+      useToastStore.getState().addToast("warning", t("workspace.directoryDeletedToast", { name: payload.workspaceName }));
     }).then((unlisten) => {
       unlistenFn = unlisten;
     });

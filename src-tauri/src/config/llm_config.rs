@@ -3,7 +3,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::errors::{CommandError, CONFIG_PROVIDER_NOT_FOUND, CONFIG_DEFAULT_PROVIDER_REQUIRED};
+use crate::errors::{CommandError, CONFIG_PROVIDER_NOT_FOUND};
 
 /// 内置 Provider 的固定 ID
 #[cfg(builtin_provider)]
@@ -113,8 +113,6 @@ pub struct LlmProvider {
     pub api_key_encrypted: String,
     /// 模型名称
     pub model: String,
-    /// 是否为默认 Provider
-    pub is_default: bool,
     /// 高级配置
     #[serde(default)]
     pub advanced: AdvancedConfig,
@@ -186,11 +184,6 @@ pub fn save_llm_config(data_dir: &Path, config: &LlmConfig) -> Result<(), Comman
     Ok(())
 }
 
-/// 获取默认 Provider
-pub fn get_default_provider(config: &LlmConfig) -> Option<&LlmProvider> {
-    config.providers.iter().find(|p| p.is_default)
-}
-
 /// 添加新 Provider
 pub fn add_provider(config: &mut LlmConfig, provider: LlmProvider) -> Result<(), CommandError> {
     // 检查 ID 是否重复
@@ -200,20 +193,6 @@ pub fn add_provider(config: &mut LlmConfig, provider: LlmProvider) -> Result<(),
             CONFIG_PROVIDER_NOT_FOUND,
             format!("Provider ID '{}' 已存在", provider.id),
         ));
-    }
-
-    // 如果新 Provider 设为默认，取消其他 Provider 的默认标记
-    if provider.is_default {
-        for p in &mut config.providers {
-            p.is_default = false;
-        }
-    }
-
-    // 如果是第一个 Provider，自动设为默认
-    let mut provider = provider;
-    if config.providers.is_empty() {
-        provider.is_default = true;
-        log::debug!("首个 Provider，自动设为默认: {}", provider.id);
     }
 
     config.providers.push(provider);
@@ -239,13 +218,6 @@ pub fn update_provider(
             )
         })?;
 
-    // 如果更新后设为默认，取消其他 Provider 的默认标记
-    if provider.is_default {
-        for p in &mut config.providers {
-            p.is_default = false;
-        }
-    }
-
     config.providers[index] = provider;
     log::info!("已更新 Provider: {}", id);
     Ok(())
@@ -265,39 +237,12 @@ pub fn delete_provider(config: &mut LlmConfig, id: &str) -> Result<(), CommandEr
             )
         })?;
 
-    let was_default = config.providers[index].is_default;
     config.providers.remove(index);
-
-    // 如果删除的是默认 Provider，将第一个设为默认
-    if was_default {
-        if let Some(first) = config.providers.first_mut() {
-            first.is_default = true;
-            log::debug!("已删除默认 Provider，新默认: {}", first.id);
-        }
-    }
 
     // 从回退顺序中移除
     config.fallback_order.retain(|fid| fid != id);
 
     log::info!("已删除 Provider: {}，剩余数量: {}", id, config.providers.len());
-    Ok(())
-}
-
-/// 设置默认 Provider
-pub fn set_default_provider(config: &mut LlmConfig, id: &str) -> Result<(), CommandError> {
-    let exists = config.providers.iter().any(|p| p.id == id);
-    if !exists {
-        log::warn!("设置默认 Provider 失败，不存在: {}", id);
-        return Err(CommandError::config(
-            CONFIG_DEFAULT_PROVIDER_REQUIRED,
-            format!("Provider '{}' 不存在", id),
-        ));
-    }
-
-    for p in &mut config.providers {
-        p.is_default = p.id == id;
-    }
-    log::info!("已设置默认 Provider: {}", id);
     Ok(())
 }
 
@@ -347,9 +292,6 @@ pub fn inject_builtin_provider(config: &mut LlmConfig, project_root: &Path) {
         _ => ProviderType::Custom,
     };
 
-    // 如果是第一个 Provider，自动设为默认
-    let is_default = config.providers.is_empty();
-
     let provider = LlmProvider {
         id: BUILTIN_PROVIDER_ID.to_string(),
         provider_type,
@@ -357,7 +299,6 @@ pub fn inject_builtin_provider(config: &mut LlmConfig, project_root: &Path) {
         api_base_url: builtin.api_base_url,
         api_key_encrypted: builtin.api_key,
         model: builtin.model,
-        is_default,
         advanced: AdvancedConfig {
             context_window: builtin.context_window,
             ..Default::default()
@@ -366,8 +307,8 @@ pub fn inject_builtin_provider(config: &mut LlmConfig, project_root: &Path) {
     };
 
     log::info!(
-        "注入内置 Provider: id={}, name={}, model={}, is_default={}",
-        provider.id, provider.name, provider.model, provider.is_default
+        "注入内置 Provider: id={}, name={}, model={}",
+        provider.id, provider.name, provider.model
     );
     config.providers.push(provider);
 }

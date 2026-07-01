@@ -42,12 +42,10 @@ App
 │   │   │   │   └── ErrorNode          // 错误节点
 │   │   │   └── IterationGroup         // Agent 执行轮次分组
 │   │   └── InputArea                  // 输入区域
-│   │       ├── TemplatePicker         // 模板选择器
 │   │       └── SendButton             // 发送按钮
 │   └── Sidebar                        // 右侧栏
 │       ├── FileTreeSection            // 文件树区域
 │       ├── AgentInfoSection           // Agent 信息区域
-│       └── ContextWindowSection       // Token 用量/上下文窗口
 ├── PreviewOverlay  (lazy)             // 预览覆盖层
 │   ├── MarkdownPreview                // Markdown 预览（react-markdown+remark-gfm+rehype-hilite）
 │   ├── PdfCanvasViewer                // PDF 预览（pdfjs-dist Canvas 渲染）
@@ -66,7 +64,6 @@ App
 │   ├── ShortcutsTab                   // 快捷键设置
 │   ├── GeneralTab                     // 通用设置
 │   └── HelpTab                        // 帮助信息
-├── HistoryPanel  (lazy)               // 历史会话面板
 ├── ToastContainer                     // Toast 通知容器
 ├── UpdateNotification  (lazy)         // 更新通知
 └── DeleteConfirmDialog                // 删除确认对话框

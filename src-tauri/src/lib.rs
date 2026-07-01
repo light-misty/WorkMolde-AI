@@ -406,7 +406,6 @@ pub fn run() {
             commands::llm::add_provider,
             commands::llm::update_provider,
             commands::llm::delete_provider,
-            commands::llm::set_default_provider,
             commands::llm::health_check_providers,
             commands::llm::force_recover_providers,
             commands::llm::get_network_status,

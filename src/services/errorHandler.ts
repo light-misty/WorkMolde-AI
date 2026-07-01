@@ -87,7 +87,6 @@ const ERROR_MESSAGE_MAP: Record<number, string> = {
   5004: i18n.t("errors.config.importFailed"),
   5005: i18n.t("errors.config.exportFailed"),
   5006: i18n.t("errors.config.providerNotFound"),
-  5007: i18n.t("errors.config.noDefaultProvider"),
 
   // 文件系统 (6000-6999)
   6001: i18n.t("errors.fs.pathNotFound"),

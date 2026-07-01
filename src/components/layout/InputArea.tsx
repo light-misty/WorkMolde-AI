@@ -28,6 +28,9 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
   const [isDragOver, setIsDragOver] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // 保存模板插入时的 focus/height 定时器，组件卸载时清理
+  const templateFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const templateHeightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const attachments = useAttachmentStore((s) => s.attachments);
   const addAttachment = useAttachmentStore((s) => s.addAttachment);
@@ -37,7 +40,6 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
   // 检查当前生效的 Provider 是否支持视觉：优先使用用户为当前会话选择的 Provider
   const { llmProviders, preferredProviderId } = useSettingsStore();
   const currentProvider = llmProviders.find((p) => p.id === preferredProviderId)
-    || llmProviders.find((p) => p.isDefault)
     || llmProviders[0];
   const supportsVision = currentProvider?.supportsVision ?? false;
   const showVisionWarning = hasImageAttachments(attachments) && !supportsVision;
@@ -55,6 +57,14 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
   useEffect(() => {
     textareaRef.current?.focus();
   }, [currentSessionId]);
+
+  // 组件卸载时清理模板插入相关的定时器
+  useEffect(() => {
+    return () => {
+      if (templateFocusTimerRef.current !== null) clearTimeout(templateFocusTimerRef.current);
+      if (templateHeightTimerRef.current !== null) clearTimeout(templateHeightTimerRef.current);
+    };
+  }, []);
 
   // 从设置中读取快捷键配置
   const sendMessageShortcut = useSettingsStore((s) => s.settings.shortcuts.sendMessage);
@@ -96,10 +106,10 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
   // 模板插入回调
   const handleTemplateInsert = useCallback((templateText: string) => {
     setText(templateText);
-    // 聚焦输入框
-    setTimeout(() => textareaRef.current?.focus(), 50);
-    // 调整高度
-    setTimeout(() => {
+    // 聚焦输入框（保存定时器，组件卸载时清理）
+    templateFocusTimerRef.current = setTimeout(() => textareaRef.current?.focus(), 50);
+    // 调整高度（保存定时器，组件卸载时清理）
+    templateHeightTimerRef.current = setTimeout(() => {
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
         textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 240) + "px";
@@ -668,7 +678,7 @@ function TemplateCards({ templates, onInsert, onOpenSettings }: {
   return (
     <div className="template-cards-section">
       <div className="template-cards-grid">
-        {templates.filter((t) => t.isBuiltin).slice(0, 3).map((tpl) => (
+        {templates.filter((tpl) => tpl.isBuiltin).slice(0, 3).map((tpl) => (
           <button key={tpl.id} className="template-card" onClick={() => onInsert(tpl.content)}>
             <span className="template-card-name">{tpl.name}</span>
           </button>

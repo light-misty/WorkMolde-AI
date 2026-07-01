@@ -54,6 +54,8 @@ export interface AppSettings {
   workspace: WorkspaceDefaults;
   shortcuts: Shortcuts;
   update: UpdateSettings;
+  /** 用户首选 Provider ID（持久化，跨会话保持；为空表示使用列表第一个 Provider） */
+  preferredProviderId?: string | null;
 }
 
 // ----- LLM 相关类型 -----
@@ -79,7 +81,6 @@ export interface ProviderInfo {
   providerType: LLMProviderType;
   apiBase: string;
   model: string;
-  isDefault: boolean;
   isAvailable: boolean;
   isConnected?: boolean;
   createdAt: string;

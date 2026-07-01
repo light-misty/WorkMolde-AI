@@ -77,13 +77,13 @@
 **前端 UI (100%)**：
 - TopBar + WindowControls + WorkspaceSelector
 - WorkflowTimeline + 7 种节点类型
-- InputArea + TemplatePicker
-- Sidebar（FileTree + AgentInfo + ContextWindow）
+- InputArea（内置 TemplateCards）
+- Sidebar（FileTree + AgentInfo + SessionList）
 - PreviewOverlay（Markdown/PDF/Word/Excel/PPT/Text/Diff）
 - VersionHistoryPanel（版本列表/对比/回滚）
 - SettingsDialog（8 个标签页）
-- HistoryPanel（会话列表/搜索/切换/删除）
-- 懒加载（Preview/Settings/History/UpdateNotification）
+- SessionListSection（会话列表/搜索/切换/删除）
+- 懒加载（Preview/Settings/UpdateNotification）
 - 虚拟滚动（WorkflowTimeline/FileTree）
 - ErrorBoundary + Toast 通知
 - NetworkStatusBanner（断网提示/恢复通知）

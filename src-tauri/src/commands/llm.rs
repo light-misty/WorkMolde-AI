@@ -204,7 +204,6 @@ pub async fn add_provider(
         api_base_url: config.api_base,
         api_key_encrypted: config.api_key,
         model: config.model,
-        is_default: llm_config.providers.is_empty(),
         advanced: crate::config::llm_config::AdvancedConfig {
             context_window: config.context_window,
             ..Default::default()
@@ -289,7 +288,6 @@ pub async fn update_provider(
         api_base_url: config.api_base,
         api_key_encrypted: api_key_to_save,
         model: config.model,
-        is_default: existing.is_default,
         advanced,
         supports_vision: config.supports_vision,
     };
@@ -335,34 +333,6 @@ pub async fn delete_provider(
     rebuild_router(&state, &llm_config).await;
 
     log::info!("Provider 删除成功: provider_id={}", provider_id);
-    Ok(())
-}
-
-/// 设置默认 LLM Provider 并重建路由器
-#[tauri::command]
-pub async fn set_default_provider(
-    provider_id: String,
-    state: State<'_, AppState>,
-) -> Result<(), CommandError> {
-    log::info!("设置默认 LLM Provider: provider_id={}", provider_id);
-    let cfg_manager = state.config.lock().await;
-    let mut llm_config = cfg_manager.load_llm_config().map_err(|e| {
-        log::error!("加载 LLM 配置失败: {}", e);
-        e
-    })?;
-    crate::config::llm_config::set_default_provider(&mut llm_config, &provider_id).map_err(|e| {
-        log::error!("设置默认 Provider 失败: provider_id={}, error={}", provider_id, e);
-        e
-    })?;
-    cfg_manager.save_llm_config(&llm_config).map_err(|e| {
-        log::error!("保存 LLM 配置失败: {}", e);
-        e
-    })?;
-
-    // 重建 LlmRouter
-    rebuild_router(&state, &llm_config).await;
-
-    log::info!("默认 Provider 设置成功: provider_id={}", provider_id);
     Ok(())
 }
 

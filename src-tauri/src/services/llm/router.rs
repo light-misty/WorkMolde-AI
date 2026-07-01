@@ -84,7 +84,8 @@ impl LlmRouter {
     pub fn from_config(config: &LlmConfig) -> Self {
         let mut providers: HashMap<String, Box<dyn LlmProvider>> = HashMap::new();
         let mut meta: HashMap<String, ProviderMeta> = HashMap::new();
-        let mut default_id = None;
+        // 默认 Provider 取列表第一个（用于路由回退，不再有"设为默认"操作）
+        let default_id = config.providers.first().map(|p| p.id.clone());
 
         for provider in &config.providers {
             let mut advanced = provider.advanced.clone();
@@ -148,13 +149,10 @@ impl LlmRouter {
                 supports_vision: provider.supports_vision,
             });
 
-            if provider.is_default {
-                default_id = Some(provider.id.clone());
-            }
             providers.insert(provider.id.clone(), adapter);
         }
 
-        log::info!("LLM 路由器初始化完成, 加载 {} 个 Provider, 默认 Provider: {:?}, Fallback 顺序: {:?}", providers.len(), default_id, config.fallback_order);
+        log::info!("LLM 路由器初始化完成, 加载 {} 个 Provider, 主 Provider: {:?}, Fallback 顺序: {:?}", providers.len(), default_id, config.fallback_order);
 
         Self {
             providers: RwLock::new(providers),
@@ -663,7 +661,6 @@ impl LlmRouter {
                     provider_type: m.map(|m| m.provider_type.clone()).unwrap_or_default(),
                     api_base: m.map(|m| m.api_base.clone()).unwrap_or_default(),
                     model: m.map(|m| m.model.clone()).unwrap_or_default(),
-                    is_default: self.default_id.as_ref() == Some(id),
                     is_available: self.is_provider_available(id),
                     created_at: m.map(|m| m.created_at.clone()).unwrap_or_default(),
                     is_connected: None,
@@ -681,7 +678,6 @@ impl LlmRouter {
                         provider_type: m.map(|m| m.provider_type.clone()).unwrap_or_default(),
                         api_base: m.map(|m| m.api_base.clone()).unwrap_or_default(),
                         model: m.map(|m| m.model.clone()).unwrap_or_default(),
-                        is_default: self.default_id.as_ref() == Some(id),
                         is_available: true,
                         created_at: m.map(|m| m.created_at.clone()).unwrap_or_default(),
                         is_connected: None,
@@ -700,6 +696,11 @@ impl LlmRouter {
             .and_then(|id| self.meta.get(id))
             .map(|m| m.model.clone())
             .unwrap_or_default()
+    }
+
+    /// 获取主 Provider ID（列表第一个，用于上下文窗口等查询）
+    pub fn default_provider_id(&self) -> Option<&str> {
+        self.default_id.as_deref()
     }
 
     /// 获取当前默认 Provider 的缓存类型

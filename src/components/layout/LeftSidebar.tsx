@@ -117,14 +117,25 @@ export function LeftSidebar({
   };
 
   const [fileTreeExiting, setFileTreeExiting] = useState(false);
+  // 保存文件树退出动画定时器，组件卸载时清理
+  const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleBackToSessions = () => {
     setFileTreeExiting(true);
-    setTimeout(() => {
+    // 保存定时器，组件卸载时清理，避免在已卸载组件上调用 setState
+    exitTimerRef.current = setTimeout(() => {
       setView("sessions");
       setFileTreeExiting(false);
+      exitTimerRef.current = null;
     }, 280);
   };
+
+  // 组件卸载时清理文件树退出动画定时器
+  useEffect(() => {
+    return () => {
+      if (exitTimerRef.current !== null) clearTimeout(exitTimerRef.current);
+    };
+  }, []);
 
   // 点击外部或 Escape 关闭更多下拉菜单
   useEffect(() => {

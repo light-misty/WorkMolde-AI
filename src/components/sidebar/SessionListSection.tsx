@@ -6,6 +6,7 @@ import { DeleteConfirmDialog } from "../common/DeleteConfirmDialog";
 import { Icon } from "../common/Icon";
 import { useSessionStore } from "../../stores/useSessionStore";
 import { useWorkspaceStore } from "../../stores/useWorkspaceStore";
+import { useToastStore } from "../../stores/useToastStore";
 import type { SessionSummary } from "../../types/session";
 import type { WorkspaceInfo } from "../../types/workspace";
 
@@ -57,9 +58,20 @@ export function SessionListSection({
     }
   }, [currentWorkspaceId]);
 
+  // 组件卸载时清理 focus 定时器
+  useEffect(() => {
+    return () => {
+      if (focusTimerRef.current !== null) {
+        clearTimeout(focusTimerRef.current);
+      }
+    };
+  }, []);
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
+  // 保存 focus 定时器，组件卸载时清理，避免在已卸载组件上执行回调
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmTitle, setDeleteConfirmTitle] = useState("");
@@ -128,12 +140,18 @@ export function SessionListSection({
     e.stopPropagation();
     setEditingId(session.id);
     setEditingTitle(session.title);
-    setTimeout(() => editInputRef.current?.focus(), 0);
+    // 保存定时器，组件卸载时清理
+    focusTimerRef.current = setTimeout(() => editInputRef.current?.focus(), 0);
   };
 
   const confirmRename = async () => {
     if (editingId && editingTitle.trim()) {
-      await updateSessionTitle(editingId, editingTitle.trim());
+      try {
+        await updateSessionTitle(editingId, editingTitle.trim());
+      } catch (err) {
+        console.error("[SessionListSection] 重命名会话失败:", err);
+        useToastStore.getState().addToast("error", t("sessionList.renameFailed"));
+      }
     }
     setEditingId(null);
     setEditingTitle("");
@@ -165,7 +183,14 @@ export function SessionListSection({
       ? flatSessions[currentIndex + 1]?.id || flatSessions[currentIndex - 1]?.id || null
       : null;
 
-    await deleteSession(deleteConfirmId);
+    try {
+      await deleteSession(deleteConfirmId);
+    } catch (err) {
+      console.error("[SessionListSection] 删除会话失败:", err);
+      useToastStore.getState().addToast("error", t("sessionList.deleteFailed"));
+      // 删除失败时不关闭弹窗，让用户可以重试或取消
+      return;
+    }
 
     if (isDeletingCurrent) {
       onDeleteCurrentSession(nextSessionId || null);
@@ -184,7 +209,14 @@ export function SessionListSection({
   const handleConfirmDeleteWorkspace = async () => {
     if (!deleteWorkspaceId) return;
     const { removeWorkspace } = useWorkspaceStore.getState();
-    await removeWorkspace(deleteWorkspaceId);
+    try {
+      await removeWorkspace(deleteWorkspaceId);
+    } catch (err) {
+      console.error("[SessionListSection] 删除工作区失败:", err);
+      useToastStore.getState().addToast("error", t("sessionList.deleteWorkspaceFailed"));
+      // 删除失败时不关闭弹窗，让用户可以重试或取消
+      return;
+    }
     setDeleteWorkspaceId(null);
     setDeleteWorkspaceName("");
   };

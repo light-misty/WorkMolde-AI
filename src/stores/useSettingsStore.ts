@@ -184,11 +184,17 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         tauriCmd.listHandlers(),
         tauriCmd.listTools(),
       ]);
-      const defaultProvider = providers.find((p) => p.isDefault);
+      const mainProvider = providers[0];
+      // 从持久化设置中恢复首选 Provider ID，校验是否仍存在于 Provider 列表中
+      const savedPreferredId = settings.preferredProviderId ?? null;
+      const validPreferredId = savedPreferredId && providers.some((p) => p.id === savedPreferredId)
+        ? savedPreferredId
+        : null;
       set({
         settings,
         llmProviders: providers,
-        activeProviderId: defaultProvider?.id ?? null,
+        activeProviderId: mainProvider?.id ?? null,
+        preferredProviderId: validPreferredId,
         handlers,
         tools,
       });
@@ -205,10 +211,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   loadProviders: async () => {
     try {
       const providers = await tauriCmd.listProviders();
-      const defaultProvider = providers.find((p) => p.isDefault);
+      const mainProvider = providers[0];
+      // 校验当前 preferredProviderId 是否仍有效（删除 Provider 后可能失效）
+      const currentPreferred = get().preferredProviderId;
+      const validPreferred = currentPreferred && providers.some((p) => p.id === currentPreferred)
+        ? currentPreferred
+        : null;
       set({
         llmProviders: providers,
-        activeProviderId: defaultProvider?.id ?? null,
+        activeProviderId: mainProvider?.id ?? null,
+        preferredProviderId: validPreferred,
       });
     } catch (error) {
       console.error("[SettingsStore] 加载 Provider 列表失败:", error);
@@ -245,9 +257,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     await get().loadTools();
   },
 
-  // 设置当前会话首选 Provider ID（仅内存状态，切换会话或新建会话后重置为默认）
+  // 设置首选 Provider ID（持久化到后端，跨会话保持）
   setPreferredProviderId: (id) => {
     set({ preferredProviderId: id });
+    // 异步持久化到后端，不阻塞 UI（updateSettings 内部已处理错误）
+    get().updateSettings({ preferredProviderId: id });
   },
 
   // 初始化 Provider 切换事件监听，返回取消监听函数

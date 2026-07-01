@@ -50,7 +50,6 @@ pub async fn list_workspaces(state: State<'_, AppState>) -> Result<Vec<Workspace
 pub async fn add_workspace(
     path: String,
     name: Option<String>,
-    app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<WorkspaceInfo, CommandError> {
     log::info!("add_workspace: 添加工作区, path={}", path);
@@ -86,14 +85,6 @@ pub async fn add_workspace(
     let file_count = count_files_in_dir(&dir_path).unwrap_or(0);
     log::info!("add_workspace: 工作区添加成功, name={}, id={}", display_name, entry.id);
 
-    // 发射工作区变更事件
-    let emitter = AgentEmitter::new(app_handle);
-    let _ = emitter.emit_workspace_change(types::WorkspaceChangePayload {
-        workspace_id: entry.id.clone(),
-        workspace_name: entry.name.clone(),
-        workspace_path: entry.path.clone(),
-    });
-
     Ok(WorkspaceInfo {
         id: entry.id,
         name: entry.name,
@@ -117,9 +108,6 @@ pub async fn remove_workspace(
     log::info!("remove_workspace: 移除工作区, id={}", workspace_id);
     let cfg_manager = state.config.lock().await;
     let mut ws_config = cfg_manager.load_workspaces()?;
-
-    // 在移除前获取工作区信息，用于发射事件
-    let removed_ws = ws_config.workspaces.iter().find(|w| w.id == workspace_id).cloned();
 
     cfg_manager.remove_workspace(&mut ws_config, &workspace_id)?;
     cfg_manager.save_workspaces(&ws_config)?;
@@ -154,16 +142,6 @@ pub async fn remove_workspace(
         settings.workspace.default_workspace_id = String::new();
         cfg_manager.save_app_settings(&settings)?;
         log::info!("remove_workspace: 已清除默认工作区设置（被移除的工作区是当前活动工作区）");
-    }
-
-    // 发射工作区变更事件
-    if let Some(ws) = removed_ws {
-        let emitter = AgentEmitter::new(app_handle);
-        let _ = emitter.emit_workspace_change(types::WorkspaceChangePayload {
-            workspace_id: ws.id.clone(),
-            workspace_name: ws.name.clone(),
-            workspace_path: ws.path.clone(),
-        });
     }
 
     Ok(())
