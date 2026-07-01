@@ -46,6 +46,12 @@
     "messageInputBox": "消息输入框",
     "templateCards": {
       "moreTemplates": "更多模板"
+    },
+    "configReminder": {
+      "noWorkspace": "请先配置工作区",
+      "noProvider": "请先配置模型",
+      "noWorkspaceAndProvider": "请先配置工作区和模型",
+      "configure": "去配置"
     }
   },
   "network": {

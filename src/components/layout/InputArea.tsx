@@ -8,6 +8,7 @@ import type { AttachmentMeta } from "../../types/session";
 import { useAttachmentStore, inferAttachmentType, SUPPORTED_ATTACHMENT_MIME_TYPES, MAX_IMAGE_SIZE, MAX_TEXT_SIZE, MAX_DOCUMENT_SIZE, MAX_ATTACHMENT_COUNT, hasImageAttachments } from "../../stores/useAttachmentStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useSessionStore } from "../../stores/useSessionStore";
+import { useWorkspaceStore } from "../../stores/useWorkspaceStore";
 import { formatSize, matchesShortcut } from "../../utils/format";
 import type { PromptTemplate } from "../../types";
 
@@ -41,6 +42,11 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
   const supportsVision = currentProvider?.supportsVision ?? false;
   const showVisionWarning = hasImageAttachments(attachments) && !supportsVision;
 
+  const { currentWorkspaceId, workspaces } = useWorkspaceStore();
+  const hasWorkspace = workspaces.length > 0 && currentWorkspaceId !== null;
+  const hasProvider = llmProviders.length > 0;
+  const configReady = !centered || (hasWorkspace && hasProvider);
+
   const currentSessionId = useSessionStore((s) => s.currentSessionId);
   // 自动聚焦：初始挂载 + 会话切换时
   useEffect(() => {
@@ -60,14 +66,14 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
-    if ((!trimmed && attachments.length === 0) || disabled) return;
+    if ((!trimmed && attachments.length === 0) || disabled || !configReady) return;
     onSend(trimmed || t('inputArea.attachment'));
     setText("");
     clearAttachments();
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [text, disabled, onSend, attachments.length, clearAttachments]);
+  }, [text, disabled, onSend, attachments.length, clearAttachments, configReady]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -221,6 +227,14 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
 
   const hasContent = text.trim().length > 0 || attachments.length > 0;
 
+  const configTip = centered && !configReady
+    ? (!hasWorkspace && !hasProvider
+        ? t('inputArea.configReminder.noWorkspaceAndProvider')
+        : !hasWorkspace
+          ? t('inputArea.configReminder.noWorkspace')
+          : t('inputArea.configReminder.noProvider'))
+    : "";
+
   return (
     <div className={`input-area-wrapper ${centered ? "input-area-wrapper-centered" : ""}`} role="form" aria-label={t('inputArea.messageInput')}>
       <div className="input-container-wrapper" style={{ position: "relative" }}>
@@ -309,12 +323,12 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
                   </button>
                 ) : (
                   <button
-                    className={`send-btn ${hasContent && !disabled ? "send-btn-active" : ""}`}
-                    title={t('inputArea.send')}
+                    className={`send-btn ${hasContent && !disabled && configReady ? "send-btn-active" : ""}`}
+                    title={configTip || t('inputArea.send')}
                     aria-label={t('inputArea.sendMessage')}
-                    aria-disabled={disabled || !hasContent}
+                    aria-disabled={disabled || !hasContent || !configReady}
                     onClick={handleSend}
-                    disabled={disabled || !hasContent}
+                    disabled={disabled || !hasContent || !configReady}
                   >
                     <Icon name="send" />
                   </button>

@@ -46,6 +46,12 @@
     "messageInputBox": "Message Input Box",
     "templateCards": {
       "moreTemplates": "More Templates"
+    },
+    "configReminder": {
+      "noWorkspace": "Please configure a workspace first",
+      "noProvider": "Please configure a model first",
+      "noWorkspaceAndProvider": "Please configure workspace and model first",
+      "configure": "Configure"
     }
   },
   "network": {
