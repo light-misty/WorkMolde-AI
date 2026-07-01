@@ -436,7 +436,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
           box-shadow: var(--shadow-xs);
         }
         .input-container:focus-within {
-          border-color: color-mix(in srgb, var(--color-border-strong), black 20%);
+          border-color: color-mix(in srgb, var(--color-border-strong), black 10%);
         }
         .input-container.has-content {
           border-color: var(--color-accent);
