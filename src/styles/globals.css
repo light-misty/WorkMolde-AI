@@ -493,16 +493,6 @@
   padding-left: 28px;
 }
 
-.workflow-timeline::before {
-  content: '';
-  position: absolute;
-  left: 11px;
-  top: 8px;
-  bottom: 8px;
-  width: 1.5px;
-  background: var(--color-border);
-}
-
 .wf-node {
   position: relative;
   margin-bottom: 12px;
@@ -510,21 +500,6 @@
   display: flex;
   align-items: flex-start;
   gap: 0;
-}
-
-.wf-node-dot {
-  position: absolute;
-  left: -28px;
-  top: 6px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2;
-  font-size: 10px;
-  flex-shrink: 0;
 }
 
 .wf-node-card {
@@ -635,16 +610,6 @@
   animation: blink 1s step-end infinite;
 }
 
-.wf-content-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--color-text-quaternary);
-  flex-shrink: 0;
-  margin-top: 8px;
-  margin-right: 8px;
-}
-
 .wf-content-text-wrapper {
   display: flex;
   align-items: baseline;
@@ -705,32 +670,6 @@
 .wf-tool-error {
   color: var(--color-error);
   font-size: 12px;
-}
-
-/* 工具执行中状态 - 圆点背景色 */
-.wf-tool-dot-running {
-  background: var(--color-accent-light, rgba(59, 130, 246, 0.12));
-  color: var(--color-accent, #3b82f6);
-}
-
-/* 工具执行中状态 - 旋转加载图标 */
-.wf-tool-spinner {
-  width: 12px;
-  height: 12px;
-  animation: wf-tool-spin 1s linear infinite;
-}
-
-.wf-tool-spinner-track {
-  opacity: 0.25;
-}
-
-.wf-tool-spinner-arc {
-  opacity: 0.75;
-}
-
-@keyframes wf-tool-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
 }
 
 /* 工具执行中状态 - 提示文字 */

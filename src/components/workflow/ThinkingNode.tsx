@@ -21,10 +21,6 @@ export function ThinkingNode({ node }: ThinkingNodeProps) {
 
   return (
     <div className="wf-node animate-node-in">
-      <div className="wf-node-dot" style={{ background: "var(--color-purple-light)", color: "var(--color-purple)" }}>
-        <Icon name="thinking" size={12} />
-      </div>
-
       <div className="wf-thinking-block">
         <div
           className="wf-thinking-toggle"

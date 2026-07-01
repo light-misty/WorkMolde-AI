@@ -12,7 +12,6 @@ export function ContentNode({ node }: ContentNodeProps) {
 
   return (
     <div className="wf-node animate-node-in">
-      <div className="wf-content-dot" />
       <div className="wf-content-text-wrapper">
         <MarkdownPreview
           content={data.content}
@@ -20,14 +19,6 @@ export function ContentNode({ node }: ContentNodeProps) {
         />
       </div>
       <style>{`
-        .wf-content-dot {
-          width: 6px;
-          height: 6px;
-          border-radius: 50%;
-          background: var(--color-text-quaternary);
-          flex-shrink: 0;
-          margin-top: 7px;
-        }
         .wf-content-text-wrapper {
           min-width: 0;
           flex: 1;

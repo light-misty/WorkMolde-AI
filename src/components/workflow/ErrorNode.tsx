@@ -14,10 +14,6 @@ export function ErrorNode({ node, onRetry }: ErrorNodeProps) {
 
   return (
     <div className="wf-node animate-node-in">
-      <div className="wf-node-dot bg-error-light text-error">
-        <Icon name="error" size={12} />
-      </div>
-
       <div className="wf-error-flat">
         <div className="wf-error-message">{data.message}</div>
         <details className="wf-error-details">

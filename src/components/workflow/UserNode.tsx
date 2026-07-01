@@ -12,9 +12,6 @@ export function UserNode({ node }: UserNodeProps) {
 
   return (
     <div className="wf-node animate-node-in">
-      <div className="wf-node-dot bg-accent-light text-accent">
-        <Icon name="user" size={12} />
-      </div>
       <div className="wf-node-card">
         <div className="wf-node-body">
           <div className="wf-user-text">{data.content}</div>

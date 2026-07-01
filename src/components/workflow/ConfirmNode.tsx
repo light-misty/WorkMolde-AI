@@ -27,10 +27,6 @@ export function ConfirmNode({ node }: ConfirmNodeProps) {
 
   return (
     <div className="wf-node animate-node-in">
-      <div className="wf-node-dot bg-warning-light text-warning">
-        <Icon name="warning" size={12} />
-      </div>
-
       <div className="wf-confirm-flat">
         <div className="wf-confirm-title">
           <Icon name="warning" size={14} />
