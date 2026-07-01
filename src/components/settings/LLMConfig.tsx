@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from 'react-i18next';
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { ProviderFormDialog } from "./ProviderFormDialog";
+import { DeleteConfirmDialog } from "../common/DeleteConfirmDialog";
 import type { ProviderInfo } from "../../types";
 import * as tauriCmd from "../../services/tauri";
 
@@ -10,8 +11,7 @@ export function LLMConfigTab() {
   const { llmProviders, loadProviders } = useSettingsStore();
   const [dialogMode, setDialogMode] = useState<"add" | "edit" | null>(null);
   const [editingProvider, setEditingProvider] = useState<ProviderInfo | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ProviderInfo | null>(null);
   // 正在测试连接的 provider ID，用于显示加载动画
   const [testingId, setTestingId] = useState<string | null>(null);
 
@@ -41,14 +41,15 @@ export function LLMConfigTab() {
     }
   };
 
-  const handleDelete = async (providerId: string) => {
-    setDeleteError(null);
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await tauriCmd.deleteProvider(providerId);
-      setDeletingId(null);
+      await tauriCmd.deleteProvider(deleteTarget.id);
+      setDeleteTarget(null);
       await loadProviders();
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : String(err));
+      setDeleteTarget(null);
+      alert(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -99,7 +100,7 @@ export function LLMConfigTab() {
                 </button>
                 <button
                   className="action-btn action-btn-danger"
-                  onClick={() => { setDeletingId(p.id); setDeleteError(null); }}
+                  onClick={() => setDeleteTarget(p)}
                 >
                   {t('settings.llm.delete')}
                 </button>
@@ -115,22 +116,19 @@ export function LLMConfigTab() {
               </span>
             </div>
 
-            {deletingId === p.id && (
-              <div className="confirm-bar">
-                <div className="confirm-bar-text">{t('settings.llm.confirmDelete')}</div>
-                {deleteError && (
-                  <div className="error-text">{deleteError}</div>
-                )}
-                <div className="confirm-bar-actions">
-                  <button className="confirm-btn confirm-btn-danger" onClick={() => handleDelete(p.id)}>{t('settings.llm.confirmDeleteBtn')}</button>
-                  <button className="confirm-btn confirm-btn-ghost" onClick={() => { setDeletingId(null); setDeleteError(null); }}>{t('settings.llm.cancel')}</button>
-                </div>
-              </div>
-            )}
           </div>
         ))}
 
       </div>
+
+      {deleteTarget && (
+        <DeleteConfirmDialog
+          name={deleteTarget.name}
+          isDir={false}
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
 
       {dialogMode && (
         <ProviderFormDialog
@@ -269,49 +267,6 @@ export function LLMConfigTab() {
         .status-unavailable {
           background: var(--color-error-light);
           color: var(--color-error);
-        }
-        .confirm-bar {
-          margin-top: 12px;
-          padding-top: 12px;
-          border-top: 1px solid var(--color-border-light);
-        }
-        .confirm-bar-text {
-          font-size: 12px;
-          color: var(--color-text-secondary);
-          margin-bottom: 8px;
-        }
-        .error-text {
-          font-size: 11px;
-          color: var(--color-error);
-          margin-bottom: 8px;
-        }
-        .confirm-bar-actions {
-          display: flex;
-          gap: 8px;
-        }
-        .confirm-btn {
-          padding: 4px 12px;
-          border-radius: var(--radius-xs);
-          font-size: 11px;
-          font-weight: 500;
-          border: none;
-          cursor: pointer;
-          transition: all 0.15s;
-        }
-        .confirm-btn-danger {
-          background: var(--color-error);
-          color: white;
-        }
-        .confirm-btn-danger:hover {
-          background: var(--color-error);
-          filter: brightness(0.9);
-        }
-        .confirm-btn-ghost {
-          background: var(--color-bg-sub);
-          color: var(--color-text-secondary);
-        }
-        .confirm-btn-ghost:hover {
-          background: var(--color-bg-hover);
         }
         .add-btn {
           display: inline-flex;

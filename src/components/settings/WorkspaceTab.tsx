@@ -2,25 +2,27 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useWorkspaceStore } from "../../stores/useWorkspaceStore";
 import { AddWorkspaceDialog } from "./AddWorkspaceDialog";
+import { DeleteConfirmDialog } from "../common/DeleteConfirmDialog";
+import type { WorkspaceInfo } from "../../types/workspace";
 
 export function WorkspaceTab() {
   const { t } = useTranslation();
   const { workspaces, currentWorkspaceId, switchWorkspace, removeWorkspace } = useWorkspaceStore();
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [removingId, setRemovingId] = useState<string | null>(null);
-  const [removeError, setRemoveError] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<WorkspaceInfo | null>(null);
 
   const handleSwitch = async (id: string) => {
     await switchWorkspace(id);
   };
 
-  const handleRemove = async (id: string) => {
-    setRemoveError(null);
+  const handleRemove = async () => {
+    if (!removeTarget) return;
     try {
-      await removeWorkspace(id);
-      setRemovingId(null);
+      await removeWorkspace(removeTarget.id);
+      setRemoveTarget(null);
     } catch (err) {
-      setRemoveError(err instanceof Error ? err.message : String(err));
+      setRemoveTarget(null);
+      alert(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -60,7 +62,7 @@ export function WorkspaceTab() {
             <div className="workspace-actions">
               <button
                 className="action-btn action-btn-danger"
-                onClick={() => { setRemovingId(ws.id); setRemoveError(null); }}
+                onClick={() => setRemoveTarget(ws)}
               >
                 {t('settings.workspace.remove')}
               </button>
@@ -71,22 +73,18 @@ export function WorkspaceTab() {
             <span className="info-sep">|</span>
             <span className="workspace-date">{t('settings.workspace.createdAt')} {new Date(ws.createdAt).toLocaleDateString("zh-CN")}</span>
           </div>
-
-          {removingId === ws.id && (
-            <div className="confirm-bar">
-              <div className="confirm-bar-text">{t('workspace.confirmRemove')}</div>
-              {removeError && (
-                <div className="error-text">{removeError}</div>
-              )}
-              <div className="confirm-bar-actions">
-                <button className="confirm-btn confirm-btn-danger" onClick={() => handleRemove(ws.id)}>{t('workspace.confirmRemoveBtn')}</button>
-                <button className="confirm-btn confirm-btn-ghost" onClick={() => { setRemovingId(null); setRemoveError(null); }}>{t('common.cancel')}</button>
-              </div>
-            </div>
-          )}
         </div>
       ))}
 
+
+      {removeTarget && (
+        <DeleteConfirmDialog
+          name={removeTarget.name}
+          isDir={true}
+          onConfirm={handleRemove}
+          onCancel={() => setRemoveTarget(null)}
+        />
+      )}
 
       {showAddDialog && (
         <AddWorkspaceDialog
@@ -158,6 +156,7 @@ export function WorkspaceTab() {
           display: flex;
           gap: 4px;
           flex-shrink: 0;
+          opacity: 1;
         }
         .action-btn {
           padding: 3px 8px;
@@ -195,49 +194,6 @@ export function WorkspaceTab() {
         }
         .workspace-date {
           color: var(--color-text-quaternary);
-        }
-        .confirm-bar {
-          margin-top: 12px;
-          padding-top: 12px;
-          border-top: 1px solid var(--color-border-light);
-        }
-        .confirm-bar-text {
-          font-size: 12px;
-          color: var(--color-text-secondary);
-          margin-bottom: 8px;
-        }
-        .error-text {
-          font-size: 11px;
-          color: var(--color-error);
-          margin-bottom: 8px;
-        }
-        .confirm-bar-actions {
-          display: flex;
-          gap: 8px;
-        }
-        .confirm-btn {
-          padding: 4px 12px;
-          border-radius: var(--radius-xs);
-          font-size: 11px;
-          font-weight: 500;
-          border: none;
-          cursor: pointer;
-          transition: all 0.15s;
-        }
-        .confirm-btn-danger {
-          background: var(--color-error);
-          color: white;
-        }
-        .confirm-btn-danger:hover {
-          background: var(--color-error);
-          filter: brightness(0.9);
-        }
-        .confirm-btn-ghost {
-          background: var(--color-bg-sub);
-          color: var(--color-text-secondary);
-        }
-        .confirm-btn-ghost:hover {
-          background: var(--color-bg-hover);
         }
         .add-btn {
           display: inline-flex;

@@ -62,9 +62,6 @@
   "workspace": {
     "selectWorkspace": "Select workspace",
     "noWorkspace": "No workspace",
-    "confirmRemove": "Are you sure you want to remove this workspace? All session history in this workspace will be permanently deleted. (Local files will not be deleted)",
-    "confirmRemoveBtn": "Confirm Remove",
-    "cancel": "Cancel",
     "addWorkspace": "Add Workspace",
     "removeWorkspace": "Remove workspace",
     "directoryDeleted": "Directory deleted"
@@ -241,9 +238,6 @@
       "delete": "Delete",
       "available": "Available",
       "unavailable": "Unavailable",
-      "confirmDelete": "Are you sure you want to delete this provider?",
-      "confirmDeleteBtn": "Confirm Delete",
-      "cancel": "Cancel",
       "connectionSuccess": "Connection successful! Latency: {{latency}}ms",
       "connectionSuccessWithModel": "Connection successful! Latency: {{latency}}ms\nModel: {{model}}",
       "connectionFailed": "Connection failed: {{error}}",

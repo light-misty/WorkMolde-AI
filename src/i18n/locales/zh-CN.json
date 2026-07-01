@@ -62,9 +62,6 @@
   "workspace": {
     "selectWorkspace": "选择工作区",
     "noWorkspace": "暂无工作区",
-    "confirmRemove": "确定移除此工作区？该工作区下的所有会话历史将被永久删除（不会删除本地文件）",
-    "confirmRemoveBtn": "确认移除",
-    "cancel": "取消",
     "addWorkspace": "添加工作区",
     "removeWorkspace": "移除工作区",
     "directoryDeleted": "目录已删除"
@@ -241,9 +238,6 @@
       "delete": "删除",
       "available": "可用",
       "unavailable": "不可用",
-      "confirmDelete": "确定要删除此服务商吗？",
-      "confirmDeleteBtn": "确认删除",
-      "cancel": "取消",
       "connectionSuccess": "连接成功！延迟: {{latency}}ms",
       "connectionSuccessWithModel": "连接成功！延迟: {{latency}}ms\n模型: {{model}}",
       "connectionFailed": "连接失败: {{error}}",
