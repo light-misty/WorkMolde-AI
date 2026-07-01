@@ -64,16 +64,9 @@
     "directoryDeleted": "Directory deleted"
   },
   "workflow": {
-    "selectWorkspaceTitle": "Select Workspace",
-    "selectWorkspaceDesc": "Please select a folder as your workspace first. Agent will operate on documents in that directory.",
-    "addWorkspace": "Add Workspace",
-    "configureProviderTitle": "Configure Provider",
-    "configureProviderDesc": "Please configure an LLM provider first. Agent needs an LLM to understand and process your instructions.",
-    "addProvider": "Add Provider",
     "startNewSession": "Work with DocAgent",
-    "startSessionDesc": "Enter instructions, Agent will help you process documents.",
-    "timeline": "Workflow Timeline",
-    "emptySession": "Empty Session"
+    "emptySession": "Empty Session",
+    "timeline": "Workflow Timeline"
   },
   "provider": {
     "selectModel": "Select Model",

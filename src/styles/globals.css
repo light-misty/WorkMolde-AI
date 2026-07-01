@@ -318,18 +318,6 @@
   padding: 32px 24px;
   animation: fadeIn 0.4s ease;
 }
-.wf-empty-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 16px;
-  background: var(--color-accent-bg);
-  border: 1px solid var(--color-accent-light);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-accent);
-  margin-bottom: 4px;
-}
 .wf-empty-title {
   font-size: 16px;
   font-weight: 600;
@@ -350,103 +338,6 @@
 .wf-empty-book-icon {
   color: var(--color-text-primary);
   flex-shrink: 0;
-}
-.wf-empty-desc {
-  font-size: 14px;
-  color: var(--color-text-tertiary);
-  max-width: 360px;
-  text-align: center;
-  line-height: 1.6;
-}
-.wf-empty-quick {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
-  justify-content: center;
-  max-width: 360px;
-}
-.wf-empty-quick-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: var(--radius-md);
-  background: var(--color-bg-sub);
-  border: 1px solid var(--color-border-light);
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  transition: all 0.2s;
-  cursor: default;
-}
-.wf-empty-quick-item:hover {
-  border-color: var(--color-accent-light);
-  background: var(--color-accent-bg);
-  color: var(--color-accent);
-}
-.wf-empty-guide {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-.wf-empty-guide-icon {
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
-  background: var(--color-accent-bg);
-  border: 1px solid var(--color-accent-light);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-accent);
-}
-.wf-empty-guide-icon-secondary {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: var(--color-bg-hover);
-  border-color: var(--color-border-light);
-  color: var(--color-text-tertiary);
-}
-.wf-empty-divider {
-  width: 360px;
-  height: 1px;
-  background: var(--color-border-light);
-  margin: 8px 0;
-}
-.wf-empty-guide-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 20px;
-  border-radius: var(--radius-md);
-  background: var(--color-accent);
-  color: white;
-  font-size: 13px;
-  font-weight: 500;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s;
-  margin-top: 4px;
-}
-.wf-empty-guide-btn:hover {
-  background: var(--color-accent-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
-}
-.wf-empty-guide-btn:active {
-  transform: translateY(0);
-}
-.wf-empty-guide-btn-secondary {
-  background: var(--color-bg-hover);
-  color: var(--color-text-secondary);
-  border: 1px solid var(--color-border-light);
-}
-.wf-empty-guide-btn-secondary:hover {
-  background: var(--color-accent-bg);
-  color: var(--color-accent);
-  border-color: var(--color-accent-light);
 }
 
 /* ===== 暗色模式 ===== */

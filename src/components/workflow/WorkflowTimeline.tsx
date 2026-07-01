@@ -1,11 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { useTranslation } from 'react-i18next';
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useWorkflowStore } from "../../stores/useWorkflowStore";
-import { useWorkspaceStore } from "../../stores/useWorkspaceStore";
-import { useSettingsStore } from "../../stores/useSettingsStore";
 import { Icon } from "../common/Icon";
-import { AddWorkspaceDialog } from "../settings/AddWorkspaceDialog";
 import { WorkflowNodeRenderer } from "./WorkflowNode";
 
 interface WorkflowTimelineProps {
@@ -21,10 +18,6 @@ interface WorkflowTimelineProps {
 export function WorkflowTimeline({ onRetryError }: WorkflowTimelineProps) {
   const { t } = useTranslation();
   const { nodes } = useWorkflowStore();
-  const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
-  const llmProviders = useSettingsStore((s) => s.llmProviders);
-  const openSettings = useSettingsStore((s) => s.openSettings);
-  const [showAddWorkspace, setShowAddWorkspace] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   // 追踪是否应自动滚动（用户未手动上滚时自动跟随）
   const autoScrollRef = useRef(true);
@@ -111,73 +104,13 @@ export function WorkflowTimeline({ onRetryError }: WorkflowTimelineProps) {
     return () => cancelAnimationFrame(rafIdRef.current);
   }, [nodes.length, streamingContentKey, virtualizer]);
 
-  // 空状态：根据工作区和服务商配置情况展示引导提示
-  const hasWorkspace = !!currentWorkspaceId;
-  const hasProvider = llmProviders.length > 0;
-
   if (nodes.length === 0) {
     return (
       <div className="wf-empty" role="status" aria-label={t('workflow.emptySession')}>
-        {/* 无工作区时的引导 */}
-        {!hasWorkspace && (
-          <div className="wf-empty-guide">
-            <div className="wf-empty-guide-icon">
-              <Icon name="folder" size={28} />
-            </div>
-            <h3 className="wf-empty-title">{t('workflow.selectWorkspaceTitle')}</h3>
-            <p className="wf-empty-desc">
-              {t('workflow.selectWorkspaceDesc')}
-            </p>
-            <button
-              className="wf-empty-guide-btn"
-              onClick={() => setShowAddWorkspace(true)}
-            >
-              <Icon name="folder-plus" size={16} />
-              <span>{t('workflow.addWorkspace')}</span>
-            </button>
-          </div>
-        )}
-
-        {/* 两个引导区域之间的分割线 */}
-        {!hasWorkspace && !hasProvider && (
-          <div className="wf-empty-divider" />
-        )}
-
-        {/* 无服务商时的引导 */}
-        {!hasProvider && (
-          <div className="wf-empty-guide">
-            <div className="wf-empty-guide-icon wf-empty-guide-icon-secondary">
-              <Icon name="settings" size={28} />
-            </div>
-            <h3 className="wf-empty-title">{t('workflow.configureProviderTitle')}</h3>
-            <p className="wf-empty-desc">
-              {t('workflow.configureProviderDesc')}
-            </p>
-            <button
-              className="wf-empty-guide-btn wf-empty-guide-btn-secondary"
-              onClick={() => openSettings("llm")}
-            >
-              <Icon name="plus" size={16} />
-              <span>{t('workflow.addProvider')}</span>
-            </button>
-          </div>
-        )}
-
-        {/* 工作区和服务商均已就绪，显示默认开始提示 */}
-        {hasWorkspace && hasProvider && (
-          <h3 className="wf-empty-title wf-empty-main-title wf-empty-main-title-with-icon">
-            <Icon name="book" size={42} className="wf-empty-book-icon" />
-            {t('workflow.startNewSession')}
-          </h3>
-        )}
-
-        {/* 添加工作区弹窗 */}
-        {showAddWorkspace && (
-          <AddWorkspaceDialog
-            onClose={() => setShowAddWorkspace(false)}
-            onSaved={() => setShowAddWorkspace(false)}
-          />
-        )}
+        <h3 className="wf-empty-title wf-empty-main-title wf-empty-main-title-with-icon">
+          <Icon name="book" size={42} className="wf-empty-book-icon" />
+          {t('workflow.startNewSession')}
+        </h3>
       </div>
     );
   }

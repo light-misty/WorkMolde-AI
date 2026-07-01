@@ -47,10 +47,7 @@ export function ProviderSelector() {
     setOpen(false);
   };
 
-  // 无 Provider 时不渲染选择器
-  if (llmProviders.length === 0) {
-    return null;
-  }
+  const noProvider = llmProviders.length === 0;
 
   return (
     <div ref={containerRef} className="provider-selector-container">
@@ -59,14 +56,29 @@ export function ProviderSelector() {
         aria-label={t('provider.selectModel')}
         tabIndex={0}
         className={`provider-selector-trigger ${open ? "provider-selector-trigger-active" : ""}`}
-        onClick={() => setOpen((prev) => !prev)}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen((prev) => !prev); } }}
+        onClick={() => {
+          if (noProvider) {
+            openSettings("llm");
+          } else {
+            setOpen((prev) => !prev);
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            if (noProvider) {
+              openSettings("llm");
+            } else {
+              setOpen((prev) => !prev);
+            }
+          }
+        }}
       >
-        <span className="provider-selector-label">{currentProvider?.name ?? t('provider.selectModel')}</span>
-        <Icon name={open ? "chevron-up" : "chevron-down"} size={14} />
+        <span className="provider-selector-label">{currentProvider?.name ?? t('provider.configureModel')}</span>
+        <Icon name={noProvider ? "settings" : (open ? "chevron-up" : "chevron-down")} size={14} />
       </div>
 
-      {open && (
+      {open && !noProvider && (
         <div className="provider-selector-dropdown">
           <div className="provider-selector-list">
             {llmProviders.map((provider) => (

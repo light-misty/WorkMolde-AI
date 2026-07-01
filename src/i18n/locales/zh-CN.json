@@ -64,16 +64,9 @@
     "directoryDeleted": "目录已删除"
   },
   "workflow": {
-    "selectWorkspaceTitle": "选择工作区",
-    "selectWorkspaceDesc": "请先选择一个文件夹作为工作区，Agent 将在该目录下操作文档",
-    "addWorkspace": "添加工作区",
-    "configureProviderTitle": "配置服务商",
-    "configureProviderDesc": "请先配置大模型服务商，Agent 需要通过大模型来理解和处理你的指令",
-    "addProvider": "添加服务商",
     "startNewSession": "Work with DocAgent",
-    "startSessionDesc": "输入指令，Agent 将协助你处理文档",
-    "timeline": "工作流时间线",
-    "emptySession": "空会话"
+    "emptySession": "空会话",
+    "timeline": "工作流时间线"
   },
   "provider": {
     "selectModel": "选择模型",
