@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useState, useRef, useCallback, useEffect, type KeyboardEvent, type DragEvent, type ClipboardEvent } from "react";
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, type KeyboardEvent, type DragEvent, type ClipboardEvent } from "react";
 import { Icon } from "../common/Icon";
 import { ProviderSelector } from "../common/ProviderSelector";
 import { WorkspaceSelector } from "./WorkspaceSelector";
@@ -80,9 +80,6 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
     onSend(trimmed || t('inputArea.attachment'));
     setText("");
     clearAttachments();
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-    }
   }, [text, disabled, onSend, attachments.length, clearAttachments, configReady]);
 
   const handleKeyDown = useCallback(
@@ -96,12 +93,25 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
     [handleSend, sendMessageShortcut]
   );
 
-  const handleInput = useCallback(() => {
+  // 输入框最大高度
+  const MAX_TEXTAREA_HEIGHT = 240;
+
+  // 自动调整高度的核心函数
+  const adjustTextareaHeight = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 240) + "px";
+    el.style.height = Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT) + "px";
   }, []);
+
+  // 每次 text 更新后（React 提交 DOM 后）重新调整高度，确保高度始终正确
+  useLayoutEffect(() => {
+    adjustTextareaHeight();
+  }, [text, adjustTextareaHeight]);
+
+  const handleInput = useCallback(() => {
+    adjustTextareaHeight();
+  }, [adjustTextareaHeight]);
 
   // 模板插入回调
   const handleTemplateInsert = useCallback((templateText: string) => {
@@ -109,12 +119,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
     // 聚焦输入框（保存定时器，组件卸载时清理）
     templateFocusTimerRef.current = setTimeout(() => textareaRef.current?.focus(), 50);
     // 调整高度（保存定时器，组件卸载时清理）
-    templateHeightTimerRef.current = setTimeout(() => {
-      if (textareaRef.current) {
-        textareaRef.current.style.height = "auto";
-        textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 240) + "px";
-      }
-    }, 60);
+    templateHeightTimerRef.current = setTimeout(adjustTextareaHeight, 60);
   }, []);
 
   // 监听来自设置的待插入模板文本（由 TemplatesTab 的"使用"按钮触发）
@@ -493,8 +498,8 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
           background: var(--color-accent-light);
         }
         .input-textarea {
-          flex: 1;
           resize: none;
+          box-sizing: border-box;
           min-height: 30px;
           max-height: 240px;
           line-height: 1.5;
@@ -502,12 +507,28 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
           padding: 2px 0 2px 4px;
           outline: none;
           align-self: stretch;
+          overflow-y: auto;
+          scrollbar-width: thin;
+          scrollbar-color: var(--color-border-strong) transparent;
         }
         .input-textarea:focus-visible {
           outline: none;
         }
         .input-textarea::placeholder {
           color: var(--color-text-quaternary);
+        }
+        .input-textarea::-webkit-scrollbar {
+          width: 4px;
+        }
+        .input-textarea::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .input-textarea::-webkit-scrollbar-thumb {
+          background: var(--color-border-strong);
+          border-radius: 2px;
+        }
+        .input-textarea::-webkit-scrollbar-thumb:hover {
+          background: var(--color-text-quaternary);
         }
         .input-actions-right {
           display: flex;
