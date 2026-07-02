@@ -186,8 +186,24 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   loadFromMessages: (messages) => {
     nodeCounter = 0;
     const nodes: WorkflowNode[] = [];
-    // 追踪当前迭代轮次：每条 assistant 消息代表一次迭代
     let iterationCounter = 0;
+
+    // 第一遍：收集 tool 消息的执行结果，按 callId 索引
+    // tc.result 为实际值表示成功（JSON 解析成功）；为 null 时结合 msg.content 判断
+    const toolResultMap = new Map<string, { success: boolean; error?: string }>();
+    for (const msg of messages) {
+      if (msg.role === "tool" && msg.toolCalls) {
+        for (const tc of msg.toolCalls) {
+          if (tc.id) {
+            const failed = tc.result == null && msg.content.startsWith("错误:");
+            toolResultMap.set(tc.id, {
+              success: !failed,
+              error: failed ? msg.content : undefined,
+            });
+          }
+        }
+      }
+    }
 
     for (const msg of messages) {
       const msgTimestamp = new Date(msg.createdAt).getTime();
@@ -239,17 +255,19 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         }
         if (msg.toolCalls && msg.toolCalls.length > 0) {
           for (const tc of msg.toolCalls) {
+            const { success, error } = toolResultMap.get(tc.id) ?? { success: true };
             nodes.push({
               id: `node_${++nodeCounter}`,
               type: "tool",
-              status: "completed",
+              status: success ? "completed" as NodeStatus : "failed" as NodeStatus,
               timestamp: msgTimestamp,
               data: {
                 toolName: tc.name,
                 briefDescription: generateToolBrief(tc.name, (tc.arguments ?? {}) as Record<string, unknown>),
                 input: (tc.arguments ?? {}) as Record<string, unknown>,
                 callId: tc.id,
-                success: true,
+                success,
+                ...(error ? { error } : {}),
               },
               isExpanded: true,
               iteration: currentIteration,

@@ -57,8 +57,9 @@ export function ToolNode({ node }: ToolNodeProps) {
     if (prevIsCodeStreamingRef.current === true && !data.isCodeStreaming) {
       setCodeExpanded(false);
     }
-    // 当代码流式输出开始时，重置自动滚动状态
+    // 当代码流式输出开始时，展开代码预览并重置自动滚动
     if (data.isCodeStreaming && prevIsCodeStreamingRef.current !== true) {
+      setCodeExpanded(true);
       codeAutoScrollRef.current = true;
     }
     prevIsCodeStreamingRef.current = data.isCodeStreaming;
@@ -92,12 +93,15 @@ export function ToolNode({ node }: ToolNodeProps) {
     }
   }, [codeContent, isCodeStreaming]);
 
-  // 代码解释器错误：截断显示，可展开
+  // 代码解释器错误：移除原始代码部分（已在代码预览区域展示），余下文本截断显示
   const errorText = data.error || "";
-  const shouldTruncateError = isCodeInterpreter && errorText.length > 150;
-  const displayError = shouldTruncateError && !errorExpanded
-    ? errorText.slice(0, 150) + "..."
+  const cleanError = isCodeInterpreter
+    ? errorText.split("\n\n原始代码:")[0].trim()
     : errorText;
+  const shouldTruncateError = cleanError.length > 150;
+  const displayError = shouldTruncateError && !errorExpanded
+    ? cleanError.slice(0, 150) + "..."
+    : cleanError;
 
   // 收缩状态下显示前几行代码（最多3行），而非仅用省略号
   const collapsedMaxLines = 3;

@@ -1281,6 +1281,7 @@ impl<R: Runtime> AgentExecutor<R> {
                         | "read_file_lines"
                         | "docx_handler" | "xlsx_handler" | "pptx_handler" | "pdf_handler"
                         | "code_interpreter_handler"  // 需要workspace_root作为working_dir
+                        | "validator_handler"
                     );
                     if needs_workspace_root && !ctx.workspace_path.is_empty() {
                         safe_params["workspace_root"] = json!(ctx.workspace_path);
