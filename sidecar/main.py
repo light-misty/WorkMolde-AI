@@ -11,6 +11,12 @@ import datetime
 import traceback
 from typing import Any
 
+# Python Embeddable Distribution 的 python312._pth 文件会完全覆盖默认的 sys.path 计算，
+# 导致脚本所在目录不会被自动加入 sys.path，handlers 等业务模块无法被 import。
+# 这里显式将脚本所在目录插入 sys.path[0]，确保开发和生产环境行为一致。
+# 注意：必须放在所有 handlers.* 导入之前执行。
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 logger = logging.getLogger(__name__)
 
 

@@ -26,17 +26,15 @@ jobs:
       - name: Setup Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Setup Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-
-      - name: Install Python dependencies
-        run: pip install -r sidecar/requirements.txt
-
       - name: Install Node.js dependencies
         run: npm ci
+
+      # 构建 Python Sidecar（嵌入式 Python + 依赖），产物 sidecar_dist/ 会被 tauri build 打包
+      # pretauri:build 钩子会自动执行 npm run sidecar:build，这里显式调用以确保 CI 中可见日志
+      # 注意：build_sidecar.ps1 自包含 Python Embeddable 下载，无需 actions/setup-python
+      - name: Build Python Sidecar (Embedded)
+        run: npm run sidecar:build
+        shell: pwsh
 
       # 使用 tauri-apps/tauri-action 构建、签名、生成 latest.json 并上传到 Release
       # 该 Action 会自动：

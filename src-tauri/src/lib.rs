@@ -39,6 +39,38 @@ pub struct AppState {
     pub scratchpad_states: crate::services::tool::builtin::SharedScratchpadStates,
 }
 
+/// 从系统 PATH 中查找 Python 可执行文件（开发模式兜底）
+///
+/// 在开发模式下使用（嵌入式 Python 不存在时回退），生产环境优先使用嵌入式 Python。
+/// Windows 上按 py（Python Launcher）、python、python3 顺序尝试。
+fn find_system_python() -> String {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        let candidates = ["py", "python", "python3"];
+        for candidate in &candidates {
+            // 使用 --version 检测可执行文件是否存在
+            let check = std::process::Command::new(candidate)
+                .arg("--version")
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .creation_flags(CREATE_NO_WINDOW)
+                .status();
+            if check.is_ok() {
+                log::info!("检测到系统 Python: {}", candidate);
+                return candidate.to_string();
+            }
+        }
+        // 兜底：返回 "python"，后续 spawn 时若失败会输出明确错误
+        "python".to_string()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        "python3".to_string()
+    }
+}
+
 pub fn run() {
     // 安装增强版 panic hook：
     // 1. 将 panic 信息记录到日志
@@ -155,37 +187,33 @@ pub fn run() {
                 Arc::new(tokio::sync::RwLock::new(Arc::new(llm_router)));
 
             // 解析 Python 可执行文件路径
-            // 优先使用环境变量 DOCAGENT_PYTHON，否则按平台尝试常见命令名
+            // 优先级：
+            // 1. 环境变量 DOCAGENT_PYTHON（开发模式覆盖，最高优先级）
+            // 2. 应用资源目录的嵌入式 Python（生产环境，sidecar_dist/python/python.exe）
+            // 3. 系统 PATH 中的 py/python/python3（开发模式兜底）
             let python_path = if let Ok(p) = std::env::var("DOCAGENT_PYTHON") {
+                log::info!("使用环境变量 DOCAGENT_PYTHON 指定的 Python: {}", p);
                 p
             } else {
-                // Windows 上优先尝试 py（Python Launcher），再尝试 python 和 python3
-                // py 是 Windows 官方推荐的 Python 启动器，通常随 Python 一起安装
-                #[cfg(target_os = "windows")]
-                {
-                    use std::os::windows::process::CommandExt;
-                    const CREATE_NO_WINDOW: u32 = 0x08000000;
-                    let candidates = ["py", "python", "python3"];
-                    let mut found = "python".to_string();
-                    for candidate in &candidates {
-                        // 使用 --version 检测可执行文件是否存在
-                        let check = std::process::Command::new(candidate)
-                            .arg("--version")
-                            .stdout(std::process::Stdio::null())
-                            .stderr(std::process::Stdio::null())
-                            .creation_flags(CREATE_NO_WINDOW)
-                            .status();
-                        if check.is_ok() {
-                            found = candidate.to_string();
-                            log::info!("检测到 Python 可执行文件: {}", found);
-                            break;
-                        }
+                // 优先尝试应用资源目录中的嵌入式 Python（生产环境）
+                let embedded_python = app.path()
+                    .resolve("sidecar_dist/python/python.exe", BaseDirectory::Resource)
+                    .ok()
+                    .map(|p| crate::utils::strip_unc_prefix(&p).to_string_lossy().to_string());
+
+                if let Some(path) = embedded_python {
+                    if std::path::Path::new(&path).exists() {
+                        log::info!("使用嵌入式 Python: {}", path);
+                        path
+                    } else {
+                        // 资源路径解析成功但文件不存在，回退到系统 PATH
+                        log::warn!("嵌入式 Python 路径解析成功但文件不存在: {}，回退到系统 PATH", path);
+                        find_system_python()
                     }
-                    found
-                }
-                #[cfg(not(target_os = "windows"))]
-                {
-                    "python3".to_string()
+                } else {
+                    // 资源路径解析失败（开发模式），使用系统 PATH
+                    log::info!("未找到嵌入式 Python（开发模式），使用系统 PATH");
+                    find_system_python()
                 }
             };
 
@@ -199,13 +227,15 @@ pub fn run() {
 
                 // Tauri 资源路径解析：生产环境中 bundle.resources 打包的文件通过此 API 定位
                 // resolve() 会自动处理路径中的 .. -> _up_ 等转换，比手动拼接 resource_dir() 更可靠
-                let resource_path = app.path().resolve("sidecar/main.py", BaseDirectory::Resource)
+                // 生产环境通过 sidecar_dist/ 打包，脚本路径为 sidecar_dist/sidecar/main.py
+                let embedded_script = app.path()
+                    .resolve("sidecar_dist/sidecar/main.py", BaseDirectory::Resource)
                     .ok();
 
                 // 按优先级构建候选路径列表
                 let mut candidates: Vec<std::path::PathBuf> = Vec::new();
-                // 1. Tauri 资源路径解析（生产环境，通过 bundle.resources 打包）
-                if let Some(path) = resource_path {
+                // 1. 嵌入式 Python 方案的脚本路径（生产环境，最高优先级）
+                if let Some(path) = embedded_script {
                     candidates.push(path);
                 }
                 // 2. 项目根目录下的 sidecar（开发模式，基于 CARGO_MANIFEST_DIR 推导）

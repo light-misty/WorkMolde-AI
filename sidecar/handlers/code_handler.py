@@ -207,13 +207,20 @@ class CodeHandler:
         Returns:
             执行结果字典
         """
-        # 定位 code_executor.py 脚本路径（与当前文件同目录的上一级）
+        # 定位 code_executor 脚本路径（与当前文件同目录的上一级）
+        # 优先使用 .py 源文件（开发模式），回退到 .pyc 字节码（生产模式，源码保护编译后 .py 已删除）
+        # python.exe 同时支持执行 .py 和 .pyc，subprocess 调用无需区分
         sidecar_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        executor_script = os.path.join(sidecar_dir, "code_executor.py")
+        executor_script_py = os.path.join(sidecar_dir, "code_executor.py")
+        executor_script_pyc = os.path.join(sidecar_dir, "code_executor.pyc")
 
-        if not os.path.exists(executor_script):
-            logger.error("代码执行器脚本不存在: %s", executor_script)
-            return {"error": f"代码执行器脚本不存在: {executor_script}"}
+        if os.path.exists(executor_script_py):
+            executor_script = executor_script_py
+        elif os.path.exists(executor_script_pyc):
+            executor_script = executor_script_pyc
+        else:
+            logger.error("代码执行器脚本不存在（已尝试 .py 和 .pyc）: %s", sidecar_dir)
+            return {"error": f"代码执行器脚本不存在（已尝试 .py 和 .pyc）: {sidecar_dir}"}
 
         # 构建子进程输入
         executor_input = json.dumps({
@@ -351,8 +358,12 @@ class CodeHandler:
             }
 
             # 确定审计日志文件路径
-            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            log_dir = os.path.join(project_root, "log")
+            # 优先使用 Rust 端注入的 DOCAGENT_LOG_DIR 环境变量（生产环境指向
+            # %LOCALAPPDATA%\docagent\logs\，避免写到安装目录导致卸载残留）
+            # 回退到 sidecar 目录下的 log/ 子目录（开发模式兼容旧逻辑）
+            log_dir = os.environ.get("DOCAGENT_LOG_DIR") or os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "log"
+            )
             os.makedirs(log_dir, exist_ok=True)
             audit_log_path = os.path.join(log_dir, "code_audit.log")
 

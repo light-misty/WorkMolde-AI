@@ -32,7 +32,7 @@
     "targets": "nsis",
     "createUpdaterArtifacts": true,
     "resources": {
-      "../sidecar/": "sidecar/"
+      "../sidecar_dist/": "sidecar_dist/"
     },
     "icon": [
       "icons/32x32.png",
@@ -47,7 +47,8 @@
           "English"
         ],
         "displayLanguageSelector": false,
-        "installerIcon": "icons/icon.ico"
+        "installerIcon": "icons/icon.ico",
+        "installerHooks": "nsis/installer-hooks.nsh"
       }
     }
   },

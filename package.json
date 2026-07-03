@@ -9,6 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
+    "sidecar:build": "powershell -ExecutionPolicy Bypass -File scripts/build_sidecar.ps1",
+    "pretauri:build": "npm run sidecar:build",
     "tauri:build": "tauri build"
   },
   "dependencies": {
