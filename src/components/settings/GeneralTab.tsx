@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useSessionStore } from "../../stores/useSessionStore";
 import { useToastStore } from "../../stores/useToastStore";
+import { useUpdateStore } from "../../stores/useUpdateStore";
 import * as tauriCmd from "../../services/tauri";
 import { getVersion } from "@tauri-apps/api/app";
 
@@ -12,6 +13,7 @@ export function GeneralTab() {
   const { clearAllSessions } = useSessionStore();
   const addToast = useToastStore((s) => s.addToast);
   const removeToast = useToastStore((s) => s.removeToast);
+  const setUpdateNotificationOpen = useUpdateStore((s) => s.setUpdateNotificationOpen);
   const [clearConfirm, setClearConfirm] = useState(false);
   // 日志路径信息
   const [logPathInfo, setLogPathInfo] = useState<{ logSource: string } | null>(null);
@@ -235,6 +237,7 @@ export function GeneralTab() {
                 if (result) {
                   setUpdateCheckResult("available");
                   addToast("success", t('update.newVersionFound', { version: result.version }));
+                  setUpdateNotificationOpen(true);
                 } else {
                   setUpdateCheckResult("upToDate");
                   addToast("success", t('settings.general.upToDate'));

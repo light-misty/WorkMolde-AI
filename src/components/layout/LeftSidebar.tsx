@@ -9,6 +9,7 @@ import { Icon } from "../common/Icon";
 import { useWorkspaceStore } from "../../stores/useWorkspaceStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useToastStore } from "../../stores/useToastStore";
+import { useUpdateStore } from "../../stores/useUpdateStore";
 import type { ThemeMode } from "../../types";
 import * as tauriCmd from "../../services/tauri";
 
@@ -61,6 +62,7 @@ export function LeftSidebar({
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const addToast = useToastStore((s) => s.addToast);
   const removeToast = useToastStore((s) => s.removeToast);
+  const setUpdateNotificationOpen = useUpdateStore((s) => s.setUpdateNotificationOpen);
 
   // 判断当前是否处于深色模式
   const isDarkMode = (() => {
@@ -87,6 +89,7 @@ export function LeftSidebar({
       removeToast(toastId);
       if (result) {
         addToast("success", t('update.newVersionFound', { version: result.version }));
+        setUpdateNotificationOpen(true);
       } else {
         addToast("success", t('settings.general.upToDate'));
       }
@@ -97,7 +100,7 @@ export function LeftSidebar({
     } finally {
       setCheckingUpdate(false);
     }
-  }, [checkingUpdate, addToast, removeToast, t]);
+  }, [checkingUpdate, addToast, removeToast, t, setUpdateNotificationOpen]);
 
   // 切换语言
   const switchLanguage = useCallback((lang: string) => {

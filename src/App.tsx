@@ -47,8 +47,9 @@ function LazyFallback() {
 export default function App() {
   const { t } = useTranslation();
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [updateNotificationOpen, setUpdateNotificationOpen] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(true);
+  const updateNotificationOpen = useUpdateStore((s) => s.updateNotificationOpen);
+  const setUpdateNotificationOpen = useUpdateStore((s) => s.setUpdateNotificationOpen);
   const [typewriterVisible, setTypewriterVisible] = useState(true);
 
   // 文档预览状态
