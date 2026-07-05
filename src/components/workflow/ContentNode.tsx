@@ -15,18 +15,17 @@ export function ContentNode({ node }: ContentNodeProps) {
   const isCompleted = node.status === "completed" && !data.isStreaming;
   const [copied, setCopied] = useState(false);
 
-  // 判断当前 content 节点是否为其所在助手回复片段的最后一个 content 节点
-  // 仅在最后一个 content 节点显示复制按钮，避免在工具调用前的中间内容后错误出现按钮
+  // 判断当前 content 节点是否为其所在助手回复片段的最后一个节点（不仅是 content 类型）
+  // 仅在每轮智能体回答的最末端显示复制按钮，避免在工具调用、思考、确认等中间节点前错误出现按钮
+  // 确保工作流进行中、暂停、切换会话、重新进入会话等场景下，中间 content 节点不显示复制按钮
   const nodes = useWorkflowStore((state) => state.nodes);
   const isLastContentInTurn = (() => {
     const idx = nodes.findIndex((n) => n.id === node.id);
     if (idx === -1) return false;
-    // 向后扫描到下一个 user 节点（片段边界），期间若遇到 content 节点则非最后一个
-    for (let i = idx + 1; i < nodes.length; i++) {
-      if (nodes[i].type === "user") break;
-      if (nodes[i].type === "content") return false;
-    }
-    return true;
+    // 检查紧邻的下一个节点：若不存在或为 user 节点（下一轮开始），则当前 content 是该轮次末尾
+    // 任何其他类型的节点（content/tool/thinking/confirm/error）都意味着当前 content 非末尾
+    const nextNode = nodes[idx + 1];
+    return !nextNode || nextNode.type === "user";
   })();
   // 检查当前节点所在轮次是否已全部完成（从当前节点到下一个 user 节点之间的所有节点均非 running 状态）
   // 替代旧的全局 executionStatus 判断，避免新对话执行时隐藏上一轮对话的复制按钮
