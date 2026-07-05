@@ -245,6 +245,7 @@ jobs:
 
           Write-Host "Gitee 同步完成"
           Write-Host "Release 地址: https://gitee.com/$env:GITEE_OWNER/$env:GITEE_REPO/releases/$tagName"
+          $global:LASTEXITCODE = 0
 
       # 提交 updater/latest.json 到 GitHub 和 Gitee 仓库
       - name: Commit updater/latest.json to repository
