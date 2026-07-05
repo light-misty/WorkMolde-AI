@@ -125,6 +125,7 @@ jobs:
               name = $releaseName
               body = $releaseBody.Trim()
               prerelease = $false
+              target_commitish = "main"
             } | ConvertTo-Json
 
             Write-Host "正在 Gitee 上创建 Release: $tagName"
