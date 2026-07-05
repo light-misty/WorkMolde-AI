@@ -174,31 +174,46 @@ jobs:
             }
           }
 
-          # 上传附件到 Gitee Release
+          # 上传附件到 Gitee Release（先删除同名附件，再上传）
           function Upload-FileToGitee {
             param([string]$FilePath, [int]$ReleaseId)
-            $uploadUrl = "$apiBase/releases/$ReleaseId/attach_files?$tokenParam"
             $fileItem = Get-Item -Path $FilePath
-            Write-Host "正在上传: $($fileItem.Name) ($([math]::Round($fileItem.Length/1MB,2)) MB)"
+            $fileName = $fileItem.Name
 
-            # 使用 System.Net.Http.MultipartFormDataContent 上传大文件
+            # 列出现有附件，删除同名文件
+            Write-Host "检查现有附件: $fileName"
+            try {
+              $existingFiles = Invoke-RestMethod -Uri "$apiBase/releases/$ReleaseId/attach_files?$tokenParam" -Method Get
+              $duplicate = $existingFiles | Where-Object { $_.name -eq $fileName } | Select-Object -First 1
+              if ($duplicate) {
+                $delUrl = "$apiBase/releases/$ReleaseId/attach_files/$($duplicate.id)?$tokenParam"
+                Invoke-RestMethod -Uri $delUrl -Method Delete | Out-Null
+                Write-Host "已删除旧附件: $fileName (ID: $($duplicate.id))"
+              }
+            } catch {
+              Write-Host "::warning::检查/删除旧附件失败: $($_.Exception.Message)"
+            }
+
+            # 上传新附件
+            $uploadUrl = "$apiBase/releases/$ReleaseId/attach_files?$tokenParam"
+            Write-Host "正在上传: $fileName ($([math]::Round($fileItem.Length/1MB,2)) MB)"
             try {
               $client = New-Object System.Net.Http.HttpClient
               $client.Timeout = [System.TimeSpan]::FromMinutes(10)
               $content = New-Object System.Net.Http.MultipartFormDataContent
               $fileStream = [System.IO.File]::OpenRead($fileItem.FullName)
               $fileContent = New-Object System.Net.Http.StreamContent($fileStream)
-              $content.Add($fileContent, "file", $fileItem.Name)
+              $content.Add($fileContent, "file", $fileName)
               $response = $client.PostAsync($uploadUrl, $content).GetAwaiter().GetResult()
               $fileStream.Close()
               $client.Dispose()
               if ($response.IsSuccessStatusCode) {
-                Write-Host "上传成功: $($fileItem.Name)"
+                Write-Host "上传成功: $fileName"
               } else {
-                Write-Host "::warning::上传失败: $($fileItem.Name) - $($response.StatusCode)"
+                Write-Host "::warning::上传失败: $fileName - $($response.StatusCode)"
               }
             } catch {
-              Write-Host "::warning::上传失败: $($fileItem.Name) - $($_.Exception.Message)"
+              Write-Host "::warning::上传失败: $fileName - $($_.Exception.Message)"
             }
           }
 
