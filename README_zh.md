@@ -16,7 +16,9 @@
 
 ## 安装
 
-从 [Releases](https://github.com/XuMingKe-06/DocAgent/releases) 下载最新版本 Windows 安装包，运行即可完成安装。
+从 [GitHub Releases](https://github.com/XuMingKe-06/DocAgent/releases) 下载最新版本 Windows 安装包，运行即可完成安装。
+
+国内用户可访问 [Gitee 镜像](https://gitee.com/xumingke-06/doc-agent/releases) 下载。
 
 ## 核心功能
 
