@@ -100,8 +100,6 @@ pub const UPDATE_DOWNLOAD_FAILED: u32 = 8002;
 pub const UPDATE_INSTALL_FAILED: u32 = 8003;
 /// 没有可用更新
 pub const UPDATE_NO_UPDATE_AVAILABLE: u32 = 8004;
-/// 更新网络错误
-pub const UPDATE_NETWORK_ERROR: u32 = 8005;
 
 // ============================================================
 // Tool 相关错误码 (9000-9999)

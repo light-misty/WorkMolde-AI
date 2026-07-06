@@ -190,85 +190,6 @@ pub async fn check_update(app: tauri::AppHandle) -> Result<Option<UpdateInfo>, C
     }
 }
 
-/// 下载并安装更新（通过 Channel 推送进度）
-/// 下载失败时最多重试2次，间隔3秒，重试时重新检查更新
-/// 端点探测只在开始时执行一次，重试时复用相同的端点顺序
-#[cfg(desktop)]
-#[tauri::command]
-pub async fn download_and_install_update(
-    app: tauri::AppHandle,
-    on_event: tauri::ipc::Channel<DownloadEvent>,
-) -> Result<(), CommandError> {
-    let max_retries: u32 = 2;
-
-    // 探测端点顺序（只在开始时探测一次，重试时复用，避免每次重试都重新探测）
-    let endpoint_urls = select_endpoint_order()
-        .await
-        .iter()
-        .map(|url| reqwest::Url::parse(url).map_err(|e| e.to_string()))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| CommandError::update(UPDATE_DOWNLOAD_FAILED, format!("无效的端点 URL: {}", e)))?;
-    log::info!("download_and_install_update 端点顺序: {:?}", endpoint_urls);
-
-    for retry in 0..=max_retries {
-        if retry > 0 {
-            log::info!("更新下载重试, 第{}次重试, 等待3秒", retry);
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-        }
-
-        let updater = app
-            .updater_builder()
-            .endpoints(endpoint_urls.clone())
-            .map_err(|e| CommandError::update(UPDATE_DOWNLOAD_FAILED, e.to_string()))?
-            .build()
-            .map_err(|e| CommandError::update(UPDATE_DOWNLOAD_FAILED, e.to_string()))?;
-
-        let update = updater.check().await.map_err(|e| {
-            CommandError::update(UPDATE_DOWNLOAD_FAILED, e.to_string())
-        })?;
-
-        let update = match update {
-            Some(u) => u,
-            None => {
-                return Err(CommandError::update(UPDATE_NO_UPDATE_AVAILABLE, "没有可用的更新"));
-            }
-        };
-
-        let mut downloaded: u64 = 0;
-        let mut content_length: Option<u64> = None;
-
-        match update
-            .download_and_install(
-                |chunk_length, content_len| {
-                    downloaded += chunk_length as u64;
-                    content_length = content_len;
-                    let _ = on_event.send(DownloadEvent::Progress {
-                        downloaded,
-                        content_length: content_len,
-                    });
-                },
-                || {
-                    let _ = on_event.send(DownloadEvent::Finished);
-                },
-            )
-            .await
-        {
-            Ok(()) => {
-                log::info!("更新安装完成，准备重启");
-                return Ok(());
-            }
-            Err(e) => {
-                log::error!("更新下载/安装失败 (第{}次尝试): {}", retry + 1, e);
-                if retry >= max_retries {
-                    return Err(CommandError::update(UPDATE_INSTALL_FAILED, e.to_string()));
-                }
-            }
-        }
-    }
-
-    Err(CommandError::update(UPDATE_INSTALL_FAILED, "更新下载失败，重试耗尽".to_string()))
-}
-
 /// 下载更新结果
 #[cfg(desktop)]
 #[derive(Serialize)]
@@ -350,10 +271,10 @@ pub async fn download_update(
 
                     if should_send {
                         last_send_time = Some(now);
-                    let _ = on_event.send(DownloadEvent::Progress {
-                        downloaded,
+                        let _ = on_event.send(DownloadEvent::Progress {
+                            downloaded,
                             content_length: cached_content_length,
-                    });
+                        });
                     }
                 },
                 || {

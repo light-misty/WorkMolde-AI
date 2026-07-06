@@ -487,8 +487,6 @@ pub fn run() {
             #[cfg(desktop)]
             commands::update::check_update,
             #[cfg(desktop)]
-            commands::update::download_and_install_update,
-            #[cfg(desktop)]
             commands::update::download_update,
             #[cfg(desktop)]
             commands::update::install_downloaded_update,
