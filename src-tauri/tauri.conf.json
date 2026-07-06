@@ -57,8 +57,8 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFDMjdCMzEwMkY5RTNEMjEKUldRaFBaNHZFTE1uckVFWVVnaXJ5MXB6NExERU1vQmNrL29kb0tHNUFMeU04eUo2VDMvUS9iYm4K",
       "endpoints": [
-        "https://github.com/XuMingKe-06/DocAgent/releases/latest/download/latest.json",
-        "https://gitee.com/xumingke-06/doc-agent/raw/main/updater/latest.json"
+        "https://docagent-proxy.workers.dev/latest.json",
+        "https://github.com/XuMingKe-06/DocAgent/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

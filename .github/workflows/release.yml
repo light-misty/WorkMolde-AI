@@ -52,38 +52,35 @@ jobs:
           tagName: v__VERSION__
           # Release 标题
           releaseName: 'DocAgent v__VERSION__'
-          # Release 草稿，方便检查后再发布
-          releaseDraft: true
+          # 直接发布 Release（非草稿），CDN 代理需要公开访问权限
+          # 原先为草稿模式，但 Cloudflare Worker 无法代理草稿 Release（需要认证）
+          releaseDraft: false
           prerelease: false
           # 优先使用 NSIS 安装器（项目使用 NSIS 打包）
           updaterJsonPreferNsis: true
 
-      # 同步 Release 产物到 Gitee
-      # 需要仓库 Secrets: GITEE_TOKEN（在 https://gitee.com/profile/personal_access_tokens 生成）
-      # 权限要求：projects 基础权限即可
-      - name: Sync release to Gitee
+      # 生成 CDN 代理版本的 latest.json 并覆盖到 GitHub Release
+      # 背景：tauri-action 生成的 latest.json 中 URL 指向 GitHub Release 直链，国内下载慢
+      # 此步骤将 URL 替换为 Cloudflare Worker 代理地址，国内用户通过 CDN 加速下载
+      # Worker 代码见 cloudflare/worker.js，部署说明见同文件头部注释
+      - name: Generate CDN latest.json and upload to Release
         shell: pwsh
         env:
-          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
-          GITEE_OWNER: xumingke-06
-          GITEE_REPO: doc-agent
+          # CDN 代理基础 URL（Cloudflare Worker 地址）
+          # 需在 GitHub Secrets 中配置 CDN_BASE_URL，例如: https://docagent-proxy.your-name.workers.dev
+          # 未配置时降级为 GitHub Release 直链（国内下载可能较慢）
+          CDN_BASE_URL: ${{ secrets.CDN_BASE_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if (-not $env:GITEE_TOKEN) {
-            Write-Host "::warning::GITEE_TOKEN 未设置，跳过 Gitee 同步"
-            Write-Host "请前往 https://gitee.com/profile/personal_access_tokens 生成 Token"
-            Write-Host "并添加到 GitHub Secrets: Settings -> Secrets and variables -> Actions -> New secret: GITEE_TOKEN"
-            exit 0
-          }
-
           $ErrorActionPreference = "Stop"
 
-          # 从 tauri.conf.json 读取版本号，兼容 tag 推送和 workflow_dispatch 两种触发方式
+          # 从 tauri.conf.json 读取版本号
           $configPath = "${{ github.workspace }}\src-tauri\tauri.conf.json"
           $configVersion = (Get-Content $configPath -Raw | ConvertFrom-Json).version
           $tagName = "v$configVersion"
-          $releaseName = "DocAgent $tagName"
+          Write-Host "版本号: $configVersion, 标签: $tagName"
 
-          # 查找构建产物
+          # 查找 NSIS 构建产物
           $nsisDir = "${{ github.workspace }}\src-tauri\target\release\bundle\nsis"
           Write-Host "查找 NSIS 产物目录: $nsisDir"
           $exeFile = Get-ChildItem -Path $nsisDir -Filter "*_x64-setup.exe" | Select-Object -First 1
@@ -93,137 +90,43 @@ jobs:
             $exeFile = Get-ChildItem -Path "${{ github.workspace }}" -Recurse -Filter "*_x64-setup.exe" | Select-Object -First 1
           }
           if (-not $exeFile) {
-            Write-Host "::warning::未找到构建产物，跳过 Gitee 同步"
-            exit 0
+            Write-Host "::error::未找到 NSIS 构建产物，无法生成 latest.json"
+            exit 1
           }
           Write-Host "找到安装包: $($exeFile.FullName)"
 
-          # 获取发布说明（从上个标签到当前标签的提交记录）
-          $prevTag = & git describe --tags --abbrev=0 "${tagName}^" 2>$null
-          if ($LASTEXITCODE -eq 0 -and $prevTag) {
-            $releaseBody = & git log --oneline "$prevTag..$tagName" 2>$null
-            if (-not $releaseBody) { $releaseBody = "DocAgent $tagName" }
-          } else {
-            $releaseBody = "DocAgent $tagName"
-          }
-
-          # Gitee API 基础地址
-          $apiBase = "https://gitee.com/api/v5/repos/$env:GITEE_OWNER/$env:GITEE_REPO"
-          $tokenParam = "access_token=$env:GITEE_TOKEN"
-
-          # 检查是否已存在同名 Release，若存在则获取其 ID
-          Write-Host "检查 Gitee 上是否已存在 Release: $tagName"
-          $releaseId = $null
-          try {
-            $existing = Invoke-RestMethod -Uri "$apiBase/releases/tags/$tagName?$tokenParam" -Method Get
-            if ($existing.id) {
-              $releaseId = $existing.id
-              Write-Host "Release 已存在，ID: $releaseId"
-            } else {
-              Write-Host "Release 存在但 ID 为空，将通过列表重新获取"
-            }
-          } catch {
-            Write-Host "Release 不存在，将新建"
-          }
-
-          if (-not $releaseId) {
-            # 创建 Release
-            $createBody = @{
-              tag_name = $tagName
-              name = $releaseName
-              body = $releaseBody.Trim()
-              prerelease = $false
-              target_commitish = "main"
-            } | ConvertTo-Json
-
-            Write-Host "正在 Gitee 上创建 Release: $tagName"
-            try {
-              $response = Invoke-RestMethod -Uri "$apiBase/releases?$tokenParam" -Method Post `
-                -Body $createBody -ContentType "application/json"
-              $releaseId = $response.id
-              Write-Host "Gitee Release 创建成功，ID: $releaseId"
-            } catch {
-              $statusCode = [int]$_.Exception.Response.StatusCode
-              $detail = $_.ErrorDetails.Message
-              if ($statusCode -eq 401) {
-                Write-Host "::warning::Gitee Token 认证失败，请检查 GITEE_TOKEN 是否有效"
-                exit 0
-              } elseif ($statusCode -eq 404) {
-                Write-Host "::warning::Gitee 仓库不存在或 Token 无权限"
-                exit 0
-              } elseif ($statusCode -eq 400) {
-                Write-Host "创建失败（400），尝试列出 Releases 查找现有 ID"
-                try {
-                  $releases = Invoke-RestMethod -Uri "$apiBase/releases?$tokenParam&per_page=100" -Method Get
-                  $existing = $releases | Where-Object { $_.tag_name -eq $tagName } | Select-Object -First 1
-                  if ($existing -and $existing.id) {
-                    $releaseId = $existing.id
-                    Write-Host "找到现有 Release，ID: $releaseId"
-                  } else {
-                    Write-Host "::warning::无法找到现有 Release: $detail"
-                    exit 0
-                  }
-                } catch {
-                  Write-Host "::warning::获取 Release 列表失败: $($_.Exception.Message)"
-                  exit 0
-                }
-              } else {
-                Write-Host "::warning::Gitee Release 创建失败 ($statusCode): $detail"
-                exit 0
-              }
-            }
-          }
-
-          # 上传附件到 Gitee Release（先删除同名附件，再上传）
-          function Upload-FileToGitee {
-            param([string]$FilePath, [int]$ReleaseId)
-            $fileItem = Get-Item -Path $FilePath
-            $fileName = $fileItem.Name
-
-            # 列出现有附件，删除同名文件
-            Write-Host "检查现有附件: $fileName"
-            try {
-              $existingFiles = Invoke-RestMethod -Uri "$apiBase/releases/$ReleaseId/attach_files?$tokenParam" -Method Get
-              $duplicate = $existingFiles | Where-Object { $_.name -eq $fileName } | Select-Object -First 1
-              if ($duplicate) {
-                $delUrl = "$apiBase/releases/$ReleaseId/attach_files/$($duplicate.id)?$tokenParam"
-                Invoke-RestMethod -Uri $delUrl -Method Delete | Out-Null
-                Write-Host "已删除旧附件: $fileName (ID: $($duplicate.id))"
-              }
-            } catch {
-              Write-Host "::warning::检查/删除旧附件失败: $($_.Exception.Message)"
-            }
-
-            # 上传新附件
-            $uploadUrl = "$apiBase/releases/$ReleaseId/attach_files?$tokenParam"
-            Write-Host "正在上传: $fileName ($([math]::Round($fileItem.Length/1MB,2)) MB)"
-            try {
-              $client = New-Object System.Net.Http.HttpClient
-              $client.Timeout = [System.TimeSpan]::FromMinutes(120)
-              $content = New-Object System.Net.Http.MultipartFormDataContent
-              $fileStream = [System.IO.File]::OpenRead($fileItem.FullName)
-              $fileContent = New-Object System.Net.Http.StreamContent($fileStream)
-              $content.Add($fileContent, "file", $fileName)
-              $response = $client.PostAsync($uploadUrl, $content).GetAwaiter().GetResult()
-              $fileStream.Close()
-              $client.Dispose()
-              if ($response.IsSuccessStatusCode) {
-                Write-Host "上传成功: $fileName"
-              } else {
-                Write-Host "::warning::上传失败: $fileName - $($response.StatusCode)"
-              }
-            } catch {
-              Write-Host "::warning::上传失败: $fileName - $($_.Exception.Message)"
-            }
-          }
-
-          # 构造 Gitee 专用的 latest.json（指向 Gitee 下载地址）
-          $giteeUrlBase = "https://gitee.com/$env:GITEE_OWNER/$env:GITEE_REPO/releases/download/$tagName"
+          # 决定下载 URL 基础地址
+          # 优先使用 CDN 代理，未配置则降级为 GitHub Release 直链
           $exeName = $exeFile.Name
+          $cdnBaseUrl = $env:CDN_BASE_URL
+          if ($cdnBaseUrl) {
+            $cdnBaseUrl = $cdnBaseUrl.TrimEnd('/')
+            $downloadUrlBase = "$cdnBaseUrl/releases/download/$tagName"
+            Write-Host "使用 CDN 代理下载地址: $downloadUrlBase/$exeName"
+          } else {
+            $downloadUrlBase = "https://github.com/${{ github.repository }}/releases/download/$tagName"
+            Write-Host "::warning::CDN_BASE_URL 未配置，降级为 GitHub Release 直链"
+            Write-Host "::warning::国内用户下载可能较慢，请配置 Cloudflare Worker 并设置 CDN_BASE_URL Secret"
+          }
+
+          # 读取签名文件
           $signature = ""
           if ($sigFile) {
             $signature = (Get-Content $sigFile.FullName -Raw).Trim()
+            Write-Host "已加载签名文件: $($sigFile.Name)"
+          } else {
+            Write-Host "::warning::未找到签名文件 (.sig)"
           }
+
+          # 获取发布说明（从上个标签到当前标签的提交记录）
+          $releaseBody = "DocAgent $tagName"
+          $prevTag = & git describe --tags --abbrev=0 "${tagName}^" 2>$null
+          if ($LASTEXITCODE -eq 0 -and $prevTag) {
+            $body = & git log --oneline "$prevTag..$tagName" 2>$null
+            if ($body) { $releaseBody = $body }
+          }
+
+          # 构造 latest.json（URL 指向 CDN 代理）
           $latestJsonObj = @{
             version = $configVersion
             notes = $releaseBody.Trim()
@@ -231,42 +134,63 @@ jobs:
             platforms = @{
               "windows-x86_64" = @{
                 signature = $signature
-                url = "$giteeUrlBase/$exeName"
+                url = "$downloadUrlBase/$exeName"
               }
               "windows-x86_64-nsis" = @{
                 signature = $signature
-                url = "$giteeUrlBase/$exeName"
+                url = "$downloadUrlBase/$exeName"
               }
             }
           }
 
-          # 保存到工作区 updater/latest.json（提交到仓库用）
+          # 保存到仓库 updater/latest.json（供 endpoints 读取）
           $repoUpdaterDir = "${{ github.workspace }}\updater"
           if (-not (Test-Path $repoUpdaterDir)) {
             New-Item -ItemType Directory -Path $repoUpdaterDir -Force | Out-Null
           }
-          $giteeLatestJsonPath = "$repoUpdaterDir\latest.json"
-          $latestJsonObj | ConvertTo-Json -Depth 10 | Set-Content -Path $giteeLatestJsonPath
-          Write-Host "Gitee latest.json 已生成并保存到仓库 updater/latest.json"
+          $latestJsonPath = "$repoUpdaterDir\latest.json"
+          $latestJsonObj | ConvertTo-Json -Depth 10 | Set-Content -Path $latestJsonPath -Encoding UTF8
+          Write-Host "latest.json 已生成:"
+          Get-Content $latestJsonPath | Write-Host
 
-          # 上传 Gitee latest.json 到 Gitee Release
-          Upload-FileToGitee -FilePath $giteeLatestJsonPath -ReleaseId $releaseId
-
-          # 上传 .exe 和 .sig
-          Upload-FileToGitee -FilePath $exeFile.FullName -ReleaseId $releaseId
-          if ($sigFile) {
-            Upload-FileToGitee -FilePath $sigFile.FullName -ReleaseId $releaseId
+          # 上传 latest.json 到 GitHub Release（覆盖 tauri-action 生成的版本）
+          # 这样 Tauri updater 通过 endpoints 访问到的 latest.json 中 URL 指向 CDN
+          $repo = "${{ github.repository }}"
+          $headers = @{
+            Authorization = "Bearer $env:GITHUB_TOKEN"
+            Accept = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
           }
 
-          Write-Host "Gitee 同步完成"
-          Write-Host "Release 地址: https://gitee.com/$env:GITEE_OWNER/$env:GITEE_REPO/releases/$tagName"
-          $global:LASTEXITCODE = 0
+          # 通过 tag 获取 Release ID 和现有 assets
+          $releaseApiUrl = "https://api.github.com/repos/$repo/releases/tags/$tagName"
+          $releaseInfo = Invoke-RestMethod -Uri $releaseApiUrl -Method Get -Headers $headers
+          $releaseId = $releaseInfo.id
+          Write-Host "GitHub Release ID: $releaseId"
 
-      # 提交 updater/latest.json 到 GitHub 和 Gitee 仓库
+          # 删除现有的 latest.json asset（如有），避免重复
+          $existingAsset = $releaseInfo.assets | Where-Object { $_.name -eq "latest.json" } | Select-Object -First 1
+          if ($existingAsset) {
+            $delUrl = "https://api.github.com/repos/$repo/releases/assets/$($existingAsset.id)"
+            Invoke-RestMethod -Uri $delUrl -Method Delete -Headers $headers | Out-Null
+            Write-Host "已删除现有 latest.json asset (ID: $($existingAsset.id))"
+          }
+
+          # 上传 CDN 版 latest.json 到 GitHub Release
+          $uploadUrl = "https://uploads.github.com/repos/$repo/releases/$releaseId/assets?name=latest.json"
+          $uploadHeaders = @{
+            Authorization = "Bearer $env:GITHUB_TOKEN"
+            Accept = "application/vnd.github+json"
+            "Content-Type" = "application/json"
+          }
+          $jsonContent = Get-Content $latestJsonPath -Raw
+          $uploadResponse = Invoke-RestMethod -Uri $uploadUrl -Method Post -Headers $uploadHeaders -Body $jsonContent
+          Write-Host "CDN 版 latest.json 已上传到 GitHub Release (asset ID: $($uploadResponse.id))"
+
+      # 提交 updater/latest.json 到 GitHub 仓库
+      # 注意：不再推送到 Gitee 仓库，因为国内下载已通过 CDN 代理加速
       - name: Commit updater/latest.json to repository
         shell: pwsh
-        env:
-          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
         run: |
           $updaterFile = "${{ github.workspace }}\updater\latest.json"
           if (-not (Test-Path $updaterFile)) {
@@ -288,19 +212,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add updater/latest.json
-          git commit -m "chore: update Gitee latest.json for v$configVersion [skip ci]"
+          git commit -m "chore: update latest.json for v$configVersion [skip ci]"
 
-          # 推送到 GitHub（使用 GITHUB_TOKEN）
+          # 推送到 GitHub（使用 GITHUB_TOKEN，仅推 GitHub，不再推 Gitee）
           git push origin HEAD:main
-          Write-Host "已推送到 GitHub"
-
-          # 同时推送到 Gitee（使用 GITEE_TOKEN）
-          if ($env:GITEE_TOKEN) {
-            git remote add gitee_push "https://xumingke-06:$env:GITEE_TOKEN@gitee.com/xumingke-06/doc-agent.git"
-            git push gitee_push HEAD:main
-            git remote remove gitee_push
-            Write-Host "已推送到 Gitee"
-          } else {
-            Write-Host "::warning::GITEE_TOKEN 未设置，跳过 Gitee 推送"
-          }
-          Write-Host "updater/latest.json 已提交并同步到两个平台"
+          Write-Host "updater/latest.json 已提交到 GitHub 仓库"
