@@ -278,23 +278,20 @@ export default function App() {
     };
   }, [handleWorkspaceDirectoryDeleted]);
 
-  // 应用启动后自动检查更新（延迟5秒，避免启动时阻塞；开发环境下跳过自动检查）
-  // 使用 Toast（右上角小弹窗）提示检查状态，与手动检查更新行为一致
+  // 应用启动后自动静默检查更新（延迟5秒，避免启动时阻塞；开发环境下跳过自动检查）
+  // 静默检查不弹出"正在检查更新"的 Toast，仅在发现新版本时通知用户
   useEffect(() => {
     const timer = setTimeout(async () => {
       if (!settings.update.autoCheck) return;
       if (import.meta.env.DEV) return;
-      const toastId = useToastStore.getState().addToast("info", t('update.checking'));
       try {
         const result = await tauriCmd.checkUpdate();
-        useToastStore.getState().removeToast(toastId);
         if (result) {
           setPendingUpdateInfo(result);
           useToastStore.getState().addToast("success", t('update.newVersionFound', { version: result.version }));
           setUpdateNotificationOpen(true);
         }
       } catch {
-        useToastStore.getState().removeToast(toastId);
         // 静默处理检查失败
       }
     }, 5000);
