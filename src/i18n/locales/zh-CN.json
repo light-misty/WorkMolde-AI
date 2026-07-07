@@ -78,10 +78,7 @@
     "userCancelled": "✗ 用户已取消操作",
     "confirmExecute": "确认执行",
     "cancelOperation": "取消操作",
-    "codePreview": "代码预览",
-    "expandCode": "展开代码",
-    "feedbackPlaceholder": "输入拒绝原因（可选）…",
-    "collapseCode": "收起代码"
+    "feedbackPlaceholder": "输入拒绝原因（可选）…"
   },
   "errorNode": {
     "errorDetails": "错误详情",
@@ -92,13 +89,8 @@
   "toolNode": {
     "executing": "执行中...",
     "executionFailed": "执行失败",
-    "codeExecutionFailed": "代码执行失败",
     "expandError": "展开详情",
-    "collapseError": "收起详情",
-    "writingCode": "正在编写代码...",
-    "codePreview": "代码预览",
-    "collapseCode": "收缩代码",
-    "expandCode": "展开代码"
+    "collapseError": "收起详情"
   },
   "fileTree": {
     "sectionTitle": "工作区文件",
@@ -178,6 +170,12 @@
       "confirmAlways": "全部需确认",
       "confirmEditOnly": "仅编辑操作确认",
       "confirmNever": "全部自动确认",
+      "codeExecutionTitle": "代码执行环境",
+      "gitBashPath": "Git Bash 路径",
+      "gitBashPathDesc": "用于执行 Shell 命令的 Git Bash 可执行文件路径。留空则从 PATH 环境变量自动检测",
+      "gitBashPathPlaceholder": "例如：C:\\Program Files\\Git\\bin\\bash.exe（留空自动检测）",
+      "commandTimeout": "命令执行超时（秒）",
+      "commandTimeoutDesc": "执行 Shell 命令的最大等待时间，超时后自动终止（10-300秒）",
       "versionSnapshot": "版本快照",
       "retentionPolicy": "保留策略",
       "byCount": "按数量（最近{{count}}个）",
@@ -470,7 +468,6 @@
       "handlerXlsx": "Excel 文档操作（生成/读取/修改/转换/分析）",
       "handlerPptx": "PPT 文档操作（生成/读取/修改/转换/分析）",
       "handlerPdf": "PDF 文档操作（生成/读取/修改/转换/分析）",
-      "handlerCodeInterpreter": "代码解释器（执行 Python 代码生成/修改文档）",
       "handlerValidator": "文档质量验证器（检测文档常见质量问题）",
       "faqQ0": "如何配置 LLM 服务商?",
       "faqA0": "在设置 > 模型配置中，点击\"添加服务商\"按钮，选择服务商类型（OpenAI/Anthropic/Gemini/Ollama/自定义），填写 API 地址、API Key 和模型名称即可。",
@@ -693,9 +690,7 @@
     "search": "搜索",
     "file": "文件",
     "listDirectory": "列出目录",
-    "write": "写入",
-    "executeCode": "执行代码",
-    "codeInterpreter": "执行代码: {description}"
+    "write": "写入"
   },
   "session": {
     "newSession": "新会话"

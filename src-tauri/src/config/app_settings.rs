@@ -221,10 +221,20 @@ pub struct AppSettings {
     /// 用户首选 Provider ID（持久化，跨会话保持；为空表示使用列表第一个 Provider）
     #[serde(default)]
     pub preferred_provider_id: Option<String>,
+    /// Git Bash 可执行文件路径（空字符串表示从 PATH 环境变量自动检测）
+    /// 用于 run_command 工具执行 Shell 命令
+    #[serde(default)]
+    pub git_bash_path: String,
+    /// 命令执行默认超时时间（秒），0 表示使用默认值 60 秒
+    /// 用于 run_command 工具的超时控制
+    #[serde(default)]
+    pub command_timeout_secs: u64,
 }
 
 /// Sidecar 默认请求超时时间（秒）
 const DEFAULT_SIDECAR_TIMEOUT_SECS: u64 = 120;
+/// 命令执行默认超时时间（秒）
+const DEFAULT_COMMAND_TIMEOUT_SECS: u64 = 60;
 
 /// 获取应用设置文件路径
 fn config_path(data_dir: &Path) -> std::path::PathBuf {
@@ -349,5 +359,13 @@ pub fn merge_with_defaults(
         },
         // 首选 Provider ID 直接保留用户设置（None 表示未指定，使用列表第一个）
         preferred_provider_id: user_settings.preferred_provider_id.clone(),
+        // Git Bash 路径直接保留用户设置（空字符串表示自动检测）
+        git_bash_path: user_settings.git_bash_path.clone(),
+        // command_timeout_secs 为 0 时使用默认值（兼容旧配置文件）
+        command_timeout_secs: if user_settings.command_timeout_secs == 0 {
+            DEFAULT_COMMAND_TIMEOUT_SECS
+        } else {
+            user_settings.command_timeout_secs
+        },
     }
 }

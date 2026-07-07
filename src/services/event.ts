@@ -97,17 +97,6 @@ export interface NetworkRetryPayload {
   reason: string;
 }
 
-/** 代码流式事件（仅 code_interpreter_handler 触发） */
-export interface CodeStreamingPayload {
-  sessionId: string;
-  /** 关联的 tool_call ID */
-  callId: string;
-  /** 完整的代码内容（非增量，前端直接替换） */
-  codeDelta: string;
-  /** 是否为流式输出的最后一个事件 */
-  isFinal: boolean;
-}
-
 // ================================================================
 // 系统事件 Payload 类型
 // ================================================================
@@ -255,15 +244,6 @@ export function onAgentNetworkRetry(
   handler: (payload: NetworkRetryPayload) => void,
 ): Promise<UnlistenFn> {
   return listen<NetworkRetryPayload>("agent:network_retry", (event) => {
-    handler(event.payload);
-  });
-}
-
-/** 监听代码流式增量事件 */
-export function onAgentCodeStreaming(
-  handler: (payload: CodeStreamingPayload) => void,
-): Promise<UnlistenFn> {
-  return listen<CodeStreamingPayload>("agent:code_streaming", (event) => {
     handler(event.payload);
   });
 }

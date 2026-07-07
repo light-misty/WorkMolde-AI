@@ -87,7 +87,6 @@ export default function App() {
     doneResult,
     isStopped,
     networkRetry,
-    codeStreaming,
     sendMessage,
     stopAgent,
     confirmOperation,
@@ -99,8 +98,6 @@ export default function App() {
   const streamingNodeIdRef = useRef<string | null>(null);
   const thinkingNodeIdRef = useRef<string | null>(null);
   const confirmNodeIdRef = useRef<string | null>(null);
-  // 暂存 code_streaming 数据：当 ToolNode 尚未创建时缓存增量，等创建后一次性应用
-  const pendingCodeStreamingRef = useRef<Map<string, { code: string; isStreaming: boolean }>>(new Map());
   // 追踪当前迭代轮次，用于将 iteration 传递给 content/tool 节点
   const currentIterationRef = useRef<number | undefined>(undefined);
   // 追踪最后一次 tool_call 的迭代轮次，用于过滤残余 content 事件
@@ -148,7 +145,6 @@ export default function App() {
     currentIterationRef.current = undefined;
     lastToolCallIterationRef.current = null;
     lastClosedStreamingNodeIdRef.current = null;
-    pendingCodeStreamingRef.current.clear();
   }
 
   useEffect(() => {
@@ -392,10 +388,6 @@ export default function App() {
         });
       } else {
         const toolIteration = currentToolCall.iteration ?? currentIterationRef.current;
-        // 检查是否有暂存的 code_streaming 数据（可能在真实 callId 下）
-        const pendingStreaming = currentToolCall.callId
-          ? pendingCodeStreamingRef.current.get(currentToolCall.callId)
-          : undefined;
 
         // 流式阶段提前创建的 streaming_ 节点与真实 callId 匹配：
         // 后端流式阶段可能用 "streaming_0" 作为临时 callId，流式结束后用真实 callId 重发。
@@ -417,8 +409,6 @@ export default function App() {
               callId: currentToolCall.callId,
               input: currentToolCall.arguments,
               briefDescription: generateToolBrief(currentToolCall.toolName, currentToolCall.arguments),
-              streamingCode: pendingStreaming?.code ?? existingData.streamingCode,
-              isCodeStreaming: pendingStreaming?.isStreaming ?? false,
             } as ToolNodeData,
           });
         } else {
@@ -432,13 +422,7 @@ export default function App() {
             input: currentToolCall.arguments,
             briefDescription: generateToolBrief(currentToolCall.toolName, currentToolCall.arguments),
             callId: currentToolCall.callId,
-            streamingCode: pendingStreaming?.code,
-            isCodeStreaming: pendingStreaming?.isStreaming,
           }, "running", toolIteration);
-        }
-        // 清除暂存（两分支共用）
-        if (pendingStreaming) {
-          pendingCodeStreamingRef.current.delete(currentToolCall.callId!);
         }
       }
     }
@@ -464,50 +448,11 @@ export default function App() {
             ...existingData,
             success: lastToolResult.success,
             error: lastToolResult.success ? undefined : (lastToolResult.error || t('toolNode.executionFailed')),
-            // 工具执行完毕，代码流式输出也必然结束
-            isCodeStreaming: false,
           },
         });
       }
     }
   }, [lastToolResult, updateNode]);
-
-  // 代码流式事件：更新对应 ToolNode 的流式代码内容
-  // 后端每次发射完整的反转义代码（非增量），前端直接替换
-  useEffect(() => {
-    if (codeStreaming) {
-      // 通过 callId 匹配已有的 ToolNode
-      const toolNode = codeStreaming.callId
-        ? useWorkflowStore.getState().nodes.find(
-            (n) => n.type === "tool" && (n.data as ToolNodeData).callId === codeStreaming.callId
-          )
-        : undefined;
-
-      if (toolNode) {
-        const existingData = toolNode.data as ToolNodeData;
-        const isFinal = codeStreaming.isFinal;
-        const hasCodeDelta = codeStreaming.codeDelta.length > 0;
-        updateNode(toolNode.id, {
-          data: {
-            ...existingData,
-            // is_final 且 codeDelta 为空：纯结束信号，不替换代码内容
-            // is_final 且 codeDelta 非空：最终代码（如 patches 回传），仍需更新内容
-            streamingCode: isFinal && !hasCodeDelta ? existingData.streamingCode : codeStreaming.codeDelta,
-            isCodeStreaming: !isFinal,
-          },
-        });
-      } else if (codeStreaming.callId) {
-        // ToolNode 尚未创建，暂存最新数据（直接覆盖，非追加）
-        // is_final 时除非附带代码内容（如后端用真实 callId 重新发射），否则不暂存
-        if (!codeStreaming.isFinal) {
-          pendingCodeStreamingRef.current.set(codeStreaming.callId, {
-            code: codeStreaming.codeDelta,
-            isStreaming: true,
-          });
-        }
-      }
-    }
-  }, [codeStreaming, updateNode]);
 
   useEffect(() => {
     if (content !== undefined && content !== null) {
@@ -611,34 +556,12 @@ export default function App() {
 
   useEffect(() => {
     if (pendingConfirmation) {
-      // 防御性检查：code_interpreter_handler 不应再触发确认流程
-      // 如果仍然收到，直接自动确认（兼容性兜底）
-      if (pendingConfirmation.operationType === "code_interpreter_handler") {
-        console.warn("[Confirm] code_interpreter_handler 不应触发确认流程，已自动批准（兼容性兜底）");
-        confirmOperation(pendingConfirmation.operationId, true);
-        return;
-      }
-
-      // 从 details 中提取代码（仅 code_interpreter_handler 操作时存在）
-      const details = pendingConfirmation.details as Record<string, unknown> | undefined;
-      const code = details?.code as string | undefined;
-      // 当有代码预览时，description 中已包含代码摘要，需要分离出纯描述
-      // Rust 端格式: "执行代码: {desc}\n{code_preview}"
-      let displayDescription = pendingConfirmation.description;
-      if (code) {
-        const newlineIdx = displayDescription.indexOf('\n');
-        if (newlineIdx !== -1) {
-          // 只保留第一行（描述部分），代码部分由代码预览区域展示
-          displayDescription = displayDescription.substring(0, newlineIdx);
-        }
-      }
       const confirmData = {
         title: pendingConfirmation.operationType,
-        description: displayDescription,
+        description: pendingConfirmation.description,
         confirmLabel: t('confirmNode.confirmExecute'),
         cancelLabel: t('confirmNode.cancelOperation'),
         confirmed: null,
-        ...(code ? { code } : {}),
       };
       const nodeId = addNode("confirm", confirmData, "running");
       confirmNodeIdRef.current = nodeId;

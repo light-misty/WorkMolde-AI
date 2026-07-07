@@ -278,7 +278,6 @@ impl PromptLoader {
 
 ### 写入操作
 - 纯文本文件 -> write_text_file
-- 生成/修改文档 -> code_interpreter_handler（编写 Python 代码生成或修改任意文档）
 
 ### 搜索操作
 - 按文件名搜索 -> search_files（设置include_content=false）
@@ -304,9 +303,7 @@ impl PromptLoader {
 - 回复和文档中不得出现任何emoji表情符号，使用文字替代（如用"完成"替代"✅"，用"注意"替代"⚠️"）
 </tool_strategy>"#;
 
-        // 追加 Code Interpreter 指导
-        let ci_guide = super::code_interpreter::CODE_INTERPRETER_GUIDE;
-        format!("{}\n\n{}", base, ci_guide)
+        base.to_string()
     }
 
     /// 默认防幻觉层
@@ -345,7 +342,6 @@ impl PromptLoader {
 
 以下操作会自动触发用户确认：
 - delete_file: 删除文件（critical风险级别）
-- code_interpreter_handler: 执行代码生成/修改文档（high风险级别）
 
 当你的工具调用被确认机制拦截时：
 - 你会收到"用户拒绝了操作"的反馈
@@ -357,18 +353,17 @@ impl PromptLoader {
     /// 默认示例
     fn default_examples(example_type: &str) -> String {
         match example_type {
-            "document" => r#"<examples>
-## 生成文档示例
+            "document" => r##"<examples>
+## 写入纯文本文件示例
 
-### 示例: 生成Word文档
-用户: "帮我创建一份项目周报"
-思考: 用户需要生成Word文档，应使用code_interpreter_handler编写Python代码
-工具调用: code_interpreter_handler({
-  "code": "doc = create_word_doc(title='项目周报', author='作者名')\ndoc.add_heading('本周工作总结', level=1)\ndoc.add_paragraph('本周完成了以下工作...')\nsave_word_doc(doc, '项目周报.docx', working_dir=working_dir)",
-  "description": "生成项目周报Word文档",
-  "expected_files": ["项目周报.docx"]
+### 示例: 创建Markdown笔记
+用户: "帮我创建一份会议笔记"
+思考: 用户需要创建纯文本文件，应使用write_text_file
+工具调用: write_text_file({
+  "path": "会议笔记.md",
+  "content": "# 会议笔记\n\n## 议题\n1. 项目进度\n2. 下周计划\n\n## 结论\n- 进度符合预期"
 })
-</examples>"#.to_string(),
+</examples>"##.to_string(),
             _ => String::new(),
         }
     }
@@ -427,7 +422,7 @@ mod tests {
     #[test]
     fn test_default_examples() {
         let content = PromptLoader::default_examples("document");
-        assert!(content.contains("code_interpreter_handler"));
+        assert!(content.contains("write_text_file"));
     }
 
     #[test]

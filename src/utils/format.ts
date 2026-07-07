@@ -93,8 +93,6 @@ export function generateToolBrief(toolName: string, input: Record<string, unknow
       return `${i18n.t('toolBrief.read')} ${f("path") || i18n.t('toolBrief.file')}`;
     case "write_text_file":
       return `${i18n.t('toolBrief.write')} ${f("path") || i18n.t('toolBrief.file')}`;
-    case "code_interpreter_handler":
-      return `${i18n.t('toolBrief.executeCode')} ${f("description") || ""}`;
     default:
       return toolName;
   }

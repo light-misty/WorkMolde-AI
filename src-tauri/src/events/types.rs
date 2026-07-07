@@ -15,7 +15,6 @@ pub const AGENT_ERROR: &str = "agent:error";
 pub const AGENT_STOPPED: &str = "agent:stopped";
 pub const AGENT_CONTEXT_UPDATE: &str = "agent:context_update";
 pub const AGENT_NETWORK_RETRY: &str = "agent:network_retry";
-pub const AGENT_CODE_STREAMING: &str = "agent:code_streaming";
 
 // ================================================================
 // 系统事件名常量
@@ -137,21 +136,6 @@ pub struct NetworkRetryPayload {
     pub attempt: u32,
     pub max_attempts: u32,
     pub reason: String,
-}
-
-/// 代码流式事件（仅 code_interpreter_handler 触发）
-/// 当 LLM 流式输出 code_interpreter_handler 的 code 参数时，
-/// 每次发射完整的反转义代码内容（非增量），前端直接替换显示
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct CodeStreamingPayload {
-    pub session_id: String,
-    /// 关联的 tool_call ID，用于前端匹配对应的 ToolNode
-    pub call_id: String,
-    /// 完整的代码内容（非增量，前端直接替换）
-    pub code_delta: String,
-    /// 是否为流式输出的最后一个事件
-    pub is_final: bool,
 }
 
 /// Agent 执行中断

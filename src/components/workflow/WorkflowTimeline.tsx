@@ -50,7 +50,7 @@ export function WorkflowTimeline({ onRetryError, typewriterVisible = false }: Wo
   // 追踪上一次节点数量，用于判断是会话切换还是增量更新
   const prevNodesLengthRef = useRef(nodes.length);
 
-  // 计算流式内容变化标识：当流式节点的文本/代码内容增长时，此值变化
+  // 计算流式内容变化标识：当流式节点的文本内容增长时，此值变化
   const streamingContentKey = nodes.reduce((acc, node) => {
     if (node.type === "content") {
       const d = node.data as { content: string; isStreaming?: boolean };
@@ -59,10 +59,6 @@ export function WorkflowTimeline({ onRetryError, typewriterVisible = false }: Wo
     if (node.type === "thinking") {
       const d = node.data as { content: string; isStreaming?: boolean };
       if (node.status === "running" || d.isStreaming) return acc + d.content.length;
-    }
-    if (node.type === "tool") {
-      const d = node.data as { streamingCode?: string; isCodeStreaming?: boolean };
-      if (d.isCodeStreaming && d.streamingCode) return acc + d.streamingCode.length;
     }
     return acc;
   }, 0);

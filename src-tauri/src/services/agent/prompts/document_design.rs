@@ -1,12 +1,12 @@
 //! 文档设计参考模块
-//! 为 Agent 通过 code_interpreter_handler 编写文档生成代码时提供设计参考
+//! 为 Agent 生成文档时提供设计参考
 //! 包含配色方案、字体规范、页面尺寸等专业设计信息
 
 /// Word 文档设计参考
 pub const WORD_DESIGN_GUIDE: &str = r#"
 ## Word 文档设计参考
 
-以下为文档设计参考，供 code_interpreter_handler 编写代码时使用。可用 helper: create_word_doc(), save_word_doc()。
+以下为文档设计参考。
 
 ### 专业配色方案
 - 标题1: 深蓝色 (#1F4E79) 22pt 粗体
@@ -40,7 +40,7 @@ from docx.shared import Inches, Cm, Pt, Emu
 pub const EXCEL_DESIGN_GUIDE: &str = r#"
 ## Excel 文档设计参考
 
-以下为文档设计参考，供 code_interpreter_handler 编写代码时使用。可用 helper: create_excel_doc(), save_excel_doc()。
+以下为文档设计参考。
 
 ### 专业配色方案
 - 表头: 蓝色背景 (#D6E4F0) + 深蓝色粗体文字 (#1F4E79)
@@ -71,7 +71,7 @@ pub const EXCEL_DESIGN_GUIDE: &str = r#"
 pub const PPT_DESIGN_GUIDE: &str = r#"
 ## PPT 文档设计参考
 
-以下为文档设计参考，供 code_interpreter_handler 编写代码时使用。可用 helper: create_ppt_doc(), save_ppt_doc()。
+以下为文档设计参考。
 
 ### 专业配色方案
 | 方案 | 主色 | 辅色 | 强调色 |
@@ -103,7 +103,7 @@ pub const PDF_DESIGN_GUIDE: &str = r#"
 - 读取 PDF 视觉布局 → 用 pdf_handler 的 `include_visual` 开关
 
 可用 helper: create_pdf_doc(), save_pdf_doc(), register_chinese_font(), register_bold_font()。
-可用 PDF 库: fitz(PyMuPDF), pypdf, pdfplumber, reportlab, fpdf（均已在 code_interpreter 白名单）。
+可用 PDF 库: fitz(PyMuPDF), pypdf, pdfplumber, reportlab, fpdf。
 
 ### 1. PyMuPDF 常见陷阱（重要，务必先读）
 
@@ -308,8 +308,6 @@ pdf_handler 提供 17 个 modify 子操作，**优先使用内置操作**：
 - 注释：add_annotation
 - 表单：fill_form
 - 压缩：compress
-
-仅在需要更精细控制时才用 code_interpreter 写 PyMuPDF 代码。
 "#;
 
 /// 获取所有文档设计参考, 拼接为完整字符串

@@ -30,7 +30,6 @@ export function HelpTab() {
     { name: "xlsx_handler", desc: t('settings.help.handlerXlsx') },
     { name: "pptx_handler", desc: t('settings.help.handlerPptx') },
     { name: "pdf_handler", desc: t('settings.help.handlerPdf') },
-    { name: "code_interpreter_handler", desc: t('settings.help.handlerCodeInterpreter') },
     { name: "validator_handler", desc: t('settings.help.handlerValidator') },
   ];
 

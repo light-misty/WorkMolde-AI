@@ -94,6 +94,42 @@ export function GeneralTab() {
         </div>
       </div>
 
+      {/* 代码执行环境设置 */}
+      <div className="settings-section">
+        <div className="section-header">
+          <span className="section-title">{t('settings.general.codeExecutionTitle')}</span>
+        </div>
+
+        <div className="setting-row">
+          <div className="setting-info">
+            <div className="setting-label">{t('settings.general.gitBashPath')}</div>
+            <div className="setting-desc">{t('settings.general.gitBashPathDesc')}</div>
+          </div>
+          <input
+            className="setting-input"
+            style={{ minWidth: '300px' }}
+            placeholder={t('settings.general.gitBashPathPlaceholder')}
+            value={settings.gitBashPath ?? ''}
+            onChange={(e) => updateSettings({ gitBashPath: e.target.value })}
+          />
+        </div>
+
+        <div className="setting-row">
+          <div className="setting-info">
+            <div className="setting-label">{t('settings.general.commandTimeout')}</div>
+            <div className="setting-desc">{t('settings.general.commandTimeoutDesc')}</div>
+          </div>
+          <input
+            type="number"
+            className="setting-input setting-input-narrow"
+            min={10}
+            max={300}
+            value={settings.commandTimeoutSecs ?? 60}
+            onChange={(e) => updateSettings({ commandTimeoutSecs: Number(e.target.value) || 60 })}
+          />
+        </div>
+      </div>
+
       <div className="settings-section">
         <div className="section-header">
           <span className="section-title">{t('settings.general.versionSnapshot')}</span>

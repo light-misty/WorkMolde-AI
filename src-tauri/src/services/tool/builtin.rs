@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -35,7 +35,13 @@ fn resolve_path(path: &str, workspace_root: &str) -> String {
 
 /// 注册所有内置工具
 /// 返回 Scratchpad 共享状态 Arc，供 AgentContext 在每轮迭代时读取笔记摘要
-pub fn register_builtin_tools(registry: &mut ToolRegistry) -> SharedScratchpadStates {
+/// git_bash_path: Git Bash 可执行文件路径（空字符串表示从 PATH 自动检测）
+/// command_timeout_secs: 命令执行默认超时时间（秒，0 表示使用默认值 60）
+pub fn register_builtin_tools(
+    registry: &mut ToolRegistry,
+    git_bash_path: String,
+    command_timeout_secs: u64,
+) -> SharedScratchpadStates {
     log::info!("开始注册内置工具");
     registry.register(Box::new(ListDirectoryTool));
     registry.register(Box::new(SearchFilesTool));
@@ -60,7 +66,15 @@ pub fn register_builtin_tools(registry: &mut ToolRegistry) -> SharedScratchpadSt
         states: scratchpad_states.clone(),
     }));
 
-    log::info!("内置工具注册完成, 共注册 14 个工具");
+    // 代码执行工具：write_script + run_command
+    // 让智能体通过编写脚本文件并执行命令解决用户问题
+    registry.register(Box::new(WriteScriptTool));
+    registry.register(Box::new(RunCommandTool {
+        git_bash_path,
+        default_timeout_secs: command_timeout_secs,
+    }));
+
+    log::info!("内置工具注册完成, 共注册 16 个工具");
     scratchpad_states
 }
 
@@ -746,11 +760,11 @@ mod tests {
     #[test]
     fn test_register_builtin_tools() {
         let mut registry = ToolRegistry::new();
-        let _scratchpad_states = register_builtin_tools(&mut registry);
+        let _scratchpad_states = register_builtin_tools(&mut registry, String::new(), 0);
 
-        // 验证 14 个工具都已注册（8 个原有 + 5 个阶段三新增 + 1 个 scratchpad）
+        // 验证 16 个工具都已注册（8 个原有 + 5 个阶段三新增 + 1 个 scratchpad + 2 个代码执行工具）
         let tools = registry.list_tools();
-        assert_eq!(tools.len(), 14);
+        assert_eq!(tools.len(), 16);
 
         // 验证每个工具的基本属性
         let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
@@ -770,15 +784,18 @@ mod tests {
         assert!(tool_names.contains(&"read_file_lines"));
         // Scratchpad 工具
         assert!(tool_names.contains(&"update_notes"));
+        // 代码执行工具
+        assert!(tool_names.contains(&"write_script"));
+        assert!(tool_names.contains(&"run_command"));
     }
 
     #[test]
     fn test_tool_definitions_count() {
         let mut registry = ToolRegistry::new();
-        let _scratchpad_states = register_builtin_tools(&mut registry);
+        let _scratchpad_states = register_builtin_tools(&mut registry, String::new(), 0);
 
         let defs = registry.tool_definitions();
-        assert_eq!(defs.len(), 14);
+        assert_eq!(defs.len(), 16);
 
         // 验证每个定义都有 type 和 function 字段
         for def in &defs {
@@ -792,7 +809,7 @@ mod tests {
     #[test]
     fn test_tool_info_properties() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry, String::new(), 0);
 
         let tools = registry.list_tools();
         for tool in &tools {
@@ -802,14 +819,14 @@ mod tests {
             assert!(!tool.name.is_empty());
             assert!(!tool.description.is_empty());
             // 文件系统工具为 "filesystem"，Scratchpad 笔记工具为 "memory"
-            assert!(tool.category == "filesystem" || tool.category == "memory");
+            assert!(tool.category == "filesystem" || tool.category == "memory" || tool.category == "code");
         }
     }
 
     #[tokio::test]
     async fn test_file_exists_nonexistent() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry, String::new(), 0);
 
         let tool = registry.get_arc("file_exists").unwrap();
         let result = tool.execute(json!({
@@ -826,7 +843,7 @@ mod tests {
     #[tokio::test]
     async fn test_read_file_missing_path() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry, String::new(), 0);
 
         let tool = registry.get_arc("read_file").unwrap();
         let result = tool.execute(json!({
@@ -842,7 +859,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_directory_missing_path() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry, String::new(), 0);
 
         let tool = registry.get_arc("create_directory").unwrap();
         let result = tool.execute(json!({
@@ -858,7 +875,7 @@ mod tests {
     #[tokio::test]
     async fn test_write_text_file_missing_path() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry, String::new(), 0);
 
         let tool = registry.get_arc("write_text_file").unwrap();
         let result = tool.execute(json!({
@@ -875,7 +892,7 @@ mod tests {
     #[tokio::test]
     async fn test_delete_file_missing_workspace() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry, String::new(), 0);
 
         let tool = registry.get_arc("delete_file").unwrap();
         let result = tool.execute(json!({
@@ -891,7 +908,7 @@ mod tests {
     #[tokio::test]
     async fn test_search_files_empty_query_and_extensions() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry, String::new(), 0);
 
         let tool = registry.get_arc("search_files").unwrap();
         let result = tool.execute(json!({
@@ -906,7 +923,7 @@ mod tests {
     #[tokio::test]
     async fn test_file_info_missing_path() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry, String::new(), 0);
 
         let tool = registry.get_arc("file_info").unwrap();
         let result = tool.execute(json!({
@@ -924,7 +941,7 @@ mod tests {
     #[tokio::test]
     async fn test_write_and_read_file_with_gbk_encoding() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry, String::new(), 0);
 
         // 创建临时工作区目录
         let temp_dir = std::env::temp_dir().join("docagent_encoding_test");
@@ -970,7 +987,7 @@ mod tests {
     #[tokio::test]
     async fn test_read_file_default_utf8_encoding() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry, String::new(), 0);
 
         // 创建临时工作区目录
         let temp_dir = std::env::temp_dir().join("docagent_utf8_test");
@@ -1005,7 +1022,7 @@ mod tests {
     #[tokio::test]
     async fn test_read_file_unsupported_encoding_fallback() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry, String::new(), 0);
 
         // 创建临时工作区目录
         let temp_dir = std::env::temp_dir().join("docagent_fallback_test");
@@ -1040,7 +1057,7 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_add_notes() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry);
+        let _states = register_builtin_tools(&mut registry, String::new(), 0);
 
         let tool = registry.get_arc("update_notes").unwrap();
 
@@ -1073,7 +1090,7 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_read_notes() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry);
+        let _states = register_builtin_tools(&mut registry, String::new(), 0);
         let tool = registry.get_arc("update_notes").unwrap();
 
         // 先添加两条笔记
@@ -1108,7 +1125,7 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_clear_notes() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry);
+        let _states = register_builtin_tools(&mut registry, String::new(), 0);
         let tool = registry.get_arc("update_notes").unwrap();
 
         // 添加笔记
@@ -1141,7 +1158,7 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_session_isolation() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry);
+        let _states = register_builtin_tools(&mut registry, String::new(), 0);
         let tool = registry.get_arc("update_notes").unwrap();
 
         // session-A 添加笔记
@@ -1182,7 +1199,7 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_missing_session_id() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry);
+        let _states = register_builtin_tools(&mut registry, String::new(), 0);
         let tool = registry.get_arc("update_notes").unwrap();
 
         let result = tool.execute(json!({
@@ -1199,7 +1216,7 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_add_empty_content() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry);
+        let _states = register_builtin_tools(&mut registry, String::new(), 0);
         let tool = registry.get_arc("update_notes").unwrap();
 
         let result = tool.execute(json!({
@@ -1216,7 +1233,7 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_unknown_action() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry);
+        let _states = register_builtin_tools(&mut registry, String::new(), 0);
         let tool = registry.get_arc("update_notes").unwrap();
 
         let result = tool.execute(json!({
@@ -1232,7 +1249,7 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_content_length_limit() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry);
+        let _states = register_builtin_tools(&mut registry, String::new(), 0);
         let tool = registry.get_arc("update_notes").unwrap();
 
         // 构造 1000 字符的长内容
@@ -1864,7 +1881,7 @@ struct WriteTextFileTool;
 #[async_trait]
 impl Tool for WriteTextFileTool {
     fn tool_name(&self) -> &str { "write_text_file" }
-    fn description(&self) -> &str { "写入纯文本文件内容（.txt/.md/.csv/.json等），不依赖Sidecar。使用场景：创建纯文本文件、修改Markdown文件、保存JSON配置。支持追加模式。注意：仅适用于纯文本，生成结构化文档请使用docx_handler/xlsx_handler/pptx_handler/pdf_handler的generate操作。内容大小限制4KB（约4000字符），超出可能触发LLM响应截断；对于大文件（如6000+字符的测试文件、长文档），请改用code_interpreter_handler通过Python代码生成（如循环写入、字符串拼接），避免将大段内容作为工具参数传输。" }
+    fn description(&self) -> &str { "写入纯文本文件内容（.txt/.md/.csv/.json等），不依赖Sidecar。使用场景：创建纯文本文件、修改Markdown文件、保存JSON配置。支持追加模式。注意：仅适用于纯文本，生成结构化文档请使用docx_handler/xlsx_handler/pptx_handler/pdf_handler的generate操作。内容大小限制4KB（约4000字符），超出可能触发LLM响应截断。" }
     fn category(&self) -> &str { "filesystem" }
     fn parameters(&self) -> Value {
         json!({
@@ -3161,4 +3178,511 @@ pub fn format_scratchpad_summary(
     }
     summary.push_str("\n如需更新笔记，请调用 update_notes 工具。\n</scratchpad>");
     Some(summary)
+}
+
+// ============================================================
+// write_script - 写入脚本文件到临时目录
+// ============================================================
+//
+// 让智能体编写 Python 或 Bash 脚本文件，存放在系统临时目录下，
+// 供 run_command 工具执行。脚本文件不污染工作区目录。
+//
+// 存放路径：<temp_dir>/docagent/scripts/<filename>
+// 脚本语言：python（.py）或 bash（.sh）
+
+/// 脚本写入工具
+/// 将智能体编写的脚本内容写入系统临时目录，返回脚本绝对路径
+struct WriteScriptTool;
+
+#[async_trait]
+impl Tool for WriteScriptTool {
+    fn tool_name(&self) -> &str { "write_script" }
+
+    fn description(&self) -> &str {
+        "将脚本内容写入临时文件，供 run_command 工具执行。\
+         支持编写 Python 或 Bash 脚本解决用户问题（文档处理、数据分析、自动化任务等）。\
+         脚本文件存放在系统临时目录，不污染工作区。\
+         返回脚本文件的绝对路径，可在 run_command 中通过 'python <path>' 或 'bash <path>' 执行。"
+    }
+
+    fn category(&self) -> &str { "code" }
+
+    fn parameters(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "filename": {
+                    "type": "string",
+                    "description": "脚本文件名（含扩展名，如 'generate_report.py' 或 'process_data.sh'）"
+                },
+                "language": {
+                    "type": "string",
+                    "enum": ["python", "bash"],
+                    "description": "脚本语言类型：python（.py）或 bash（.sh）。若 filename 已含扩展名，可省略此字段自动推断"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "脚本文件内容（完整源代码）"
+                }
+            },
+            "required": ["filename", "content"]
+        })
+    }
+
+    async fn execute(&self, params: Value) -> ToolResult {
+        let start = Instant::now();
+
+        let filename = params["filename"].as_str().unwrap_or("").trim();
+        let content = params["content"].as_str().unwrap_or("");
+        let language = params["language"].as_str().unwrap_or("");
+
+        // 参数校验
+        if filename.is_empty() {
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some("缺少文件名参数".to_string()),
+                duration_ms: start.elapsed().as_millis() as u64,
+                error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
+            };
+        }
+        if content.is_empty() {
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some("脚本内容不能为空".to_string()),
+                duration_ms: start.elapsed().as_millis() as u64,
+                error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
+            };
+        }
+
+        // 安全校验：禁止文件名包含路径分隔符或 .. 遍历
+        if filename.contains('/') || filename.contains('\\') || filename.contains("..") {
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some(format!("文件名包含非法字符: {}", filename)),
+                duration_ms: start.elapsed().as_millis() as u64,
+                error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
+            };
+        }
+
+        // 推断语言和扩展名
+        let (final_filename, detected_language) = infer_script_language(filename, language);
+        let _ = detected_language; // 语言仅用于日志，不强制使用
+
+        // 构造脚本目录：<temp_dir>/docagent/scripts/
+        let script_dir = std::env::temp_dir().join("docagent").join("scripts");
+        if let Err(e) = std::fs::create_dir_all(&script_dir) {
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some(format!("创建脚本目录失败: {}", e)),
+                duration_ms: start.elapsed().as_millis() as u64,
+                error_code: None,
+            };
+        }
+
+        let script_path = script_dir.join(&final_filename);
+
+        // 写入脚本文件
+        match tokio::fs::write(&script_path, content).await {
+            Ok(()) => {
+                let path_str = script_path.to_string_lossy().to_string();
+                log::info!(
+                    "write_script: 已写入脚本文件: {} (语言: {}, 大小: {} 字节)",
+                    path_str,
+                    detected_language,
+                    content.len()
+                );
+                ToolResult {
+                    success: true,
+                    output: Some(json!({
+                        "path": path_str,
+                        "filename": final_filename,
+                        "language": detected_language,
+                        "size": content.len(),
+                        "message": format!("脚本已写入: {}", final_filename)
+                    })),
+                    error: None,
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    error_code: None,
+                }
+            }
+            Err(e) => ToolResult {
+                success: false,
+                output: None,
+                error: Some(format!("写入脚本文件失败: {}", e)),
+                duration_ms: start.elapsed().as_millis() as u64,
+                error_code: None,
+            },
+        }
+    }
+}
+
+/// 根据文件名和语言参数推断最终文件名和语言类型
+/// 若 filename 已含扩展名，直接使用；否则根据 language 参数补充扩展名
+fn infer_script_language(filename: &str, language: &str) -> (String, &'static str) {
+    let lower = filename.to_lowercase();
+    if lower.ends_with(".py") {
+        (filename.to_string(), "python")
+    } else if lower.ends_with(".sh") {
+        (filename.to_string(), "bash")
+    } else {
+        // 无扩展名，根据 language 参数补充
+        match language {
+            "bash" => (format!("{}.sh", filename), "bash"),
+            _ => (format!("{}.py", filename), "python"),
+        }
+    }
+}
+
+// ============================================================
+// run_command - 执行 Shell 命令（通过 Git Bash）
+// ============================================================
+//
+// 让智能体通过 Git Bash 执行 Shell 命令，支持运行脚本、文件操作、
+// 系统命令等。工作目录默认为当前工作区，可通过 working_dir 参数指定。
+//
+// Git Bash 路径获取优先级：
+// 1. 配置中指定的 git_bash_path
+// 2. 从 PATH 环境变量查找 git.exe，推断 bash.exe 位置
+// 3. 从 PATH 直接查找 bash.exe
+
+/// 命令执行工具
+/// 通过 Git Bash 执行 Shell 命令，捕获 stdout/stderr/exit_code
+pub struct RunCommandTool {
+    /// Git Bash 可执行文件路径（空字符串表示自动检测）
+    pub git_bash_path: String,
+    /// 默认超时时间（秒）
+    pub default_timeout_secs: u64,
+}
+
+/// 命令执行默认超时时间（秒），配置值为 0 时使用
+const FALLBACK_COMMAND_TIMEOUT_SECS: u64 = 60;
+
+#[async_trait]
+impl Tool for RunCommandTool {
+    fn tool_name(&self) -> &str { "run_command" }
+
+    fn description(&self) -> &str {
+        "通过 Git Bash 执行 Shell 命令。可用于运行脚本文件、执行系统命令、处理文件等。\
+         工作目录默认为当前工作区，可通过 working_dir 参数指定其他目录。\
+         命令超时默认 60 秒，可通过 timeout 参数调整（最大 300 秒）。\
+         输出超过 6000 字符会被自动截断。\
+         高风险命令（含 rm/del/rmdir 等）会请求用户确认。"
+    }
+
+    fn category(&self) -> &str { "code" }
+
+    fn parameters(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "要执行的 Shell 命令（将通过 bash -c 执行）。例如: 'python /tmp/docagent/scripts/script.py' 或 'ls -la'"
+                },
+                "working_dir": {
+                    "type": "string",
+                    "description": "命令执行的工作目录（可选，默认为当前工作区根目录）"
+                },
+                "timeout": {
+                    "type": "integer",
+                    "description": "命令超时时间（秒），默认 60，最大 300",
+                    "default": 60
+                }
+            },
+            "required": ["command"]
+        })
+    }
+
+    async fn execute(&self, params: Value) -> ToolResult {
+        let start = Instant::now();
+
+        let command = params["command"].as_str().unwrap_or("").trim().to_string();
+        let working_dir = params["working_dir"].as_str().unwrap_or("");
+        let workspace_root = params["workspace_root"].as_str().unwrap_or("");
+        let timeout = params["timeout"].as_u64()
+            .unwrap_or(if self.default_timeout_secs > 0 {
+                self.default_timeout_secs
+            } else {
+                FALLBACK_COMMAND_TIMEOUT_SECS
+            })
+            .min(300);
+
+        // 参数校验
+        if command.is_empty() {
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some("缺少命令参数".to_string()),
+                duration_ms: start.elapsed().as_millis() as u64,
+                error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
+            };
+        }
+
+        // 解析工作目录：优先使用 working_dir，其次 workspace_root
+        let cwd = if !working_dir.is_empty() {
+            working_dir.to_string()
+        } else if !workspace_root.is_empty() {
+            workspace_root.to_string()
+        } else {
+            String::new()
+        };
+
+        // 获取 Git Bash 可执行文件路径
+        let bash_path = resolve_bash_path(&self.git_bash_path);
+        let bash_path = match bash_path {
+            Some(p) => p,
+            None => {
+                return ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some(
+                        "未找到 Git Bash 可执行文件。请在设置中配置 Git Bash 路径，或确保 git 已安装并添加到 PATH 环境变量".to_string()
+                    ),
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    error_code: None,
+                };
+            }
+        };
+
+        log::info!(
+            "run_command: 执行命令 (cwd='{}', timeout={}s): {}",
+            cwd,
+            timeout,
+            command
+        );
+
+        // 在 spawn_blocking 中执行同步的子进程操作，避免阻塞异步运行时
+        let command_for_closure = command.clone();
+        let cwd_for_closure = cwd.clone();
+        let bash_path_for_closure = bash_path.clone();
+
+        let result = tokio::task::spawn_blocking(move || {
+            execute_bash_command(&bash_path_for_closure, &command_for_closure, &cwd_for_closure, timeout)
+        }).await;
+
+        match result {
+            Ok(Ok(output)) => {
+                log::info!(
+                    "run_command: 命令执行完成 (exit_code={}, stdout={} 字节, stderr={} 字节)",
+                    output.exit_code,
+                    output.stdout.len(),
+                    output.stderr.len()
+                );
+                ToolResult {
+                    success: output.exit_code == 0,
+                    output: Some(json!({
+                        "stdout": output.stdout,
+                        "stderr": output.stderr,
+                        "exit_code": output.exit_code,
+                        "command": command,
+                        "working_dir": cwd,
+                    })),
+                    error: if output.exit_code != 0 {
+                        Some(format!("命令执行失败，退出码: {}", output.exit_code))
+                    } else {
+                        None
+                    },
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    error_code: None,
+                }
+            }
+            Ok(Err(e)) => {
+                log::error!("run_command: 命令执行错误: {}", e);
+                ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some(format!("命令执行错误: {}", e)),
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    error_code: None,
+                }
+            }
+            Err(e) => {
+                log::error!("run_command: 任务执行失败: {}", e);
+                ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some(format!("任务执行失败: {}", e)),
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    error_code: None,
+                }
+            }
+        }
+    }
+}
+
+/// 命令执行结果
+struct CommandOutput {
+    stdout: String,
+    stderr: String,
+    exit_code: i32,
+}
+
+/// 解析 Git Bash 可执行文件路径
+/// 优先使用配置路径，否则从 PATH 环境变量自动检测
+fn resolve_bash_path(configured_path: &str) -> Option<String> {
+    // 1. 优先使用配置中指定的路径
+    if !configured_path.is_empty() {
+        let path = std::path::Path::new(configured_path);
+        if path.exists() {
+            log::debug!("resolve_bash_path: 使用配置路径: {}", configured_path);
+            return Some(configured_path.to_string());
+        }
+        log::warn!("resolve_bash_path: 配置的 Git Bash 路径不存在: {}", configured_path);
+    }
+
+    // 2. 从 PATH 环境变量自动检测
+    find_git_bash_from_path()
+}
+
+/// 从 PATH 环境变量中查找 Git Bash 可执行文件
+/// 检测策略：
+///   a. 先从 PATH 中直接查找 bash.exe
+///   b. 若未找到，从 PATH 中查找 git.exe，推断 bash.exe 位置（<git_root>/bin/bash.exe）
+fn find_git_bash_from_path() -> Option<String> {
+    let path_env = std::env::var_os("PATH")?;
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::path::PathBuf;
+
+        // Windows 上 PATH 使用分号分隔
+        let paths: Vec<PathBuf> = std::env::split_paths(&path_env).collect();
+
+        // 策略 a: 从 PATH 中直接查找 bash.exe
+        for dir in &paths {
+            let bash_candidate = dir.join("bash.exe");
+            if bash_candidate.exists() {
+                log::info!("find_git_bash_from_path: 从 PATH 找到 bash.exe: {}", bash_candidate.display());
+                return Some(bash_candidate.to_string_lossy().to_string());
+            }
+        }
+
+        // 策略 b: 从 PATH 中查找 git.exe，推断 bash.exe 位置
+        // Git 安装目录结构：<git_root>/cmd/git.exe，bash.exe 在 <git_root>/bin/bash.exe
+        for dir in &paths {
+            let git_candidate = dir.join("git.exe");
+            if git_candidate.exists() {
+                // dir 形如 <git_root>/cmd，bash 应在 <git_root>/bin/bash.exe
+                if let Some(parent) = dir.parent() {
+                    let bash_inferred = parent.join("bin").join("bash.exe");
+                    if bash_inferred.exists() {
+                        log::info!(
+                            "find_git_bash_from_path: 从 git.exe 推断 bash.exe: {}",
+                            bash_inferred.display()
+                        );
+                        return Some(bash_inferred.to_string_lossy().to_string());
+                    }
+                    // 部分安装可能在 <git_root>/usr/bin/bash.exe
+                    let bash_usr = parent.join("usr").join("bin").join("bash.exe");
+                    if bash_usr.exists() {
+                        log::info!(
+                            "find_git_bash_from_path: 从 git.exe 推断 bash.exe (usr/bin): {}",
+                            bash_usr.display()
+                        );
+                        return Some(bash_usr.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+
+        log::warn!("find_git_bash_from_path: 未在 PATH 中找到 bash.exe 或 git.exe");
+        None
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        // 非 Windows 平台：直接查找 bash
+        for dir in std::env::split_paths(&path_env) {
+            let bash_candidate = dir.join("bash");
+            if bash_candidate.exists() {
+                return Some(bash_candidate.to_string_lossy().to_string());
+            }
+        }
+        None
+    }
+}
+
+/// 执行 bash 命令（同步函数，应在 spawn_blocking 中调用）
+fn execute_bash_command(
+    bash_path: &str,
+    command: &str,
+    working_dir: &str,
+    timeout_secs: u64,
+) -> Result<CommandOutput, String> {
+    use std::process::{Command, Stdio};
+    use std::time::Instant;
+
+    #[cfg(target_os = "windows")]
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+    let mut cmd = Command::new(bash_path);
+    cmd.arg("-c").arg(command);
+
+    // 设置工作目录
+    if !working_dir.is_empty() {
+        cmd.current_dir(working_dir);
+    }
+
+    // 捕获 stdout 和 stderr
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).stdin(Stdio::null());
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let start = Instant::now();
+    let mut child = cmd.spawn().map_err(|e| format!("启动子进程失败: {}", e))?;
+
+    // 使用 tokio 的同步等待 + 超时控制
+    // 由于本函数在 spawn_blocking 中调用，可以使用同步等待
+    let timeout_duration = Duration::from_secs(timeout_secs);
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let stdout = child.stdout.take()
+                    .map(|mut s| {
+                        use std::io::Read;
+                        let mut buf = String::new();
+                        s.read_to_string(&mut buf).ok();
+                        buf
+                    })
+                    .unwrap_or_default();
+                let stderr = child.stderr.take()
+                    .map(|mut s| {
+                        use std::io::Read;
+                        let mut buf = String::new();
+                        s.read_to_string(&mut buf).ok();
+                        buf
+                    })
+                    .unwrap_or_default();
+
+                let exit_code = status.code().unwrap_or(-1);
+                return Ok(CommandOutput {
+                    stdout,
+                    stderr,
+                    exit_code,
+                });
+            }
+            Ok(None) => {
+                // 子进程仍在运行，检查超时
+                if start.elapsed() >= timeout_duration {
+                    log::warn!("execute_bash_command: 命令超时 ({}秒)，终止子进程", timeout_secs);
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(format!("命令执行超时（{}秒），已终止", timeout_secs));
+                }
+                // 短暂休眠避免 CPU 空转
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(e) => {
+                return Err(format!("等待子进程失败: {}", e));
+            }
+        }
+    }
 }

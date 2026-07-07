@@ -156,9 +156,9 @@ class PptHandler:
             raise FileNotFoundError(path)
         self.logger.info("convert: %s -> %s", path, target)
         # 系统不再支持 PPT 转 PDF
-        # 如需 PPT 转 PDF，请使用 code_interpreter_handler 编写 Python 代码自行实现
+        # 如需 PPT 转 PDF，请通过编写脚本并执行命令的方式自行实现
         return {
-            "error": "PPT 转 PDF 不再被支持。请使用 code_interpreter_handler 编写 Python 代码进行转换（如使用 reportlab 重新生成 PDF，或调用其他可用库）。"
+            "error": "PPT 转 PDF 不再被支持。请通过编写脚本并执行命令的方式自行实现。"
         }
 
     def analyze(self, params: dict) -> dict:

@@ -78,10 +78,7 @@
     "userCancelled": "✗ User cancelled operation",
     "confirmExecute": "Confirm Execution",
     "cancelOperation": "Cancel Operation",
-    "codePreview": "Code Preview",
-    "expandCode": "Expand code",
-    "feedbackPlaceholder": "Enter reason (optional)…",
-    "collapseCode": "Collapse code"
+    "feedbackPlaceholder": "Enter reason (optional)…"
   },
   "errorNode": {
     "errorDetails": "Error Details",
@@ -92,13 +89,8 @@
   "toolNode": {
     "executing": "Executing...",
     "executionFailed": "Execution failed",
-    "codeExecutionFailed": "Code execution failed",
     "expandError": "Show details",
-    "collapseError": "Hide details",
-    "writingCode": "Writing code...",
-    "codePreview": "Code Preview",
-    "collapseCode": "Collapse",
-    "expandCode": "Expand"
+    "collapseError": "Hide details"
   },
   "fileTree": {
     "sectionTitle": "Workspace Files",
@@ -178,6 +170,12 @@
       "confirmAlways": "Always confirm",
       "confirmEditOnly": "Confirm edits only",
       "confirmNever": "Auto-confirm all",
+      "codeExecutionTitle": "Code Execution Environment",
+      "gitBashPath": "Git Bash Path",
+      "gitBashPathDesc": "Path to Git Bash executable for running shell commands. Leave empty to auto-detect from PATH",
+      "gitBashPathPlaceholder": "e.g. C:\\Program Files\\Git\\bin\\bash.exe (empty for auto-detect)",
+      "commandTimeout": "Command Timeout (seconds)",
+      "commandTimeoutDesc": "Maximum wait time for shell command execution, auto-terminate on timeout (10-300 seconds)",
       "versionSnapshot": "Version Snapshots",
       "retentionPolicy": "Retention Policy",
       "byCount": "By count (latest {{count}})",
@@ -321,9 +319,8 @@
       "descriptions": {
         "docx_handler": "Word document (.docx) handler, supports three operations: read, format conversion, and analysis. Conversion supports md/txt/pdf formats (consistent with sidecar word_handler.convert actual support).",
         "xlsx_handler": "Excel document (.xlsx) handler, supports three operations: read, format conversion, and analysis. Conversion supports csv/pdf/html/txt formats (consistent with sidecar excel_handler.convert actual support).",
-        "pptx_handler": "PowerPoint presentation (.pptx) handler, supports two operations: read and analysis. PPT to PDF is no longer supported; for PPT to PDF, use code_interpreter_handler to write Python code to implement it.",
+        "pptx_handler": "PowerPoint presentation (.pptx) handler, supports two operations: read and analysis.",
         "pdf_handler": "PDF document (.pdf) handler, supports three operations: read, format conversion, and analysis. Conversion supports txt/md/html formats (consistent with sidecar pdf_handler.convert actual support).",
-        "code_interpreter_handler": "Code interpreter, generates and modifies documents by writing and executing Python code. All document generation and modification operations are done through this handler. Available libraries: python-docx, openpyxl, python-pptx, reportlab, matplotlib, pandas, numpy, Pillow. Available helpers: create_word_doc(), save_word_doc(), etc.",
         "validator_handler": "Document quality validator, detects common document quality issues and returns a list of warnings. Supports six types: docx/xlsx/pptx/pdf/md/txt. Markdown detects unclosed code blocks / heading level jumps / trailing whitespace / consecutive blank lines; plain text detects mixed line endings / mixed indentation / overlong lines / consecutive blank lines. Returns {valid, warnings, stats}."
       }
     },
@@ -340,7 +337,7 @@
         "file_exists": "Check whether a file or directory exists. Use cases: verify paths before reading or modifying files, avoid operating on non-existent files. Lighter than list_directory.",
         "delete_file": "Delete a specified file, optionally creating a backup before deletion. Note: this operation is irreversible and will automatically trigger user confirmation. Recommend creating a version snapshot before deletion.",
         "create_directory": "Create a directory (supports recursive creation). Use cases: ensure target directory exists before writing files, organize file structure. Creates parent directories recursively by default.",
-        "write_text_file": "Write plain text file contents (.txt/.md/.csv/.json, etc.), does not depend on Sidecar. Use cases: create plain text files, modify Markdown files, save JSON configurations. Supports append mode. Note: only for plain text; for generating structured documents, use the generate operation of docx_handler/xlsx_handler/pptx_handler/pdf_handler. Content size limit 4KB (about 4000 characters); exceeding this may trigger LLM response truncation. For large files (e.g., 6000+ character test files, long documents), use code_interpreter_handler to generate via Python code (e.g., loop writing, string concatenation) to avoid passing large content as tool parameters.",
+        "write_text_file": "Write plain text file contents (.txt/.md/.csv/.json, etc.), does not depend on Sidecar. Use cases: create plain text files, modify Markdown files, save JSON configurations. Supports append mode. Note: only for plain text; for generating structured documents, use the generate operation of docx_handler/xlsx_handler/pptx_handler/pdf_handler. Content size limit 4KB (about 4000 characters); exceeding this may trigger LLM response truncation.",
         "rename_file": "Rename or move a file. Use cases: organize file structure, modify filenames. Note: cross-filesystem moves may fail; this operation is irreversible.",
         "copy_file": "Copy a file to a new path. Use cases: create file copies, backup files, copy templates. Supports binary file copying.",
         "delete_directory": "Recursively delete a directory and all its contents. Note: this operation is irreversible and will automatically trigger user confirmation. Recommend confirming directory contents before deletion.",
@@ -494,7 +491,6 @@
       "handlerXlsx": "Excel document operations (generate/read/modify/convert/analyze)",
       "handlerPptx": "PPT document operations (generate/read/modify/convert/analyze)",
       "handlerPdf": "PDF document operations (generate/read/modify/convert/analyze)",
-      "handlerCodeInterpreter": "Code interpreter (execute Python code to generate/modify documents)",
       "handlerValidator": "Document quality validator (detects common document quality issues)",
       "faqQ0": "How to configure LLM provider?",
       "faqA0": "In Settings > LLM Configuration, click the \"Add Provider\" button, select the provider type (OpenAI/Anthropic/Gemini/Ollama/Custom), and fill in the API URL, API Key, and model name.",
@@ -717,9 +713,7 @@
     "search": "Search",
     "file": "file",
     "listDirectory": "List directory",
-    "write": "Write",
-    "executeCode": "Execute code",
-    "codeInterpreter": "Execute code: {description}"
+    "write": "Write"
   },
   "session": {
     "newSession": "New Session"

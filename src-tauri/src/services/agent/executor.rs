@@ -23,6 +23,25 @@ const RETRY_DELAY_SECONDS: u64 = 2;
 const CONFIRM_TIMEOUT_SECS: u64 = 300;
 /// 始终需要确认的高风险 Handler 列表
 const HIGH_RISK_HANDLERS: &[&str] = &["delete_file"];
+
+/// 判断 Shell 命令是否为高风险命令（需要用户确认）
+/// 检测破坏性命令模式：rm/del/rmdir/mkfs/format/shutdown 等
+fn is_high_risk_command(command: &str) -> bool {
+    let lower = command.to_lowercase();
+    // 危险命令关键字（前后需为单词边界，避免误判如 "format" 出现在 "formatter" 中）
+    let dangerous_patterns = [
+        "rm -rf", "rm -r", "rmdir", "del /f", "del /q", "rd /s",
+        "mkfs", "format ", "shutdown", "reboot", "halt",
+        "dd if=", "> /dev/sd", "mv / ", "chmod -R 777",
+        "taskkill /f", "kill -9",
+    ];
+    for pattern in &dangerous_patterns {
+        if lower.contains(pattern) {
+            return true;
+        }
+    }
+    false
+}
 /// 截断重试最大次数（每次翻倍 max_tokens）
 const MAX_TRUNCATION_RETRIES: u32 = 2;
 /// 截断重试时 max_tokens 的最大上限
@@ -211,97 +230,12 @@ impl<R: Runtime> AgentExecutor<R> {
         }
     }
 
-    /// 在流式阶段的不完整 JSON 字符串中查找 "code" 字段值的起始位置
-    /// LLM 输出格式通常为 {"code":"xxx","description":"xxx"}
-    /// 此方法查找 "code" 键后紧跟的 ":" 和引号，返回值内容的起始字节偏移
-    /// 返回 None 表示尚未找到 "code" 键的值起始位置
-    fn find_code_value_start(json_str: &str) -> Option<usize> {
-        // 查找 "code" 键
-        let key_pattern = "\"code\"";
-        let key_pos = json_str.find(key_pattern)?;
-        let after_key = &json_str[key_pos + key_pattern.len()..];
-        // 使用 char_indices 遍历，跳过空白找到冒号和引号
-        let mut chars = after_key.char_indices().peekable();
-        // 跳过空白
-        while let Some(&(_, c)) = chars.peek() {
-            if c.is_whitespace() {
-                chars.next();
-            } else {
-                break;
-            }
-        }
-        // 期望冒号
-        if chars.peek().map(|&(_, c)| c) != Some(':') {
-            return None;
-        }
-        chars.next(); // 消费冒号
-        // 跳过冒号后的空白
-        while let Some(&(_, c)) = chars.peek() {
-            if c.is_whitespace() {
-                chars.next();
-            } else {
-                break;
-            }
-        }
-        // 期望双引号（JSON 标准使用双引号）
-        if chars.peek().map(|&(_, c)| c) != Some('"') {
-            return None;
-        }
-        chars.next(); // 消费开头引号
-        // 计算值内容在原始字符串中的起始字节偏移
-        let value_start_in_after_key = chars.peek().map(|&(i, _)| i).unwrap_or(after_key.len());
-        Some(key_pos + key_pattern.len() + value_start_in_after_key)
-    }
-
-    /// 反转义 JSON 字符串中的转义序列
-    /// 将 \n → 换行, \t → 制表符, \" → 双引号, \\ → 反斜杠 等
-    /// 遇到未闭合的转义序列（如末尾单独的 \）时安全截断
-    fn unescape_json_string(raw: &str) -> String {
-        let mut result = String::with_capacity(raw.len());
-        let mut chars = raw.chars().peekable();
-        while let Some(c) = chars.next() {
-            if c == '\\' {
-                match chars.next() {
-                    Some('n') => result.push('\n'),
-                    Some('t') => result.push('\t'),
-                    Some('r') => result.push('\r'),
-                    Some('"') => result.push('"'),
-                    Some('\\') => result.push('\\'),
-                    Some('/') => result.push('/'),
-                    Some('b') => result.push('\x08'),
-                    Some('f') => result.push('\x0C'),
-                    Some('u') => {
-                        // Unicode 转义: \uXXXX
-                        let hex: String = chars.by_ref().take(4).collect();
-                        if let Ok(code) = u32::from_str_radix(&hex, 16) {
-                            if let Some(ch) = char::from_u32(code) {
-                                result.push(ch);
-                            }
-                        }
-                    }
-                    Some(other) => result.push(other), // 未知转义，保留原字符
-                    None => result.push('\\'),         // 末尾单独的 \，保留
-                }
-            } else if c == '"' {
-                // 遇到闭合引号，说明 code 字符串值结束
-                break;
-            } else {
-                result.push(c);
-            }
-        }
-        result
-    }
-
     /// 检查是否为高风险操作（需要用户确认）
     /// 根据确认级别决定哪些操作需要用户确认：
     /// - Never: 任何操作都不需要确认
     /// - EditOnly: 仅高风险操作需要确认
     /// - Always: 所有 Handler/Tool 调用都需要确认
     fn needs_confirmation(&self, name: &str, params: &serde_json::Value) -> bool {
-        // code_interpreter_handler 始终不需要确认（代码自动执行）
-        if name == "code_interpreter_handler" {
-            return false;
-        }
         match self.confirmation_level {
             ConfirmationLevel::Never => false,
             ConfirmationLevel::EditOnly => {
@@ -312,6 +246,15 @@ impl<R: Runtime> AgentExecutor<R> {
                 // write_text_file 在覆盖模式（非追加）下属于修改操作
                 if name == "write_text_file" && !params.get("append").and_then(|v| v.as_bool()).unwrap_or(false) {
                     return true;
+                }
+                // run_command 中的高风险命令需确认
+                // 含 rm/del/rmdir/rm -rf/mkfs/format 等破坏性命令
+                if name == "run_command" {
+                    if let Some(cmd) = params.get("command").and_then(|v| v.as_str()) {
+                        if is_high_risk_command(cmd) {
+                            return true;
+                        }
+                    }
                 }
                 false
             }
@@ -339,18 +282,6 @@ impl<R: Runtime> AgentExecutor<R> {
             "docx_handler" | "xlsx_handler" | "pptx_handler" | "pdf_handler" => {
                 // 文档 Handler 精简后不再有 modify 操作，无需创建快照
                 Vec::new()
-            }
-            "code_interpreter_handler" => {
-                // Code Interpreter 可能修改多个文件，提取预期文件列表
-                // 1. 优先从 expected_files 参数提取（LLM 声明的预期输出文件）
-                // 2. 如果没有 expected_files，则不创建快照（因为无法预知文件路径）
-                if let Some(files) = params["expected_files"].as_array() {
-                    files.iter()
-                        .filter_map(|f| f.as_str().map(|s| s.to_string()))
-                        .collect()
-                } else {
-                    Vec::new()
-                }
             }
             _ => Vec::new(),
         }
@@ -381,6 +312,8 @@ impl<R: Runtime> AgentExecutor<R> {
                 // 全部需确认模式下，根据操作类型区分风险等级
                 if tool_name == "delete_file" {
                     "critical"
+                } else if tool_name == "run_command" {
+                    "high"
                 } else {
                     "normal"
                 }
@@ -396,6 +329,7 @@ impl<R: Runtime> AgentExecutor<R> {
 
         let description = match tool_name {
             "delete_file" => format!("删除文件: {}", arguments["path"].as_str().unwrap_or("未知")),
+            "run_command" => format!("执行命令: {}", arguments["command"].as_str().unwrap_or("未知")),
             "docx_handler" | "xlsx_handler" | "pptx_handler" | "pdf_handler" => {
                 let action = arguments["action"].as_str().unwrap_or("操作");
                 let path = arguments["path"].as_str().unwrap_or("未知文件");
@@ -645,8 +579,6 @@ impl<R: Runtime> AgentExecutor<R> {
             // 追踪已在流式阶段提前发射 agent:tool_call 事件的工具索引
             // 避免 LLM 流式输出工具参数期间前端无反馈，也避免流结束后重复发射
             let mut early_announced_tool_indices: HashSet<u32> = HashSet::new();
-            // 代码流式状态：记录每个 code_interpreter_handler tool_call 已发射的 code 长度
-            let mut code_streaming_state: HashMap<u32, usize> = HashMap::new();
 
             while let Some(chunk_result) = stream_rx.recv().await {
                 match chunk_result {
@@ -715,41 +647,6 @@ impl<R: Runtime> AgentExecutor<R> {
                                                     arguments: early_params,
                                                     iteration: Some(current_iteration),
                                                 }).ok();
-                                            }
-                                        }
-                                    }
-
-                                    // 代码流式增量：当检测到 code_interpreter_handler 时，发射 code_streaming 事件
-                                    // 注意：流式阶段 arguments 是不完整的 JSON，不能用 serde_json::from_str 解析
-                                    // 改用字符串搜索定位 "code" 字段的值，提取后反转义 JSON 转义序列
-                                    // 由于转义序列可能被流式分块切割，无法正确计算增量（delta），
-                                    // 因此每次发射完整的反转义代码内容，前端直接替换而非追加
-                                    if let Some(collected) = collected_tool_calls.get(&tc_index) {
-                                        if collected.name == "code_interpreter_handler" {
-                                            let args = &collected.arguments;
-                                            if let Some(code_start) = Self::find_code_value_start(args) {
-                                                let raw_code_so_far = &args[code_start..];
-                                                // 反转义 JSON 转义序列（\n → 换行, \t → 制表符 等）
-                                                let unescaped_code = Self::unescape_json_string(raw_code_so_far);
-                                                // 用 raw 字节偏移判断是否有新内容（raw 偏移单调递增，不受转义影响）
-                                                let prev_raw_len = code_streaming_state
-                                                    .get(&tc_index)
-                                                    .copied()
-                                                    .unwrap_or(0);
-                                                if raw_code_so_far.len() > prev_raw_len {
-                                                    self.emitter.emit_code_streaming(CodeStreamingPayload {
-                                                        session_id: ctx.session_id.clone(),
-                                                        call_id: if collected.id.is_empty() {
-                                                            format!("streaming_{}", tc_index)
-                                                        } else {
-                                                            collected.id.clone()
-                                                        },
-                                                        // 发射完整的反转义代码（非增量），前端直接替换
-                                                        code_delta: unescaped_code,
-                                                        is_final: false,
-                                                    }).ok();
-                                                    code_streaming_state.insert(tc_index, raw_code_so_far.len());
-                                                }
                                             }
                                         }
                                     }
@@ -842,44 +739,6 @@ impl<R: Runtime> AgentExecutor<R> {
                 }
             }
 
-            // 为所有 code_interpreter_handler 的 tool_call 发射流式结束事件
-            // 策略：如果真实 callId 在流式过程中已出现，额外用真实 callId 再发射一次完整代码，
-            // 确保前端 pendingCodeStreamingRef 能在真实 callId 下找到代码内容，从而在新创建的
-            // ToolNode 中显示代码预览。这解决了重试迭代中流式 callId 与真实 callId 不一致的问题。
-            for (tc_index, collected) in collected_tool_calls.iter() {
-                if collected.name == "code_interpreter_handler" {
-                    let has_real_id = !collected.id.is_empty();
-                    let streaming_id = format!("streaming_{}", tc_index);
-                    
-                    // 第一步：如果流式期间使用的是 streaming_ ID 且真实 callId 已出现，
-                    // 额外用真实 callId 发射一次完整代码（is_final=false），让前端缓存下来
-                    if has_real_id && collected.id != streaming_id {
-                        if let Ok(params) = serde_json::from_str::<serde_json::Value>(&collected.arguments) {
-                            if let Some(code) = params.get("code").and_then(|v| v.as_str()) {
-                                self.emitter.emit_code_streaming(CodeStreamingPayload {
-                                    session_id: ctx.session_id.clone(),
-                                    call_id: collected.id.clone(),
-                                    code_delta: code.to_string(),
-                                    is_final: false,
-                                }).ok();
-                            }
-                        }
-                    }
-                    
-                    // 第二步：发射 is_final 事件（使用流式期间的 callId）
-                    self.emitter.emit_code_streaming(CodeStreamingPayload {
-                        session_id: ctx.session_id.clone(),
-                        call_id: if has_real_id {
-                            collected.id.clone()
-                        } else {
-                            streaming_id
-                        },
-                        code_delta: String::new(),
-                        is_final: true,
-                    }).ok();
-                }
-            }
-
             // 将 HashMap 转为按 index 排序的 Vec
             let mut collected_tool_calls: Vec<LlmToolCall> = collected_tool_calls.into_values()
                 .collect::<Vec<_>>();
@@ -962,7 +821,6 @@ impl<R: Runtime> AgentExecutor<R> {
                 // 回滚上下文，用翻倍的 max_tokens 重新调用 LLM
                 if is_truncated {
                     let mut all_params_valid = true;
-                    let mut has_empty_code = false;
 
                     for tool_call in collected_tool_calls.iter() {
                         let params_result = serde_json::from_str::<serde_json::Value>(&tool_call.arguments);
@@ -974,20 +832,9 @@ impl<R: Runtime> AgentExecutor<R> {
                             );
                             break;
                         }
-                        // 检查 code_interpreter_handler 的 code 字段是否为空
-                        let params = params_result.unwrap_or(json!({}));
-                        if tool_call.name == "code_interpreter_handler"
-                            && params["code"].as_str().unwrap_or("").is_empty() {
-                                has_empty_code = true;
-                                log::warn!(
-                                    "截断响应的 code_interpreter_handler 参数中 code 为空, session_id={}",
-                                    ctx.session_id
-                                );
-                                break;
-                        }
                     }
 
-                    if !all_params_valid || has_empty_code {
+                    if !all_params_valid {
                         // 回滚刚添加的不完整 assistant message
                         ctx.pop_last_assistant_message();
 
@@ -1126,22 +973,15 @@ impl<R: Runtime> AgentExecutor<R> {
 
                                         // 检查重试响应的参数完整性
                                         let mut retry_params_valid = true;
-                                        let mut retry_empty_code = false;
                                         for tc in &retry_tc_vec {
                                             let pr = serde_json::from_str::<serde_json::Value>(&tc.arguments);
                                             if pr.is_err() {
                                                 retry_params_valid = false;
                                                 break;
                                             }
-                                            let p = pr.unwrap_or(json!({}));
-                                            if tc.name == "code_interpreter_handler"
-                                                && p["code"].as_str().unwrap_or("").is_empty() {
-                                                    retry_empty_code = true;
-                                                    break;
-                                            }
                                         }
 
-                                        if !retry_is_truncated && retry_params_valid && !retry_empty_code {
+                                        if !retry_is_truncated && retry_params_valid {
                                             // 重试成功，用重试的 tool_calls 替换原来的
                                             collected_tool_calls = retry_tc_vec;
                                             assistant_content = retry_content;
@@ -1235,35 +1075,6 @@ impl<R: Runtime> AgentExecutor<R> {
 
                     let params = params_result.unwrap_or(json!({}));
 
-                    // 截断重试耗尽后 code_interpreter_handler 的 code 字段仍为空的降级处理
-                    if is_truncated && tool_call.name == "code_interpreter_handler" {
-                        let code_content = params["code"].as_str().unwrap_or("");
-                        if code_content.is_empty() {
-                            log::warn!(
-                                "截断响应的 code_interpreter_handler 参数中 code 为空（重试耗尽）, 跳过执行, session_id={}",
-                                ctx.session_id
-                            );
-                            // 发射思考事件，让用户看到重试提示
-                            self.emitter.emit_thinking(ThinkingPayload {
-                                session_id: ctx.session_id.clone(),
-                                step: total_steps,
-                                thought: "代码内容因响应被截断而缺失，正在重新生成...".to_string(),
-                            }).ok();
-                            // 必须发射 tool_result 事件，否则前端对应节点永远显示加载动画
-                            self.emitter.emit_tool_result(ToolResultPayload {
-                                session_id: ctx.session_id.clone(),
-                                call_id: tool_call.id.clone(),
-                                success: false,
-                                result: json!(null),
-                                error: Some("代码内容因响应被截断而缺失，正在重新生成...".to_string()),
-                                duration_ms: 0,
-                            }).ok();
-                            let retry_msg = "代码内容因响应被截断而缺失，请重新生成完整的代码。注意控制代码长度，确保参数完整。".to_string();
-                            ctx.add_tool_result(&tool_call.id, &retry_msg);
-                            continue;
-                        }
-                    }
-
                     // 更新任务类型（基于已调用的工具）
                     ctx.update_task_type_from_tool(&tool_call.name, Some(&params));
 
@@ -1323,11 +1134,6 @@ impl<R: Runtime> AgentExecutor<R> {
                         None
                     };
 
-                    // 检测是否为 patches 模式（executed_code 回传时需要）
-                    let is_patches_mode = tool_call.name == "code_interpreter_handler"
-                        && params.get("code").is_none()
-                        && params.get("patches").is_some();
-
                     // 对需要路径安全校验的 Tool/Handler，注入工作区根目录
                     let mut safe_params = params;
                     let needs_workspace_root = matches!(
@@ -1337,8 +1143,8 @@ impl<R: Runtime> AgentExecutor<R> {
                         | "rename_file" | "copy_file" | "delete_directory" | "get_file_hash"
                         | "read_file_lines"
                         | "docx_handler" | "xlsx_handler" | "pptx_handler" | "pdf_handler"
-                        | "code_interpreter_handler"  // 需要workspace_root作为working_dir
                         | "validator_handler"
+                        | "write_script" | "run_command"
                     );
                     if needs_workspace_root && !ctx.workspace_path.is_empty() {
                         safe_params["workspace_root"] = json!(ctx.workspace_path);
@@ -1352,34 +1158,6 @@ impl<R: Runtime> AgentExecutor<R> {
                         safe_params["_iteration"] = json!(current_iteration);
                     }
 
-                    // 对 code_interpreter_handler 的 patch 模式，注入上一次代码作为 base_code
-                    // patch 模式由 LLM 提供 patches 参数触发，系统自动注入 base_code（LLM 无需也无法手动传入）
-                    if tool_call.name == "code_interpreter_handler" && safe_params.get("patches").is_some() {
-                        match ctx.last_code() {
-                            Some(code) if !code.is_empty() => {
-                                safe_params["base_code"] = json!(code);
-                                log::debug!("patch 模式: 已注入 base_code, session_id={}, code_len={}",
-                                    ctx.session_id, code.len());
-                            }
-                            _ => {
-                                // 无可用基准代码，返回明确错误引导 LLM 改用完整 code
-                                let err_msg = "使用 patch 模式但没有可用的上一次代码基准。请改用完整 code 参数，或确保先执行过一次完整代码。";
-                                let result_content = format!("错误: {}", err_msg);
-                                log::warn!("patch 模式无可用基准代码, session_id={}", ctx.session_id);
-                                self.emitter.emit_tool_result(ToolResultPayload {
-                                    session_id: ctx.session_id.clone(),
-                                    call_id: tool_call.id.clone(),
-                                    success: false,
-                                    result: json!(null),
-                                    error: Some(err_msg.to_string()),
-                                    duration_ms: 0,
-                                }).ok();
-                                ctx.add_tool_result(&tool_call.id, &result_content);
-                                continue;
-                            }
-                        }
-                    }
-
                     // 在文件修改/删除操作前自动创建版本快照
                     if let Some(ref snapshot_fn) = self.snapshot_fn {
                         let files_to_snapshot = self.extract_snapshot_paths(&tool_call.name, &safe_params);
@@ -1388,7 +1166,6 @@ impl<R: Runtime> AgentExecutor<R> {
                                 let operation = match tool_call.name.as_str() {
                                     "delete_file" => "delete",
                                     "docx_handler" | "xlsx_handler" | "pptx_handler" | "pdf_handler" => "read",
-                                    "code_interpreter_handler" => "code_execute",
                                     _ => "unknown",
                                 };
                                 match snapshot_fn(&ctx.workspace_id, &ctx.session_id, file_path, operation) {
@@ -1451,45 +1228,7 @@ impl<R: Runtime> AgentExecutor<R> {
                     let duration_ms = tool_start.elapsed().as_millis() as u64;
                     log::debug!("Tool 执行完成, session_id={}, tool={}, 成功={}, 耗时={}ms", ctx.session_id, tool_call.name, result.success, duration_ms);
 
-                    // 对 code_interpreter_handler，提取并保存最终执行的代码到 ctx.last_code
-                    // 成功和失败都保存：失败时保存的是已应用 patch 后的完整代码，供下次 patch 或错误反馈使用
-                    let executed_code = if tool_call.name == "code_interpreter_handler" {
-                        result.output.as_ref()
-                            .and_then(|o| o.get("_executed_code"))
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string())
-                    } else {
-                        None
-                    };
-                    if let Some(code) = executed_code {
-                        // patches mode: 先将完整代码通过 code_streaming 回传给前端用于代码预览
-                        if is_patches_mode {
-                            self.emitter.emit_code_streaming(CodeStreamingPayload {
-                                session_id: ctx.session_id.clone(),
-                                call_id: tool_call.id.clone(),
-                                code_delta: code.clone(),
-                                is_final: true,
-                            }).ok();
-                            log::debug!(
-                                "patch 模式: 已回传完整代码到前端, session_id={}, code_len={}",
-                                ctx.session_id, code.len()
-                            );
-                        }
-                        ctx.set_last_code(code);
-                    }
-
-                    // 对 code_interpreter_handler，构造不含 _executed_code 的 output（避免污染前端和 LLM 上下文）
-                    let clean_output = if tool_call.name == "code_interpreter_handler" {
-                        result.output.as_ref().map(|v| {
-                            let mut cleaned = v.clone();
-                            if let Some(obj) = cleaned.as_object_mut() {
-                                obj.remove("_executed_code");
-                            }
-                            cleaned
-                        })
-                    } else {
-                        result.output.clone()
-                    };
+                    let clean_output = result.output.clone();
 
                     self.emitter.emit_tool_result(ToolResultPayload {
                         session_id: ctx.session_id.clone(),
@@ -1576,22 +1315,6 @@ impl<R: Runtime> AgentExecutor<R> {
                         } else {
                             serialized
                         }
-                    } else if tool_call.name == "code_interpreter_handler" {
-                        // code_interpreter_handler 失败：附加完整原始代码 + 错误定位提示
-                        // 引导 LLM 在原代码基础上修正而非重写
-                        // 优先从 output._executed_code 获取（代码执行失败场景），
-                        // 回退到 ctx.last_code()（patch 应用失败场景，output 为 None）
-                        let original_code = result.output.as_ref()
-                            .and_then(|o| o.get("_executed_code"))
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string())
-                            .or_else(|| ctx.last_code().map(|s| s.to_string()))
-                            .unwrap_or_default();
-                        let error_msg = result.error.clone().unwrap_or_default();
-                        format!(
-                            "错误: {}\n\n原始代码:\n```python\n{}\n```\n\n请在原代码基础上修正错误部分。你可以：\n1. 使用 patches 参数提供搜索替换块进行局部修正（推荐）\n2. 或输出修正后的完整 code\n\n注意：优先使用 patches 模式，保留原代码结构，仅修改出错的部分。",
-                            error_msg, original_code
-                        )
                     } else {
                         format!("错误: {}", result.error.clone().unwrap_or_default())
                     };

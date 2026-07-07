@@ -1,6 +1,6 @@
 """DocAgent Python Sidecar
 文档处理引擎，通过 stdin/stdout JSON 协议与 Rust 后端通信
-支持 Word、Excel、PPT、PDF、Markdown 等文档的读取、转换、分析，以及代码执行
+支持 Word、Excel、PPT、PDF、Markdown 等文档的读取、转换、分析
 """
 
 import sys
@@ -117,12 +117,6 @@ except ImportError as e:
     for key in ("md", "markdown", "txt"):
         MISSING_DEPS[key] = f"({e})"
 
-try:
-    from handlers.code_handler import CodeHandler
-    HANDLERS["code"] = CodeHandler()
-except ImportError as e:
-    MISSING_DEPS["code"] = f"({e})"
-
 # 文档验证器实例
 try:
     from handlers.validator import DocumentValidator
@@ -228,7 +222,6 @@ def handle_request(request: dict) -> dict:
     try:
         result = action_method(params)
         # 检查结果中是否包含错误信息（handler 参数校验失败时返回含 error 键的字典而非抛出异常）
-        # 注意：code_executor 等处理器成功时也包含 "error": None，需排除
         if isinstance(result, dict) and result.get("error") is not None:
             logger.warning("操作返回错误: id=%s, error=%s", request_id, result["error"])
             return {

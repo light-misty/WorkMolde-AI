@@ -107,11 +107,6 @@ impl<R: Runtime> AgentEmitter<R> {
         self.emit_event(types::AGENT_NETWORK_RETRY, payload, false, false)
     }
 
-    /// 发射代码流式增量事件（非关键，高频流式）
-    pub fn emit_code_streaming(&self, payload: types::CodeStreamingPayload) -> Result<(), CommandError> {
-        self.emit_event(types::AGENT_CODE_STREAMING, payload, false, true)
-    }
-
     /// 发射会话更新事件（关键 - 前端依赖此事件刷新会话列表）
     pub fn emit_session_updated(&self, payload: types::SessionUpdatePayload) -> Result<(), CommandError> {
         self.emit_event(types::SESSION_UPDATED, payload, true, false)
