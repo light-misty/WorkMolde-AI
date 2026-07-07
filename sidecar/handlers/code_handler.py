@@ -40,7 +40,7 @@ class CodeHandler:
     # 允许的 Python 模块白名单
     ALLOWED_MODULES = {
         # 文档处理库
-        "docx", "openpyxl", "pptx", "reportlab", "fpdf",
+    "docx", "openpyxl", "pptx", "reportlab", "fpdf",
         # PDF 读取/修改库（扩展：让智能体可操作现有 PDF 的所有元素）
         "fitz",          # PyMuPDF - 读取/修改 PDF（文字/绘图/图片/链接/书签/注释等）
         "pymupdf",       # PyMuPDF 新版导入名

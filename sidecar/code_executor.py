@@ -309,6 +309,27 @@ def build_namespace(working_dir: str) -> dict:
     except ImportError:
         pass
 
+    # 预导入 ReportLab 常用常量和单位，避免智能体忘记导入导致 NameError
+    # 常见错误：NameError: name 'TA_RIGHT' is not defined（智能体忘记 from reportlab.lib.enums import TA_RIGHT）
+    # 注意：reportlab.lib.units 只有 inch/mm/cm/pica，没有 pt（智能体常误用 from reportlab.lib.units import pt）
+    try:
+        from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
+        namespace['TA_LEFT'] = TA_LEFT
+        namespace['TA_CENTER'] = TA_CENTER
+        namespace['TA_RIGHT'] = TA_RIGHT
+        namespace['TA_JUSTIFY'] = TA_JUSTIFY
+    except ImportError:
+        pass
+
+    try:
+        from reportlab.lib.units import inch, mm, cm, pica
+        namespace['inch'] = inch
+        namespace['mm'] = mm
+        namespace['cm'] = cm
+        namespace['pica'] = pica
+    except ImportError:
+        pass
+
     return namespace
 
 
