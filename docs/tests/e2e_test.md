@@ -91,7 +91,7 @@
 
 **预期结果**:
 - 工作流时间线按顺序显示所有节点
-- Agent 使用 Code Interpreter 生成文档
+- Agent 使用 write_script + run_command Tool 生成文档
 - 文档在工作区目录中生成
 - Token 统计数字递增
 
@@ -100,11 +100,11 @@
 - [ ] 流式输出过程中内容逐步显示
 - [ ] Agent 执行期间输入框禁用
 - [ ] 节点可展开/折叠查看详情
-- [ ] Agent 使用 `code_interpreter_handler` 而非旧的 generate handler
+- [ ] Agent 使用 `write_script + run_command` Tool 而非旧的 generate handler
 
-### E2E-04: Code Interpreter 文档生成
+### E2E-04: 脚本生成文档
 
-**目标**: 验证 Code Interpreter 生成多种格式文档
+**目标**: 验证 write_script + run_command Tool 生成多种格式文档
 
 **步骤**:
 1. 输入: `创建一份项目周报.docx`
@@ -114,13 +114,12 @@
 5. 分别测试 Excel、PPT、PDF、Markdown 格式
 
 **预期结果**:
-- Agent 调用 `code_interpreter_handler`
+- Agent 调用 `write_script + run_command`
 - 确认弹窗显示代码功能描述和代码摘要（前 200 字符）
 - 生成的文件格式正确，内容完整
 - 文件树自动刷新
 
 **验证点**:
-- [ ] Code Interpreter 使用 helper 函数（create_word_doc 等）
 - [ ] 文档属性中作者字段正确
 - [ ] 生成的文档可正常打开
 
@@ -152,9 +151,9 @@
 - 不弹出确认弹窗（convert 不是高风险操作）
 - 转换后的文件可正常打开
 
-### E2E-07: 文档修改（Code Interpreter）
+### E2E-07: 文档修改（脚本执行）
 
-**目标**: 验证通过 Code Interpreter 修改文档
+**目标**: 验证通过 write_script + run_command Tool 修改文档
 
 **步骤**:
 1. 输入: `修改项目周报.docx，将标题改为"2024年度总结"`
@@ -162,7 +161,7 @@
 3. 重新读取文档验证修改结果
 
 **预期结果**:
-- Agent 调用 `code_interpreter_handler` 编写修改代码
+- Agent 调用 `write_script + run_command` 编写修改脚本
 - 确认弹窗展示代码摘要
 - 修改后文档内容正确更新
 - 修改前自动创建版本快照
@@ -220,10 +219,10 @@
 | E2E-01 | 应用启动与初始化 | 基础框架 | |
 | E2E-02 | LLM Provider 配置 | LLM | |
 | E2E-03 | Agent 对话交互 | Agent | |
-| E2E-04 | Code Interpreter 文档生成 | Code Interpreter | |
+| E2E-04 | 脚本生成文档 | write_script + run_command | |
 | E2E-05 | 文档读取 | Handler | |
 | E2E-06 | 格式转换 | Handler | |
-| E2E-07 | 文档修改 | Code Interpreter | |
+| E2E-07 | 文档修改 | write_script + run_command | |
 | E2E-08 | 操作确认机制 | Agent | |
 | E2E-09 | Electron 参考移除 | 全局 | |
 | E2E-10 | 错误边界与自动恢复 | 全局 | |
@@ -253,11 +252,10 @@
 - 停止功能（stopping → cancelled）
 
 ### Handler 系统 (100%)
-- 5 个文档 Handler（docx/xlsx/pptx/pdf/md + code_interpreter）
-- 8 个文件系统 Tool（全部 Rust 原生）
+- 4 个文档 Handler（docx/xlsx/pptx/pdf）
+- 10 个 Tool（全部 Rust 原生）
 - Python Sidecar 管理器（自动重启/超时/重试）
-- Code Interpreter 安全沙箱（子进程隔离/超时/内存限制/审计日志）
-- Code Interpreter Helper 函数库
+- write_script + run_command Tool（10 个 Tool）
 
 ### 前端 UI (100%)
 - TopBar + WindowControls + WorkspaceSelector

@@ -179,18 +179,17 @@ cargo clean
 
 ### Handler 系统（文档处理，始终启用）
 - 每个 Handler 实现 `Handler` trait: `handler_name()`, `description()`, `parameters()` (JSON Schema), `execute()`
-- 内置 5 个文档类型 Handler（均通过 Python Sidecar 执行）:
+- 内置 4 个文档类型 Handler（均通过 Python Sidecar 执行）:
   - `docx_handler`: Word 文档处理（读取/转换/分析）
   - `xlsx_handler`: Excel 文档处理（读取/转换/分析）
   - `pptx_handler`: PPT 文档处理（读取/转换/分析）
   - `pdf_handler`: PDF 文档处理（读取/转换/分析）
-  - `code_interpreter_handler`: 代码解释器（执行 Python 代码，用于复杂文档生成和修改）
 - Handler 始终启用，前端 HandlersTab 仅展示信息
 
 ### Tool 系统（文件系统操作，始终启用）
 - Tool 是轻量级、始终启用的基础文件系统操作，与 Handler 平行但不可禁用
 - 每个 Tool 实现 `Tool` trait（与 Handler 相似的接口: `tool_name()`, `description()`, `parameters()`, `execute()`）
-- 内置 8 个 Tool（纯 Rust 实现，不依赖 Python Sidecar）:
+- 内置 10 个 Tool（纯 Rust 实现，不依赖 Python Sidecar）:
   - `list_directory`: 列出目录内容（支持深度控制、扩展名过滤、排序，含路径遍历安全校验）
   - `search_files`: 按文件名/内容搜索文件（支持扩展名过滤、内容预览）
   - `read_file`: 读取纯文本文件（.txt/.md/.csv/.json 等，1MB 上限，含路径校验）
@@ -199,6 +198,8 @@ cargo clean
   - `file_info`: 获取文件元数据（大小、修改时间、类型分类）
   - `file_exists`: 检查文件/目录是否存在
   - `create_directory`: 创建目录（支持递归创建）
+  - `write_script`: 将智能体生成的脚本写入系统临时目录 `<temp_dir>/docagent/scripts/`
+  - `run_command`: 通过 Git Bash 执行命令（运行脚本），支持工作目录和超时控制；高风险命令（rm -rf、format、shutdown 等）需用户确认；默认超时 60 秒（可在设置中配置）；Git Bash 路径优先使用用户配置，为空时从 PATH 自动检测（先查找 bash.exe，再从 git.exe 推断 `<git_root>/bin/bash.exe`）
 - Tool 注册在 `ToolRegistry` 中，通过 `Arc<dyn Tool>` 共享访问
 - 共同路径安全机制：所有文件操作通过 executor 注入 `workspace_root`，拒绝路径遍历攻击
 
@@ -229,7 +230,7 @@ AppState {
 
 ### Python Sidecar 通信协议
 - stdin/stdout JSON 行协议，SidecarManager 自动管理进程生命周期（启动、停止、崩溃时自动重启）
-- 请求: `{"id": "...", "action": "read|convert|analyze|execute|ping|validate", "type": "docx|xlsx|pptx|pdf|md|code|txt", "params": {...}}`
+- 请求: `{"id": "...", "action": "read|convert|analyze|execute|ping|validate", "type": "docx|xlsx|pptx|pdf|md|txt", "params": {...}}`
 - 响应: `{"id": "...", "success": true|false, "data": {...}, "error": "..."}`
 - 默认请求超时 120 秒，超时后自动重启 Sidecar 进程并重试一次
 
@@ -283,7 +284,7 @@ AppState {
 
 ### 应用设置
 `AppSettings` 含以下子配置（JSON 文件存储），前端 SettingsDialog 含 8 个标签页：
-- `GeneralSettings`: 作者名、作者邮箱、作者公司、确认级别(Always/EditOnly/Never) → **GeneralTab**
+- `GeneralSettings`: 作者名、作者邮箱、作者公司、确认级别(Always/EditOnly/Never)、`git_bash_path`（String，空表示自动检测）、`command_timeout_secs`（u64，0 表示用默认 60） → **GeneralTab**（含"代码执行环境"区域）
 - `AppearanceSettings`: 主题模式(light/dark/system)、界面语言(language)、跟随系统语言(languageFollowSystem) → **AppearanceTab**
 - `VersionSnapshot`: 保留策略(ByCount/ByDays/Both)、最大数量/天数
 - `WorkspaceDefaults`: 默认工作区 ID → **WorkspaceTab**
@@ -353,9 +354,8 @@ AppState {
 - `component_design.md` — 前端组件层级与交互设计
 - `task_breakdown.md` — 阶段任务分解与进度
 - `PRD_DocAgent.md` — 产品需求文档
-- `plans/` — 设计文档 (Code Interpreter 设计、上下文窗口设计等)
+- `plans/` — 设计文档 (上下文窗口设计等)
 - `tests/e2e_test.md` — E2E 测试计划
-- `tests/code-interpreter.md` — Code Interpreter 功能测试计划
 
 ## 提交规范
 
@@ -381,5 +381,5 @@ AppState {
 - 文档预览: 普通文件返回文本 `PreviewContent`，PDF 文件通过 `get_pdf_data` 返回 base64 数据由前端 `PdfCanvasViewer` 渲染
 - 版本历史: `VersionHistoryPanel` 组件展示文档版本快照列表，支持版本对比（diff）和回滚操作
 - 所有文件操作（创建/删除/重命名）通过 Tauri 命令在 Rust 端执行，前端不直接操作文件系统
-- 应用初始化顺序: 应用数据目录 → 日志系统 → 数据库（含损坏检测+自动重建） → 配置管理器 → LLM Config → LLM Router → Sidecar → Handler 注册表 + builtin handlers → Tool 注册表 + builtin tools → AppState 注册 → FS 监听器 → 网络状态监控器 → 后台健康检查任务（LLM 每5分钟、Sidecar 每3分钟、网络监控）
+- 应用初始化顺序: 应用数据目录 → 日志系统 → 数据库（含损坏检测+自动重建） → 配置管理器 → LLM Config → LLM Router → Sidecar → Handler 注册表 + builtin handlers → Tool 注册表 + builtin tools（读取 `git_bash_path` 和 `command_timeout_secs` 配置后传入 `register_builtin_tools`） → AppState 注册 → FS 监听器 → 网络状态监控器 → 后台健康检查任务（LLM 每5分钟、Sidecar 每3分钟、网络监控）
 - 应用安装了自定义 panic hook，将 panic 信息记录到日志文件并尝试发射 `runtime:error` 事件到前端

@@ -226,7 +226,7 @@ interface UseAgentReturn {
 function useAgent(sessionId: string | null): UseAgentReturn;
 ```
 
-监听事件：`agent:thinking`, `agent:deep_thinking`, `agent:content`, `agent:tool_call`, `agent:tool_result`, `agent:confirm`, `agent:context_update`, `agent:code_streaming`, `agent:done`, `agent:error`, `agent:stopped`
+监听事件：`agent:thinking`, `agent:deep_thinking`, `agent:content`, `agent:tool_call`, `agent:tool_result`, `agent:confirm`, `agent:context_update`, `agent:done`, `agent:error`, `agent:stopped`
 
 ---
 

@@ -383,7 +383,7 @@ print(prs.core_properties.comments)  # 应输出 color_scheme:forest
 - 不出现 panic
 - 中文内容正确显示，无乱码
 
-> 注：原 8.3 PPT LibreOffice 集成测试已移除。系统不再支持 PPT 转 PDF，相关 LibreOffice 集成代码已从 ppt_handler.py 中删除。如需 PPT 转 PDF，请使用 code_interpreter_handler 编写 Python 代码自行实现。
+> 注：原 8.3 PPT LibreOffice 集成测试已移除。系统不再支持 PPT 转 PDF，相关 LibreOffice 集成代码已从 ppt_handler.py 中删除。如需 PPT 转 PDF，请使用 write_script + run_command Tool 编写脚本自行实现。
 
 ---
 
@@ -640,7 +640,7 @@ cargo test
 python -c "import ast, os; [ast.parse(open(os.path.join(r,f),encoding='utf-8').read()) for r,_,fs in os.walk('sidecar') for f in fs if f.endswith('.py')]; print('OK')"
 
 # Python 导入和功能测试
-python -c "import sys; sys.path.insert(0, 'sidecar'); from handlers.doc_helpers.common import apply_theme, THEME_COLORS; from handlers.doc_helpers.ppt_helpers import create_ppt_doc, get_ppt_color_scheme; from handlers.doc_helpers.excel_helpers import create_excel_doc, apply_excel_header_style, THEME; print('All imports OK')"
+python -c "import sys; sys.path.insert(0, 'sidecar'); from handlers.word_handler import WordHandler; from handlers.excel_handler import ExcelHandler; from handlers.ppt_handler import PptHandler; from handlers.pdf_handler import PdfHandler; from handlers.markdown_handler import MarkdownHandler; print('All imports OK')"
 ```
 
 ### 第一轮测试后的补充验证命令

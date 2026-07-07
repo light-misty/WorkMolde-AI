@@ -7,7 +7,4 @@ PyMuPDF>=1.23.0
 pdfminer.six>=20221105
 pypdf>=4.0.0
 pdfplumber>=0.10.0
-matplotlib>=3.8.0
-pandas>=2.1.0
-numpy>=1.26.0
 Pillow>=10.0.0

@@ -26,9 +26,8 @@
 
 | 项目 | 原始计划 | 实际实现 | 说明 |
 |------|---------|---------|------|
-| Handler 数量 | 9 个 | 5 个 | generate/modify/delete/search/list/batch 由 Code Interpreter + Tool 替代 |
-| Tool 系统 | 不存在 | 8 个 | Rust 原生实现文件系统操作 |
-| Code Interpreter | 不存在 | 1 个 | Python Sidecar 执行代码，替代 generate/modify |
+| Handler 数量 | 9 个 | 4 个 | generate/modify/delete/search/list/batch 由 write_script + run_command Tool 替代 |
+| Tool 系统 | 不存在 | 10 个 | Rust 原生实现文件系统操作 + 脚本写入与命令执行 |
 | 前端框架 | React 18 | React 19 | 升级到最新版本 |
 | 状态管理 | Zustand 4 | Zustand 5 | 升级 |
 | 样式方案 | Tailwind 3 | Tailwind 4 | 升级 |
@@ -67,12 +66,10 @@
 - 深层思考（deep_thinking 事件，支持 Claude Extended Thinking）
 
 **文档处理 (100%)**：
-- Handler 系统：5 个文档处理器（docx/xlsx/pptx/pdf/md），各支持 read/convert/analyze
-- Tool 系统：8 个 Rust 文件系统工具
-- Code Interpreter：代码执行生成/修改文档
+- Handler 系统：4 个文档处理器（docx/xlsx/pptx/pdf），各支持 read/convert/analyze
+- Tool 系统：10 个 Rust 文件系统工具（含 write_script + run_command 脚本写入与命令执行）
+- write_script + run_command Tool：编写脚本并执行命令
 - Python Sidecar 管理器（自动重启、超时处理、重试）
-- 安全沙箱（模块黑名单、路径隔离、子进程隔离、资源限制）
-- Helper 函数库（create_word_doc/create_chart/create_excel_doc 等）
 
 **前端 UI (100%)**：
 - TopBar + WindowControls + WorkspaceSelector
