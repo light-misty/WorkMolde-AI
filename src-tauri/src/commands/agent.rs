@@ -330,6 +330,11 @@ pub async fn get_context_usage(
         reg.tool_definitions().len()
     };
     let budget = TokenBudgetManager::new(context_window);
+    // 检测执行环境信息，注入系统提示词避免智能体浪费迭代搜索环境
+    let git_bash_path = state.config.lock().await
+        .load_app_settings().ok()
+        .map(|s| s.git_bash_path).unwrap_or_default();
+    let env_info = crate::services::agent::context::EnvironmentInfo::detect(&git_bash_path);
     let system_prompt = AgentContext::build_system_prompt_with_task(
         &workspace_path,
         &TaskType::Unknown,
@@ -337,6 +342,7 @@ pub async fn get_context_usage(
         handler_count,
         &budget,
         None,
+        &env_info,
     );
     let system_prompt_tokens = TokenBudgetManager::estimate_tokens(&system_prompt);
 
@@ -368,26 +374,6 @@ pub async fn get_context_usage(
     };
 
     let total_used_tokens = system_prompt_tokens + function_definitions_tokens + conversation_tokens;
-    let usage_percentage = if context_window > 0 {
-        (total_used_tokens as f64 / context_window as f64).min(1.0)
-    } else {
-        0.0
-    };
-
-    let is_over_budget = budget.is_conversation_over_budget(conversation_tokens);
-    let compression_status = if usage_percentage >= 0.95 {
-        "critical".to_string()
-    } else if is_over_budget {
-        "compressed".to_string()
-    } else {
-        "normal".to_string()
-    };
-
-    let retained_message_count = {
-        let avg_round_tokens = if conversation_tokens == 0 { 0 } else { conversation_tokens / 4 };
-        let keep_rounds = budget.calculate_window_size(conversation_tokens, avg_round_tokens);
-        total_message_count.min(keep_rounds * 4)
-    };
 
     Ok(crate::models::llm::ContextUsageInfo {
         context_window,
@@ -396,10 +382,8 @@ pub async fn get_context_usage(
         conversation_tokens,
         response_tokens: 0,
         total_used_tokens,
-        compression_status,
         model_name,
         total_message_count,
-        retained_message_count,
         cache_hit_tokens: 0,
         cache_miss_tokens: 0,
         cache_creation_tokens: 0,
@@ -416,7 +400,8 @@ async fn generate_session_title(
     user_message: &str,
     llm_router: &Arc<LlmRouter>,
 ) -> Result<String, CommandError> {
-    let system_prompt = "你是一个会话标题生成器。根据用户的消息，生成一个简短、准确的会话标题。要求：1) 不超过20个字；2) 直接输出标题文本；3) 不要加引号；4) 不要加任何额外说明；5) 不要使用emoji。";
+    // 系统提示词包含标题生成的完整指令，严格区分系统消息与用户消息
+    let system_prompt = "你是一个会话标题生成器。根据用户的消息，生成一个简短、准确的会话标题。要求：1) 不超过20个字；2) 直接输出标题文本；3) 不要加引号；4) 不要加任何额外说明；5) 不要使用emoji。请为以下用户消息生成标题：";
 
     let messages = vec![
         ChatMessage {
@@ -430,7 +415,7 @@ async fn generate_session_title(
         },
         ChatMessage {
             role: "user".to_string(),
-            content: format!("请为以下对话生成标题：\n\n{}", user_message),
+            content: user_message.to_string(),
             content_parts: None,
             tool_calls: None,
             tool_call_id: None,
@@ -823,6 +808,15 @@ async fn run_agent(
         let reg = handler_registry.lock().await;
         reg.list_handlers().len()
     };
+    // 检测执行环境信息（Python路径、Git Bash路径、OS等），注入系统提示词
+    // 避免智能体浪费迭代次数搜索 Python 路径等环境信息
+    let git_bash_path = {
+        let cfg = tokio::task::block_in_place(|| config.blocking_lock());
+        cfg.load_app_settings()
+            .map(|s| s.git_bash_path)
+            .unwrap_or_default()
+    };
+    let env_info = crate::services::agent::context::EnvironmentInfo::detect(&git_bash_path);
     let dynamic_prompt = AgentContext::build_system_prompt_with_task(
         workspace_path,
         &task_type,
@@ -830,6 +824,7 @@ async fn run_agent(
         handler_count,
         ctx.token_budget(),
         author_info.as_ref(),
+        &env_info,
     );
     ctx.system_prompt = dynamic_prompt;
     log::info!("任务类型: {:?}, 系统提示词已动态构建", task_type);

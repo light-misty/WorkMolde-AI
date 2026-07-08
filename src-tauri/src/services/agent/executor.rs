@@ -1456,7 +1456,7 @@ impl<R: Runtime> AgentExecutor<R> {
         });
 
         messages.push(ChatMessage {
-            role: "user".to_string(),
+            role: "system".to_string(),
             content: "请继续完成之前的回复，不要重复已输出的内容。".to_string(),
             content_parts: None,
             reasoning_content: None,

@@ -116,49 +116,6 @@ impl TokenBudgetManager {
             || (0x30A0..=0x30FF).contains(&cp)
             || (0xAC00..=0xD7AF).contains(&cp)
     }
-
-    /// 判断对话历史是否超过预算
-    pub fn is_conversation_over_budget(&self, current_tokens: usize) -> bool {
-        current_tokens > self.budget.conversation
-    }
-
-    /// 获取对话历史可用的 Token 空间
-    pub fn available_conversation_tokens(&self, current_tokens: usize) -> usize {
-        self.budget.conversation.saturating_sub(current_tokens)
-    }
-
-    /// 计算滑动窗口应保留的轮数
-    /// 基于剩余 Token 空间动态调整
-    pub fn calculate_window_size(&self, current_tokens: usize, avg_round_tokens: usize) -> usize {
-        if avg_round_tokens == 0 {
-            return 6; // 默认保留 6 轮
-        }
-        let available = self.available_conversation_tokens(current_tokens);
-        let window = available / avg_round_tokens;
-        // 保留最少 2 轮，最多 10 轮
-        window.clamp(2, 10)
-    }
-}
-
-/// 对话历史压缩策略配置
-#[derive(Debug, Clone)]
-pub struct HistoryCompressionConfig {
-    /// 滑动窗口大小（保留最近 N 轮完整对话）
-    pub window_size: usize,
-    /// 触发压缩的阈值（对话历史 Token 占预算的百分比）
-    pub compression_threshold: f64,
-    /// 压缩时保留最近几轮完整消息
-    pub keep_recent_rounds: usize,
-}
-
-impl Default for HistoryCompressionConfig {
-    fn default() -> Self {
-        Self {
-            window_size: 6,
-            compression_threshold: 0.8,
-            keep_recent_rounds: 2,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -246,35 +203,5 @@ mod tests {
         // 数字和标点
         assert!(!TokenBudgetManager::is_cjk_char('0'));
         assert!(!TokenBudgetManager::is_cjk_char('!'));
-    }
-
-    #[test]
-    fn test_conversation_over_budget() {
-        let manager = TokenBudgetManager::default_context();
-
-        assert!(!manager.is_conversation_over_budget(1000));
-        assert!(manager.is_conversation_over_budget(70000));
-    }
-
-    #[test]
-    fn test_calculate_window_size() {
-        let manager = TokenBudgetManager::default_context();
-
-        // 正常情况
-        let window = manager.calculate_window_size(10000, 2000);
-        assert!(window >= 2);
-        assert!(window <= 10);
-
-        // 平均每轮 Token 为 0，返回默认值
-        let window = manager.calculate_window_size(10000, 0);
-        assert_eq!(window, 6);
-    }
-
-    #[test]
-    fn test_compression_config_default() {
-        let config = HistoryCompressionConfig::default();
-        assert_eq!(config.window_size, 6);
-        assert!((config.compression_threshold - 0.8).abs() < f64::EPSILON);
-        assert_eq!(config.keep_recent_rounds, 2);
     }
 }

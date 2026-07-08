@@ -81,14 +81,10 @@ pub struct ContextUsageInfo {
     pub response_tokens: usize,
     /// 已使用 Token 总数
     pub total_used_tokens: usize,
-    /// 压缩状态: "normal" | "compressed" | "critical"
-    pub compression_status: String,
     /// 当前活跃 Provider 的模型名称
     pub model_name: String,
-    /// 对话历史消息总数（压缩前）
+    /// 对话历史消息总数
     pub total_message_count: usize,
-    /// 压缩后保留的消息数
-    pub retained_message_count: usize,
 
     // --- 新增缓存统计字段 ---
 

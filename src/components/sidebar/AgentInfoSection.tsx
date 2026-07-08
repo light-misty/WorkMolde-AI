@@ -15,15 +15,14 @@ function formatTokens(tokens: number): string {
   return String(tokens);
 }
 
-/** 根据压缩状态返回对应的显示信息 */
-function getCompressionInfo(status: string, t: (key: string) => string): { label: string; color: string } {
-  switch (status) {
-    case "critical":
-      return { label: t('contextWindow.approachingLimit'), color: "var(--color-error)" };
-    case "compressed":
-      return { label: t('contextWindow.compressed'), color: "var(--color-warning)" };
-    default:
-      return { label: t('contextWindow.normal'), color: "var(--color-success)" };
+/** 根据使用百分比返回对应的显示信息 */
+function getUsageInfo(usagePercent: number, t: (key: string) => string): { label: string; color: string } {
+  if (usagePercent >= 95) {
+    return { label: t('contextWindow.approachingLimit'), color: "var(--color-error)" };
+  } else if (usagePercent >= 80) {
+    return { label: t('contextWindow.normal'), color: "var(--color-warning)" };
+  } else {
+    return { label: t('contextWindow.normal'), color: "var(--color-success)" };
   }
 }
 
@@ -84,15 +83,13 @@ export function AgentInfoSection() {
       conversationTokens,
       responseTokens,
       totalUsedTokens,
-      compressionStatus,
-      retainedMessageCount,
       totalMessageCount,
       cacheHitRate,
       providerCacheType,
     } = contextUsage;
 
     const usagePercent = contextWindow > 0 ? Math.round((totalUsedTokens / contextWindow) * 100) : 0;
-    const compressionInfo = getCompressionInfo(compressionStatus, t);
+    const usageInfo = getUsageInfo(usagePercent, t);
     const systemPct = contextWindow > 0 ? (systemPromptTokens / contextWindow) * 100 : 0;
     const funcPct = contextWindow > 0 ? (functionDefinitionsTokens / contextWindow) * 100 : 0;
     const convPct = contextWindow > 0 ? (conversationTokens / contextWindow) * 100 : 0;
@@ -104,7 +101,7 @@ export function AgentInfoSection() {
       <div className="ai-context-block">
         <div className="ai-context-header">
           <span className="ai-context-label">{t('contextWindow.sectionTitle')}</span>
-          <span className="ai-context-value" style={compressionStatus === "critical" ? { color: "var(--color-error)" } : undefined}>
+          <span className="ai-context-value" style={usagePercent >= 95 ? { color: "var(--color-error)" } : undefined}>
             {formatTokens(totalUsedTokens)} / {formatTokens(contextWindow)}
           </span>
         </div>
@@ -121,19 +118,17 @@ export function AgentInfoSection() {
         </div>
 
         <div className="ai-context-footer">
-          <span className="ai-context-status" style={{ color: compressionInfo.color }}>
-            {compressionInfo.label}
+          <span className="ai-context-status" style={{ color: usageInfo.color }}>
+            {usageInfo.label}
           </span>
           <span className="ai-context-percent">{usagePercent}%</span>
         </div>
 
-        {(compressionStatus === "compressed" || compressionStatus === "critical") && (
+        {usagePercent >= 80 && (
           <div className="ai-context-compressed">
             <span className="ai-context-dot" />
             <span>
-              {compressionStatus === "critical"
-                ? t('contextWindow.approachingLimitDetail', { retained: retainedMessageCount, total: totalMessageCount })
-                : t('contextWindow.compressedDetail', { retained: retainedMessageCount, total: totalMessageCount })}
+              {t('contextWindow.approachingLimitDetail', { total: totalMessageCount })}
             </span>
           </div>
         )}

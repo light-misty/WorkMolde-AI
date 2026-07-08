@@ -152,14 +152,10 @@ export interface ContextUsageInfo {
   responseTokens: number;
   /** 已使用 Token 总数 */
   totalUsedTokens: number;
-  /** 压缩状态: "normal" | "compressed" | "critical" */
-  compressionStatus: string;
   /** 当前活跃 Provider 的模型名称 */
   modelName: string;
-  /** 对话历史消息总数（压缩前） */
+  /** 对话历史消息总数 */
   totalMessageCount: number;
-  /** 压缩后保留的消息数 */
-  retainedMessageCount: number;
 
   // --- 新增缓存字段 ---
   /** 本轮请求的缓存命中 tokens */

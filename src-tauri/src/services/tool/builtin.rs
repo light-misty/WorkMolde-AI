@@ -1478,13 +1478,17 @@ mod tests {
         assert!(!result2.success, "写入 .sh 文件应被拒绝");
 
         // 写入普通文本文件应成功（不被拒绝）
+        let tmp_dir = std::env::temp_dir().join("docagent_test_write_file");
+        let _ = std::fs::create_dir_all(&tmp_dir);
         let result3 = tool.execute(json!({
             "path": "readme.txt",
             "content": "hello world",
-            "workspace_root": ""
+            "workspace_root": tmp_dir.to_string_lossy()
         })).await;
 
         assert!(result3.success, "写入普通文本文件应成功");
+        // 清理临时文件
+        let _ = std::fs::remove_file(tmp_dir.join("readme.txt"));
     }
 }
 
@@ -2522,6 +2526,22 @@ impl Tool for RenameFileTool {
             };
         }
 
+        // 安全校验：禁止通过重命名为脚本文件绕过 write_text_file 的限制
+        // 智能体可能通过 "write_text_file 写入 .txt + rename_file 改为 .py" 绕过脚本文件写入限制
+        // 此检查复用 is_script_filename 函数，检测目标路径是否为脚本扩展名
+        if is_script_filename(target_path) {
+            log::warn!("rename_file 拒绝重命名为脚本文件: {} -> {}", source_path, target_path);
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some(format!(
+                    "不允许通过 rename_file 将文件重命名为脚本文件: {}。请改用 write_script 工具将脚本写入系统临时目录，再通过 run_command 工具执行",
+                    target_path
+                )),
+                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
+            };
+        }
+
         // 源路径必须是文件
         if !canonical_source.is_file() {
             return ToolResult {
@@ -2650,6 +2670,21 @@ impl Tool for CopyFileTool {
                 output: None,
                 error: Some(e),
                 duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
+            };
+        }
+
+        // 安全校验：禁止通过复制为脚本文件绕过 write_text_file 的限制
+        // 与 rename_file 相同的防护逻辑，防止智能体通过 copy_file 将 .txt 复制为 .py
+        if is_script_filename(target_path) {
+            log::warn!("copy_file 拒绝复制为脚本文件: {} -> {}", source_path, target_path);
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some(format!(
+                    "不允许通过 copy_file 将文件复制为脚本文件: {}。请改用 write_script 工具将脚本写入系统临时目录，再通过 run_command 工具执行",
+                    target_path
+                )),
+                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
         }
 
@@ -3914,6 +3949,14 @@ fn execute_bash_command(
     if !working_dir.is_empty() {
         cmd.current_dir(working_dir);
     }
+
+    // 注入环境变量，优化 Python 脚本执行环境
+    // PYTHONIOENCODING=utf-8: 强制 Python 标准输入输出使用 UTF-8 编码
+    //   解决 Windows 下 Python 默认使用 GBK 编码导致输出 Unicode 字符（如 \u2022）时报错的问题
+    // PYTHONUTF8=1: 启用 Python UTF-8 模式（PEP 540），使所有文件 I/O 默认使用 UTF-8
+    //   进一步减少编码相关的失败，提升智能体脚本执行成功率
+    cmd.env("PYTHONIOENCODING", "utf-8");
+    cmd.env("PYTHONUTF8", "1");
 
     // 捕获 stdout 和 stderr
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).stdin(Stdio::null());

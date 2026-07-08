@@ -135,14 +135,12 @@
   "contextWindow": {
     "sectionTitle": "上下文窗口",
     "approachingLimit": "接近上限",
-    "compressed": "已压缩",
     "normal": "正常",
     "systemPrompt": "系统提示词",
     "toolDefinitions": "工具定义",
     "conversationHistory": "对话历史",
     "llmResponse": "LLM 响应",
-    "approachingLimitDetail": "上下文接近上限 ({{retained}}/{{total}} 消息)",
-    "compressedDetail": "已压缩历史 (保留 {{retained}}/{{total}} 消息)",
+    "approachingLimitDetail": "上下文接近上限 ({{total}} 消息)",
     "cacheHitRate": "缓存命中率"
   },
   "settings": {

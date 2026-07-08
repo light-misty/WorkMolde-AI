@@ -135,14 +135,12 @@
   "contextWindow": {
     "sectionTitle": "Context Window",
     "approachingLimit": "Near Limit",
-    "compressed": "Compressed",
     "normal": "Normal",
     "systemPrompt": "System Prompt",
     "toolDefinitions": "Tool Definitions",
     "conversationHistory": "Conversation History",
     "llmResponse": "LLM Response",
-    "approachingLimitDetail": "Context near limit ({{retained}}/{{total}} messages)",
-    "compressedDetail": "History compressed (retained {{retained}}/{{total}} messages)",
+    "approachingLimitDetail": "Context near limit ({{total}} messages)",
     "cacheHitRate": "Cache Hit Rate"
   },
   "settings": {
