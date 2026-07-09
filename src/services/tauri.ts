@@ -29,6 +29,9 @@ import type {
   CreateTemplateParams,
   UpdateTemplateParams,
   ContextUsageInfo,
+  PermissionRule,
+  AddPermissionRuleParams,
+  UpdatePermissionRuleParams,
 } from "../types";
 
 // ================================================================
@@ -390,6 +393,30 @@ export async function confirmOperation(
   if (!result.ok) throw result.error.raw;
 }
 
+/** 权限审批回复（Phase 2 三态权限系统：once/always/reject） */
+export async function permissionRespond(
+  sessionId: string,
+  operationId: string,
+  response: 'once' | 'always' | 'reject',
+  feedback?: string,
+): Promise<void> {
+  const result = await safeInvoke(() => invoke("permission_respond", {
+    sessionId,
+    operationId,
+    response,
+    feedback: feedback ?? null,
+  }), { context: "permissionRespond" });
+  if (!result.ok) throw result.error.raw;
+}
+
+/** 切换 Agent 模式（Plan/Build/Document），由前端按钮触发 */
+export async function switchAgentMode(sessionId: string, mode: 'plan' | 'build' | 'document'): Promise<void> {
+  const result = await safeInvoke(() => invoke("switch_agent_mode", { sessionId, mode }), {
+    context: "switchAgentMode",
+  });
+  if (!result.ok) throw result.error.raw;
+}
+
 /** 获取上下文窗口使用信息 */
 export async function getContextUsage(sessionId: string): Promise<ContextUsageInfo> {
   const result = await safeInvoke(() => invoke<ContextUsageInfo>("get_context_usage", { sessionId }), { context: "getContextUsage" });
@@ -517,5 +544,68 @@ export async function installDownloadedUpdate(
     () => invoke("install_downloaded_update", { installerPath, restart }),
     { context: "installDownloadedUpdate" },
   );
+  if (!result.ok) throw result.error.raw;
+}
+
+// ================================================================
+// 权限规则命令
+// ================================================================
+
+/** 列出权限规则（默认规则 + 用户规则） */
+export async function listPermissionRules(
+  scope?: string,
+  workspaceId?: string,
+  sessionId?: string,
+  permissionType?: string,
+  enabledOnly?: boolean,
+  includeDefaults?: boolean,
+): Promise<PermissionRule[]> {
+  const result = await safeInvoke(() => invoke<PermissionRule[]>("list_permission_rules", {
+    scope: scope ?? null,
+    workspaceId: workspaceId ?? null,
+    sessionId: sessionId ?? null,
+    permissionType: permissionType ?? null,
+    enabledOnly: enabledOnly ?? null,
+    includeDefaults: includeDefaults ?? null,
+  }), { context: "listPermissionRules" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
+/** 添加权限规则 */
+export async function addPermissionRule(params: AddPermissionRuleParams): Promise<PermissionRule> {
+  const result = await safeInvoke(() => invoke<PermissionRule>("add_permission_rule", {
+    scope: params.scope,
+    permissionType: params.permissionType,
+    pattern: params.pattern,
+    action: params.action,
+    description: params.description ?? null,
+    workspaceId: params.workspaceId ?? null,
+    sessionId: params.sessionId ?? null,
+  }), { context: "addPermissionRule" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
+/** 更新权限规则 */
+export async function updatePermissionRule(ruleId: string, params: UpdatePermissionRuleParams): Promise<PermissionRule> {
+  const result = await safeInvoke(() => invoke<PermissionRule>("update_permission_rule", {
+    ruleId,
+    scope: params.scope ?? null,
+    permissionType: params.permissionType ?? null,
+    pattern: params.pattern ?? null,
+    action: params.action ?? null,
+    description: params.description ?? null,
+    enabled: params.enabled ?? null,
+    workspaceId: params.workspaceId ?? null,
+    sessionId: params.sessionId ?? null,
+  }), { context: "updatePermissionRule" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
+/** 删除权限规则 */
+export async function deletePermissionRule(ruleId: string): Promise<void> {
+  const result = await safeInvoke(() => invoke("delete_permission_rule", { ruleId }), { context: "deletePermissionRule" });
   if (!result.ok) throw result.error.raw;
 }

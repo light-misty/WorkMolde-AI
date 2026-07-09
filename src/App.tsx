@@ -69,7 +69,7 @@ export default function App() {
   const [versionHistoryFilePath, setVersionHistoryFilePath] = useState("");
   const [versionHistoryFileName, setVersionHistoryFileName] = useState("");
 
-  const { addNode, updateNode, setExecutionStatus, clearNodes, setConfirmHandler, loadFromMessages, executionStatus, initContextUsageListener, loadContextUsage, clearContextUsage, saveSessionToCache, restoreSessionFromCache, clearSessionCache, getCachedStreamingRefs, nodes } = useWorkflowStore();
+  const { addNode, updateNode, setExecutionStatus, clearNodes, setPermissionHandler, loadFromMessages, executionStatus, initContextUsageListener, loadContextUsage, clearContextUsage, saveSessionToCache, restoreSessionFromCache, clearSessionCache, getCachedStreamingRefs, nodes } = useWorkflowStore();
   const { switchSession, loadSessions, clearCurrentSession, currentSessionId, sessions } = useSessionStore();
   const updateSessionTitleLocal = useSessionStore((s) => s.updateSessionTitleLocal);
   const { loadSettings, initThemeListener } = useSettingsStore();
@@ -89,7 +89,7 @@ export default function App() {
     networkRetry,
     sendMessage,
     stopAgent,
-    confirmOperation,
+    respondPermission,
     reset: resetAgent,
     setSessionId: setAgentSessionId,
     sessionId: agentSessionId,
@@ -565,24 +565,29 @@ export default function App() {
         description: pendingConfirmation.description,
         confirmLabel: t('confirmNode.confirmExecute'),
         cancelLabel: t('confirmNode.cancelOperation'),
-        confirmed: null,
+        confirmed: null as boolean | null,
+        // Phase 2: 风险等级与权限回复字段，供 ConfirmNode 渲染三态按钮与风险徽标
+        riskLevel: pendingConfirmation.riskLevel,
+        permissionResponse: null as 'once' | 'always' | 'reject' | null,
       };
       const nodeId = addNode("confirm", confirmData, "running");
       confirmNodeIdRef.current = nodeId;
 
-      setConfirmHandler(async (approved: boolean, feedback?: string) => {
+      // Phase 2: 优先使用 permissionHandler（三态权限系统），与 setConfirmHandler 并存以保持向后兼容
+      setPermissionHandler(async (response: 'once' | 'always' | 'reject', feedback?: string) => {
+        const approved = response !== 'reject';
         if (confirmNodeIdRef.current) {
           updateNode(confirmNodeIdRef.current, {
-            data: { ...confirmData, confirmed: approved, feedback },
+            data: { ...confirmData, confirmed: approved, permissionResponse: response, feedback },
             status: approved ? "completed" : "cancelled",
           });
           confirmNodeIdRef.current = null;
         }
-        await confirmOperation(pendingConfirmation.operationId, approved, feedback);
-        setConfirmHandler(null);
+        await respondPermission(pendingConfirmation.operationId, response, feedback);
+        setPermissionHandler(null);
       });
     }
-  }, [pendingConfirmation, addNode, updateNode, confirmOperation, setConfirmHandler]);
+  }, [pendingConfirmation, addNode, updateNode, respondPermission, setPermissionHandler]);
 
   // 发送用户消息
   const handleSend = useCallback(async (text: string) => {

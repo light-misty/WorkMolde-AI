@@ -1,5 +1,6 @@
 pub mod init;
 pub mod message_repo;
+pub mod permission_repo;
 pub mod session_repo;
 pub mod session_summary_repo;
 pub mod snapshot_repo;

@@ -36,9 +36,11 @@ fn resolve_path(path: &str, workspace_root: &str) -> String {
 /// 注册所有内置工具
 /// 返回 Scratchpad 共享状态 Arc，供 AgentContext 在每轮迭代时读取笔记摘要
 /// git_bash_path: Git Bash 可执行文件路径（空字符串表示从 PATH 自动检测）
+/// _agent_mode_manager: Agent 模式管理器（Phase 2 仅传递，实际过滤在 executor 中实现，T2.13 会使用）
 pub fn register_builtin_tools(
     registry: &mut ToolRegistry,
     git_bash_path: String,
+    _agent_mode_manager: Arc<crate::services::agent::AgentModeManager>,
 ) -> SharedScratchpadStates {
     log::info!("开始注册内置工具");
     registry.register(Box::new(ListDirectoryTool));
@@ -76,7 +78,6 @@ pub fn register_builtin_tools(
     registry.register(Box::new(RunCommandTool { git_bash_path }));
 
     log::info!("内置工具注册完成, 共注册 18 个工具");
-    // TODO(Phase 2): 签名扩展为 (registry, git_bash_path, agent_mode_manager)
     // TODO(Phase 3): 新增 TodoWriteTool(替代 Scratchpad)
     // TODO(Phase 4): 新增 task/webfetch/websearch 工具
     // TODO(Phase 5): 新增 lsp 工具(实验性)
@@ -943,7 +944,11 @@ mod tests {
     #[test]
     fn test_register_builtin_tools() {
         let mut registry = ToolRegistry::new();
-        let _scratchpad_states = register_builtin_tools(&mut registry, String::new());
+        let _scratchpad_states = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
 
         // 验证 18 个工具都已注册（8 个原有 + 4 个阶段三新增 + 1 个 scratchpad + 2 个代码执行工具 + 3 个阶段 1 新增 edit/glob/grep）
         let tools = registry.list_tools();
@@ -978,7 +983,11 @@ mod tests {
     #[test]
     fn test_tool_definitions_count() {
         let mut registry = ToolRegistry::new();
-        let _scratchpad_states = register_builtin_tools(&mut registry, String::new());
+        let _scratchpad_states = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
 
         let defs = registry.tool_definitions();
         assert_eq!(defs.len(), 18);
@@ -995,7 +1004,11 @@ mod tests {
     #[test]
     fn test_tool_info_properties() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
 
         let tools = registry.list_tools();
         for tool in &tools {
@@ -1016,7 +1029,11 @@ mod tests {
     #[tokio::test]
     async fn test_file_exists_nonexistent() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
 
         let tool = registry.get_arc("exists").unwrap();
         let result = tool
@@ -1035,7 +1052,11 @@ mod tests {
     #[tokio::test]
     async fn test_read_file_missing_path() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
 
         let tool = registry.get_arc("read").unwrap();
         let result = tool
@@ -1069,7 +1090,11 @@ mod tests {
         let file_path = tmp_path.to_string_lossy().to_string();
 
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
         let tool = registry.get_arc("read").unwrap();
         let result = tool
             .execute(json!({
@@ -1112,7 +1137,11 @@ mod tests {
         let file_path = tmp_path.to_string_lossy().to_string();
 
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
         let tool = registry.get_arc("read").unwrap();
         // 读取第 3-5 行
         let result = tool
@@ -1152,7 +1181,11 @@ mod tests {
         let new_content = "Hello, this is a new file.\nLine 2.";
 
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
         let tool = registry.get_arc("edit").unwrap();
         let result = tool
             .execute(json!({
@@ -1190,7 +1223,11 @@ mod tests {
         std::fs::write(&abs_path, original).unwrap();
 
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
         let tool = registry.get_arc("edit").unwrap();
         let result = tool
             .execute(json!({
@@ -1227,7 +1264,11 @@ mod tests {
         std::fs::write(&abs_path, original).unwrap();
 
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
         let tool = registry.get_arc("edit").unwrap();
         let result = tool
             .execute(json!({
@@ -1258,7 +1299,11 @@ mod tests {
         std::fs::write(&abs_path, original).unwrap();
 
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
         let tool = registry.get_arc("edit").unwrap();
         let result = tool
             .execute(json!({
@@ -1301,7 +1346,11 @@ mod tests {
             .unwrap();
 
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
         let tool = registry.get_arc("glob").unwrap();
         // 用 **/*.rs 查找所有 .rs 文件
         let result = tool
@@ -1349,7 +1398,11 @@ mod tests {
             .unwrap();
 
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
         let tool = registry.get_arc("glob").unwrap();
         let result = tool
             .execute(json!({
@@ -1390,7 +1443,11 @@ mod tests {
             .unwrap();
 
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
         let tool = registry.get_arc("grep").unwrap();
         // 搜索 "fn " 模式
         let result = tool
@@ -1432,7 +1489,11 @@ mod tests {
             .unwrap();
 
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
         let tool = registry.get_arc("grep").unwrap();
         // 只搜索 .rs 文件
         let result = tool
@@ -1470,7 +1531,11 @@ mod tests {
         .unwrap();
 
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
         let tool = registry.get_arc("grep").unwrap();
         // 大小写不敏感搜索 "foobar"
         let result = tool
@@ -1505,7 +1570,11 @@ mod tests {
             .unwrap();
 
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
         let tool = registry.get_arc("grep").unwrap();
         // 搜索 "target"，前后各 1 行上下文
         let result = tool
@@ -1540,7 +1609,11 @@ mod tests {
     #[tokio::test]
     async fn test_create_directory_missing_path() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
 
         let tool = registry.get_arc("mkdir").unwrap();
         let result = tool
@@ -1558,7 +1631,11 @@ mod tests {
     #[tokio::test]
     async fn test_write_text_file_missing_path() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
 
         let tool = registry.get_arc("write").unwrap();
         let result = tool
@@ -1577,7 +1654,11 @@ mod tests {
     #[tokio::test]
     async fn test_delete_file_missing_workspace() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
 
         let tool = registry.get_arc("remove").unwrap();
         let result = tool
@@ -1595,7 +1676,11 @@ mod tests {
     #[tokio::test]
     async fn test_search_files_empty_query_and_extensions() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
 
         let tool = registry.get_arc("search").unwrap();
         let result = tool
@@ -1612,7 +1697,11 @@ mod tests {
     #[tokio::test]
     async fn test_file_info_missing_path() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
 
         let tool = registry.get_arc("file_info").unwrap();
         let result = tool
@@ -1632,7 +1721,11 @@ mod tests {
     #[tokio::test]
     async fn test_write_and_read_file_with_gbk_encoding() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
 
         // 创建临时工作区目录
         let temp_dir = std::env::temp_dir().join("docagent_encoding_test");
@@ -1694,7 +1787,11 @@ mod tests {
     #[tokio::test]
     async fn test_read_file_default_utf8_encoding() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
 
         // 创建临时工作区目录
         let temp_dir = std::env::temp_dir().join("docagent_utf8_test");
@@ -1739,7 +1836,11 @@ mod tests {
     #[tokio::test]
     async fn test_read_file_unsupported_encoding_fallback() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
 
         // 创建临时工作区目录
         let temp_dir = std::env::temp_dir().join("docagent_fallback_test");
@@ -1784,7 +1885,11 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_add_notes() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry, String::new());
+        let _states = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
 
         let tool = registry.get_arc("scratchpad").unwrap();
 
@@ -1821,7 +1926,11 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_read_notes() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry, String::new());
+        let _states = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
         let tool = registry.get_arc("scratchpad").unwrap();
 
         // 先添加两条笔记
@@ -1860,7 +1969,11 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_clear_notes() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry, String::new());
+        let _states = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
         let tool = registry.get_arc("scratchpad").unwrap();
 
         // 添加笔记
@@ -1898,7 +2011,11 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_session_isolation() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry, String::new());
+        let _states = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
         let tool = registry.get_arc("scratchpad").unwrap();
 
         // session-A 添加笔记
@@ -1946,7 +2063,11 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_missing_session_id() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry, String::new());
+        let _states = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
         let tool = registry.get_arc("scratchpad").unwrap();
 
         let result = tool
@@ -1965,7 +2086,11 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_add_empty_content() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry, String::new());
+        let _states = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
         let tool = registry.get_arc("scratchpad").unwrap();
 
         let result = tool
@@ -1984,7 +2109,11 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_unknown_action() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry, String::new());
+        let _states = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
         let tool = registry.get_arc("scratchpad").unwrap();
 
         let result = tool
@@ -2002,7 +2131,11 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_content_length_limit() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry, String::new());
+        let _states = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
         let tool = registry.get_arc("scratchpad").unwrap();
 
         // 构造 1000 字符的长内容
@@ -2241,7 +2374,11 @@ mod tests {
     #[tokio::test]
     async fn test_write_text_file_rejects_script_file() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new());
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(crate::services::agent::AgentModeManager::new()),
+        );
 
         let tool = registry.get_arc("write").unwrap();
 

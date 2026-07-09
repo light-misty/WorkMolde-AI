@@ -104,6 +104,24 @@ fn create_tables(conn: &Connection) -> Result<(), CommandError> {
         );",
     )?;
 
+    // permission_rules 权限规则表(阶段2)
+    // 存储用户配置的权限规则,支持全局、项目、会话三个作用域
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS permission_rules (
+            id                TEXT        NOT NULL PRIMARY KEY,
+            scope             TEXT        NOT NULL CHECK (scope IN ('global', 'project', 'session')),
+            workspace_id      TEXT        DEFAULT NULL,
+            session_id        TEXT        DEFAULT NULL,
+            permission_type   TEXT        NOT NULL,
+            pattern           TEXT        NOT NULL DEFAULT '*',
+            action            TEXT        NOT NULL CHECK (action IN ('allow', 'deny', 'ask')),
+            description       TEXT        NOT NULL DEFAULT '',
+            enabled           INTEGER     NOT NULL DEFAULT 1,
+            created_at        TEXT        NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+            updated_at        TEXT        NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        );",
+    )?;
+
     log::info!("数据表创建完成");
     Ok(())
 }
@@ -147,7 +165,16 @@ fn create_indexes(conn: &Connection) -> Result<(), CommandError> {
             ON session_summaries (session_id);
 
         CREATE INDEX IF NOT EXISTS idx_user_preferences_category
-            ON user_preferences (category);",
+            ON user_preferences (category);
+
+        CREATE INDEX IF NOT EXISTS idx_permission_rules_scope
+            ON permission_rules (scope);
+        CREATE INDEX IF NOT EXISTS idx_permission_rules_workspace_id
+            ON permission_rules (workspace_id);
+        CREATE INDEX IF NOT EXISTS idx_permission_rules_session_id
+            ON permission_rules (session_id);
+        CREATE INDEX IF NOT EXISTS idx_permission_rules_permission_type
+            ON permission_rules (permission_type);",
     )?;
 
     log::info!("索引创建完成");

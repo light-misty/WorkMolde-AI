@@ -57,6 +57,8 @@ interface WorkflowState {
   executionStatus: ExecutionStatus;
   error: string | null;
   confirmHandler: ((approved: boolean, feedback?: string) => Promise<void>) | null;
+  /** Phase 2 权限审批回调（once/always/reject 三态） */
+  permissionHandler: ((response: 'once' | 'always' | 'reject', feedback?: string) => Promise<void>) | null;
   /** 上下文窗口使用信息（Agent 运行时实时更新） */
   contextUsage: ContextUsageInfo | null;
   /** 按会话缓存的状态映射 */
@@ -70,6 +72,8 @@ interface WorkflowState {
   setError: (error: string | null) => void;
   toggleNode: (id: string) => void;
   setConfirmHandler: (handler: ((approved: boolean, feedback?: string) => Promise<void>) | null) => void;
+  /** Phase 2: 设置权限审批回调（与 setConfirmHandler 并存，permissionHandler 优先） */
+  setPermissionHandler: (handler: ((response: 'once' | 'always' | 'reject', feedback?: string) => Promise<void>) | null) => void;
   loadFromMessages: (messages: Message[]) => void;
   /** 初始化上下文窗口使用情况事件监听 */
   initContextUsageListener: () => Promise<() => void>;
@@ -122,6 +126,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   executionStatus: "idle",
   error: null,
   confirmHandler: null,
+  permissionHandler: null,
   contextUsage: null,
   sessionCache: new Map(),
 
@@ -159,7 +164,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   clearNodes: () => {
     nodeCounter = 0;
     // 不重置 sessionCache，它按会话管理
-    set({ nodes: [], error: null, executionStatus: "idle", confirmHandler: null, contextUsage: null });
+    set({ nodes: [], error: null, executionStatus: "idle", confirmHandler: null, permissionHandler: null, contextUsage: null });
   },
 
   setExecutionStatus: (status) => {
@@ -180,6 +185,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   setConfirmHandler: (handler) => {
     set({ confirmHandler: handler });
+  },
+
+  setPermissionHandler: (handler) => {
+    set({ permissionHandler: handler });
   },
 
   loadFromMessages: (messages) => {
@@ -276,7 +285,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       }
     }
 
-    set({ nodes, error: null, executionStatus: "idle", confirmHandler: null });
+    set({ nodes, error: null, executionStatus: "idle", confirmHandler: null, permissionHandler: null });
   },
 
   // 初始化上下文窗口使用情况事件监听，返回取消监听函数
@@ -365,6 +374,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       error: entry.error,
       contextUsage: entry.contextUsage,
       confirmHandler: null,
+      permissionHandler: null,
     });
 
     // 更新缓存访问时间

@@ -1,6 +1,6 @@
 // ===== 设置相关类型定义 - 与 Rust 后端对齐 =====
 
-export type SettingsTab = "llm" | "workspace" | "handler" | "template" | "appearance" | "shortcuts" | "general" | "help";
+export type SettingsTab = "llm" | "workspace" | "handler" | "template" | "permission" | "appearance" | "shortcuts" | "general" | "help";
 
 // ----- 应用设置 -----
 

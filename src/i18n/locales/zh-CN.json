@@ -73,12 +73,80 @@
     "selectModel": "选择模型",
     "configureModel": "配置模型"
   },
+  "agentMode": {
+    "plan": "规划",
+    "build": "构建",
+    "document": "文档",
+    "planMode": "规划模式：只读分析，不执行修改操作",
+    "buildMode": "构建模式：完整编程执行能力",
+    "documentMode": "文档模式：生成和处理 Word/Excel/PPT/PDF 文档",
+    "switchGroup": "Agent 模式切换"
+  },
   "confirmNode": {
     "userConfirmed": "✓ 用户已确认执行",
     "userCancelled": "✗ 用户已取消操作",
     "confirmExecute": "确认执行",
     "cancelOperation": "取消操作",
     "feedbackPlaceholder": "输入拒绝原因（可选）…"
+  },
+  "permission": {
+    "once": "仅本次允许",
+    "always": "永久允许",
+    "reject": "拒绝",
+    "onceAllowed": "✓ 已允许（本次）",
+    "alwaysAllowed": "✓ 已允许（永久）",
+    "rejected": "✗ 已拒绝",
+    "feedbackPlaceholder": "输入拒绝原因（可选）…",
+    "tabTitle": "权限规则管理",
+    "title": "权限规则",
+    "addRule": "添加规则",
+    "editRule": "编辑规则",
+    "refresh": "刷新",
+    "confirmDelete": "确定要删除这条权限规则吗？",
+    "noRules": "暂无自定义规则",
+    "noDefaults": "暂无默认规则",
+    "scope": "作用域",
+    "type": "类型",
+    "pattern": "匹配模式",
+    "action": "动作",
+    "description": "描述",
+    "enabled": "启用",
+    "defaultRules": "默认规则",
+    "userRules": "自定义规则",
+    "defaultBadge": "默认",
+    "scopeOptions": {
+      "global": "全局",
+      "project": "项目",
+      "session": "会话"
+    },
+    "actionOptions": {
+      "allow": "允许",
+      "deny": "拒绝",
+      "ask": "询问"
+    },
+    "typeOptions": {
+      "wildcard": "通配",
+      "read": "读取",
+      "edit": "编辑",
+      "glob": "Glob 搜索",
+      "grep": "Grep 搜索",
+      "list": "列出目录",
+      "bash": "命令执行",
+      "write_script": "写入脚本",
+      "task": "子任务",
+      "skill": "技能",
+      "lsp": "LSP",
+      "web_fetch": "网络请求",
+      "web_search": "网络搜索",
+      "external_directory": "外部目录",
+      "doom_loop": "死循环检测",
+      "document": "文档处理",
+      "question": "询问用户"
+    },
+    "patternPlaceholder": "如 src/**/*.ts, git *, *.env",
+    "descriptionPlaceholder": "可选：规则描述",
+    "save": "保存",
+    "cancel": "取消"
   },
   "errorNode": {
     "errorDetails": "错误详情",
@@ -150,6 +218,7 @@
       "workspace": "工作区管理",
       "handler": "Tools 和 Handlers管理",
       "template": "Prompt 模板",
+      "permission": "权限规则",
       "appearance": "外观设置",
       "shortcuts": "快捷键",
       "general": "通用设置",
@@ -569,6 +638,7 @@
     "templateMessage": "确定要删除模板 \"{{name}}\" 吗？",
     "versionMessage": "确定要回滚到版本 \"{{name}}\" 吗？",
     "clearSessionsMessage": "确定要清空工作区 \"{{name}}\" 的所有会话记录吗？",
+    "permissionMessage": "确定要删除权限规则 \"{{name}}\" 吗？",
     "permanentWarning": "此操作将永久删除，无法恢复。"
   },
   "errorBoundary": {

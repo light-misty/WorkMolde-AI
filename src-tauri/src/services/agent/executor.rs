@@ -14,6 +14,11 @@ use crate::events::types::*;
 use crate::models::llm::{ChatMessage, ChatUsage, LlmToolCall};
 use crate::services::handler::registry::HandlerRegistry;
 use crate::services::llm::router::LlmRouter;
+use crate::services::permission::{
+    doom_loop::DoomLoopDetector, evaluator::PermissionEvaluator, evaluator::PermissionRequest,
+    registry::PermissionRegistry, session_whitelist::SessionWhitelist, types::PermissionAction,
+    types::PermissionResponse, types::PermissionType,
+};
 use crate::services::tool::registry::ToolRegistry;
 use crate::ConfirmDecision;
 
@@ -23,6 +28,14 @@ const RETRY_DELAY_SECONDS: u64 = 2;
 const CONFIRM_TIMEOUT_SECS: u64 = 300;
 /// 始终需要确认的高风险 Handler 列表
 const HIGH_RISK_HANDLERS: &[&str] = &["remove"];
+
+/// 文档 Handler 名称列表（仅在 Document 模式下暴露给 LLM）
+const DOCUMENT_HANDLER_NAMES: &[&str] = &["docx", "xlsx", "pptx", "pdf"];
+
+/// 判断工具名是否为文档 Handler
+fn is_document_handler(name: &str) -> bool {
+    DOCUMENT_HANDLER_NAMES.contains(&name)
+}
 
 /// 判断 Shell 命令是否为高风险命令（需要用户确认）
 /// 检测破坏性命令模式：rm/del/rmdir/mkfs/format/shutdown 等
@@ -153,6 +166,20 @@ pub struct AgentExecutor<R: Runtime> {
     emitter: AgentEmitter<R>,
     confirm_channels:
         Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<ConfirmDecision>>>>,
+    /// Phase 2: 权限审批通道（三态 once/always/reject）
+    permission_channels: Arc<
+        tokio::sync::Mutex<
+            HashMap<String, tokio::sync::oneshot::Sender<crate::PermissionDecision>>,
+        >,
+    >,
+    /// Phase 2: 权限注册表（默认规则 + 用户规则合并）
+    permission_registry: Arc<PermissionRegistry>,
+    /// Phase 2: 会话级白名单（always 规则缓存）
+    session_whitelist: Arc<SessionWhitelist>,
+    /// Phase 2: Doom loop 检测器
+    doom_loop_detector: Arc<DoomLoopDetector>,
+    /// Phase 2: Agent 模式管理器（Plan/Build/Document）
+    agent_mode_manager: Arc<super::AgentModeManager>,
     max_iterations: u32,
     should_stop: Arc<dyn Fn(&str) -> bool + Send + Sync>,
     /// 增量持久化回调，每轮迭代后调用，防止崩溃丢失消息
@@ -166,6 +193,7 @@ pub struct AgentExecutor<R: Runtime> {
 }
 
 impl<R: Runtime> AgentExecutor<R> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         router: Arc<LlmRouter>,
         tool_registry: Arc<ToolRegistry>,
@@ -174,6 +202,15 @@ impl<R: Runtime> AgentExecutor<R> {
         confirm_channels: Arc<
             tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<ConfirmDecision>>>,
         >,
+        permission_channels: Arc<
+            tokio::sync::Mutex<
+                HashMap<String, tokio::sync::oneshot::Sender<crate::PermissionDecision>>,
+            >,
+        >,
+        permission_registry: Arc<PermissionRegistry>,
+        session_whitelist: Arc<SessionWhitelist>,
+        doom_loop_detector: Arc<DoomLoopDetector>,
+        agent_mode_manager: Arc<super::AgentModeManager>,
     ) -> Self {
         Self {
             router,
@@ -181,6 +218,11 @@ impl<R: Runtime> AgentExecutor<R> {
             registry,
             emitter,
             confirm_channels,
+            permission_channels,
+            permission_registry,
+            session_whitelist,
+            doom_loop_detector,
+            agent_mode_manager,
             max_iterations: 100,
             should_stop: Arc::new(|_| false),
             persist_fn: None,
@@ -473,6 +515,281 @@ impl<R: Runtime> AgentExecutor<R> {
         }
     }
 
+    /// Phase 2: 权限系统检查（替代原有 ConfirmationLevel 机制）
+    /// 按以下顺序检查：Plan 模式 → Doom loop → 白名单 → 外部目录 → 规则评估
+    /// 返回 Ok(true) 表示允许执行，Ok(false) 表示拒绝（已发射 tool_result 失败事件）
+    async fn check_permission(
+        &self,
+        ctx: &AgentContext,
+        tool_name: &str,
+        params: &serde_json::Value,
+    ) -> Result<bool, CommandError> {
+        // 1. 获取当前 AgentMode
+        let mode = self.agent_mode_manager.get_mode(&ctx.session_id).await;
+
+        // 2. Plan 模式拒绝修改类操作
+        if mode.is_plan() && PermissionType::from_tool_name(tool_name).is_modification() {
+            log::warn!(
+                "权限拒绝(Plan 模式): session_id={}, tool={}",
+                ctx.session_id,
+                tool_name
+            );
+            return Ok(false);
+        }
+
+        // 3. Doom loop 检测：连续多次相同调用
+        if self
+            .doom_loop_detector
+            .record_and_check(&ctx.session_id, tool_name, params)
+            .await
+        {
+            log::warn!(
+                "权限拒绝(Doom loop): session_id={}, tool={}",
+                ctx.session_id,
+                tool_name
+            );
+            return Ok(false);
+        }
+
+        // 4. 构造权限评估请求
+        let request = PermissionRequest::from_tool_call(tool_name, params);
+
+        // 5. 白名单检查（会话级 always 规则缓存）
+        if let Some(PermissionAction::Allow) = self
+            .session_whitelist
+            .check(&ctx.session_id, request.permission_type, &request.target)
+            .await
+        {
+            log::debug!(
+                "权限允许(白名单命中): session_id={}, tool={}",
+                ctx.session_id,
+                tool_name
+            );
+            return Ok(true);
+        }
+
+        // 6. 外部目录检查：文件操作且路径在工作区外时强制 Ask
+        let is_external = if !ctx.workspace_path.is_empty() {
+            // 从参数中提取路径，判断是否为外部目录
+            let path_str = params
+                .get("path")
+                .or_else(|| params.get("file_path"))
+                .or_else(|| params.get("input_path"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if !path_str.is_empty() && path_str != "*" {
+                PermissionEvaluator::is_external_directory(path_str, &ctx.workspace_path)
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        // 7. 规则评估（load_effective_rules 是同步方法）
+        let rules = self.permission_registry.load_effective_rules(
+            if ctx.workspace_id.is_empty() {
+                None
+            } else {
+                Some(&ctx.workspace_id)
+            },
+            Some(&ctx.session_id),
+        );
+        let decision = PermissionEvaluator::evaluate(&request, &rules);
+
+        // 8. 根据评估结果处理（外部目录访问强制升级为 Ask）
+        let final_action = if is_external {
+            PermissionAction::Ask
+        } else {
+            decision.action
+        };
+
+        match final_action {
+            PermissionAction::Allow => {
+                log::debug!(
+                    "权限允许(规则): session_id={}, tool={}",
+                    ctx.session_id,
+                    tool_name
+                );
+                Ok(true)
+            }
+            PermissionAction::Deny => {
+                log::warn!(
+                    "权限拒绝(规则): session_id={}, tool={}, rule={:?}, desc={}",
+                    ctx.session_id,
+                    tool_name,
+                    decision.matched_rule_id,
+                    decision.matched_description
+                );
+                Ok(false)
+            }
+            PermissionAction::Ask => {
+                // 询问用户，等待三态回复
+                let user_decision = self
+                    .request_permission_with_response(&ctx.session_id, tool_name, params)
+                    .await?;
+
+                match user_decision.response {
+                    PermissionResponse::Reject => {
+                        log::info!(
+                            "权限拒绝(用户): session_id={}, tool={}",
+                            ctx.session_id,
+                            tool_name
+                        );
+                        Ok(false)
+                    }
+                    PermissionResponse::Once => {
+                        log::info!(
+                            "权限允许(用户 Once): session_id={}, tool={}",
+                            ctx.session_id,
+                            tool_name
+                        );
+                        Ok(true)
+                    }
+                    PermissionResponse::Always => {
+                        // 生成会话级 Allow 规则并加入白名单
+                        let always_rule = SessionWhitelist::generate_always_rule(
+                            &ctx.session_id,
+                            request.permission_type,
+                            &request.target,
+                        );
+                        self.session_whitelist
+                            .add_rule(&ctx.session_id, always_rule)
+                            .await;
+                        log::info!(
+                            "权限允许(用户 Always): session_id={}, tool={}",
+                            ctx.session_id,
+                            tool_name
+                        );
+                        Ok(true)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Phase 2: 请求用户权限审批（三态：once/always/reject）
+    /// 使用 permission_channels 等待用户回复，5 分钟超时
+    async fn request_permission_with_response(
+        &self,
+        session_id: &str,
+        tool_name: &str,
+        arguments: &serde_json::Value,
+    ) -> Result<crate::PermissionDecision, CommandError> {
+        let operation_id = format!("perm_{}", uuid::Uuid::new_v4());
+
+        let risk_level = self.assess_risk_level(tool_name, arguments);
+        let description = self.format_permission_description(tool_name, arguments);
+
+        // 先创建 channel 并插入 map，再发射事件，避免竞态条件
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        {
+            let mut channels = self.permission_channels.lock().await;
+            channels.insert(operation_id.clone(), tx);
+        }
+
+        if self
+            .emitter
+            .emit_confirm(ConfirmPayload {
+                session_id: session_id.to_string(),
+                operation_id: operation_id.clone(),
+                operation_type: tool_name.to_string(),
+                description,
+                details: arguments.clone(),
+                risk_level: risk_level.to_string(),
+            })
+            .is_err()
+        {
+            // 发射事件失败，清理通道，避免泄漏
+            let mut channels = self.permission_channels.lock().await;
+            channels.remove(&operation_id);
+            return Err(CommandError::new(
+                crate::errors::RUNTIME_EVENT_EMIT_ERROR,
+                "发射权限确认事件失败",
+            ));
+        }
+
+        match tokio::time::timeout(Duration::from_secs(CONFIRM_TIMEOUT_SECS), rx).await {
+            Ok(Ok(decision)) => {
+                let mut channels = self.permission_channels.lock().await;
+                channels.remove(&operation_id);
+                log::info!(
+                    "用户权限审批回复: operation_id={}, tool={}, response={:?}",
+                    operation_id,
+                    tool_name,
+                    decision.response
+                );
+                Ok(decision)
+            }
+            Ok(Err(_)) => {
+                let mut channels = self.permission_channels.lock().await;
+                channels.remove(&operation_id);
+                log::warn!("权限通道关闭: operation_id={}", operation_id);
+                Ok(crate::PermissionDecision {
+                    response: PermissionResponse::Reject,
+                    feedback: Some("权限通道已关闭".to_string()),
+                })
+            }
+            Err(_) => {
+                let mut channels = self.permission_channels.lock().await;
+                channels.remove(&operation_id);
+                log::warn!("权限审批超时: operation_id={}", operation_id);
+                self.emitter
+                    .emit_error(ErrorPayload {
+                        session_id: session_id.to_string(),
+                        code: crate::errors::AGENT_CONFIRMATION_TIMEOUT,
+                        message: format!("权限审批超时 ({}秒)", CONFIRM_TIMEOUT_SECS),
+                        recoverable: true,
+                    })
+                    .ok();
+                Ok(crate::PermissionDecision {
+                    response: PermissionResponse::Reject,
+                    feedback: Some("权限审批超时".to_string()),
+                })
+            }
+        }
+    }
+
+    /// 评估操作风险等级
+    /// 用于权限确认弹窗的风险等级展示
+    fn assess_risk_level(&self, tool_name: &str, params: &serde_json::Value) -> &'static str {
+        match tool_name {
+            "remove" | "remove_dir" => "critical",
+            "bash" => {
+                if let Some(cmd) = params.get("command").and_then(|v| v.as_str()) {
+                    if is_high_risk_command(cmd) {
+                        return "critical";
+                    }
+                }
+                "high"
+            }
+            "edit" | "write" => "high",
+            "docx" | "xlsx" | "pptx" | "pdf" => "medium",
+            _ => "normal",
+        }
+    }
+
+    /// 格式化权限确认弹窗的操作描述
+    fn format_permission_description(&self, tool_name: &str, params: &serde_json::Value) -> String {
+        match tool_name {
+            "remove" => format!("删除文件: {}", params["path"].as_str().unwrap_or("未知")),
+            "remove_dir" => format!("删除目录: {}", params["path"].as_str().unwrap_or("未知")),
+            "bash" => format!("执行命令: {}", params["command"].as_str().unwrap_or("未知")),
+            "edit" => format!("编辑文件: {}", params["path"].as_str().unwrap_or("未知")),
+            "write" => format!("写入文件: {}", params["path"].as_str().unwrap_or("未知")),
+            "docx" | "xlsx" | "pptx" | "pdf" => {
+                let action = params["action"].as_str().unwrap_or("操作");
+                let path = params
+                    .get("input_path")
+                    .or_else(|| params.get("path"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("未知文件");
+                format!("{} - {}: {}", tool_name, action, path)
+            }
+            _ => format!("执行操作: {}", tool_name),
+        }
+    }
+
     /// 发射上下文窗口使用情况事件
     async fn emit_context_usage(
         &self,
@@ -519,26 +836,46 @@ impl<R: Runtime> AgentExecutor<R> {
             .ok();
     }
 
+    /// 按当前 AgentMode 动态构建工具定义列表
+    /// Build/Plan 模式：仅 Tool 定义，过滤掉文档 Handler
+    /// Document 模式：Tool 定义 + 文档 Handler 定义
+    /// 所有定义按 function.name 字母序稳定排序
+    async fn build_tool_definitions(&self, session_id: &str) -> Vec<serde_json::Value> {
+        let mode = self.agent_mode_manager.get_mode(session_id).await;
+        let mut defs = self.tool_registry.tool_definitions();
+        if mode.includes_document_handlers() {
+            // Document 模式：加入文档 Handler 定义
+            let reg = self.registry.lock().await;
+            let mut handler_defs = reg.tool_definitions();
+            // 过滤：仅保留文档 Handler（防御性，确保非文档 Handler 不被暴露）
+            handler_defs.retain(|d| {
+                d.get("function")
+                    .and_then(|f| f.get("name"))
+                    .and_then(|n| n.as_str())
+                    .map(is_document_handler)
+                    .unwrap_or(false)
+            });
+            defs.extend(handler_defs);
+        }
+        // 按 function.name 字母序稳定排序
+        defs.sort_by(|a, b| {
+            let name_a = a["function"]["name"].as_str().unwrap_or("");
+            let name_b = b["function"]["name"].as_str().unwrap_or("");
+            name_a.cmp(name_b)
+        });
+        defs
+    }
+
     pub async fn execute(&self, ctx: &mut AgentContext) -> Result<ExecutionResult, CommandError> {
         let start_time = std::time::Instant::now();
         let mut total_steps = 0u32;
 
         log::info!("Agent 开始执行, session_id={}", ctx.session_id);
 
-        // 仅使用 Tool 的工具定义（Handler 不暴露给 LLM，但 Document 模式下仍可通过 handler_arc 分支执行）
-        // TODO(Phase 2): 实现按 AgentMode 过滤工具列表(Document 模式下加入 Handler 工具定义)
+        // Phase 2: 按 AgentMode 动态过滤工具列表（Document 模式加入文档 Handler）
         // TODO(Phase 2): 实现三态权限系统(allow/deny/ask)替换 ConfirmationLevel
         // TODO(Phase 2): 实现 Doom loop 检测(连续 3 次相同工具调用无错误)
-        let tool_defs_json = {
-            let mut tool_defs = self.tool_registry.tool_definitions();
-            // 按 function.name 字母序稳定排序，确保相同工具集产生相同 JSON 序列化
-            tool_defs.sort_by(|a, b| {
-                let name_a = a["function"]["name"].as_str().unwrap_or("");
-                let name_b = b["function"]["name"].as_str().unwrap_or("");
-                name_a.cmp(name_b)
-            });
-            tool_defs
-        };
+        let tool_defs_json = self.build_tool_definitions(&ctx.session_id).await;
         let tools: Vec<crate::models::llm::ToolDefinition> = tool_defs_json
             .iter()
             .filter_map(|v| {
@@ -1370,6 +1707,33 @@ impl<R: Runtime> AgentExecutor<R> {
                     // 更新任务类型（基于已调用的工具）
                     ctx.update_task_type_from_tool(&tool_call.name, Some(&params));
 
+                    // Phase 2: 权限系统检查（替代原有 ConfirmationLevel 机制）
+                    // 按顺序检查：Plan 模式 → Doom loop → 白名单 → 外部目录 → 规则评估
+                    let permitted = self.check_permission(ctx, &tool_call.name, &params).await?;
+                    if !permitted {
+                        // 权限被拒绝（Plan 模式/Doom loop/规则拒绝/用户拒绝）
+                        // 发射带正确 call_id 的 tool_result，确保前端能关闭对应工具节点
+                        let reject_msg = format!("操作被权限系统拒绝: {}", tool_call.name);
+                        log::info!(
+                            "操作被权限系统拒绝: session_id={}, tool={}",
+                            ctx.session_id,
+                            tool_call.name
+                        );
+                        self.emitter
+                            .emit_tool_result(ToolResultPayload {
+                                session_id: ctx.session_id.clone(),
+                                call_id: tool_call.id.clone(),
+                                success: false,
+                                result: json!(null),
+                                error: Some(reject_msg.clone()),
+                                duration_ms: 0,
+                            })
+                            .ok();
+                        // 添加失败结果到上下文，让 LLM 感知被拒绝
+                        ctx.add_tool_result(&tool_call.id, &reject_msg);
+                        continue;
+                    }
+
                     if self.needs_confirmation(&tool_call.name, &params) {
                         // 高风险技能：始终发射 tool_call 事件
                         // 若流式阶段已提前发射，此处携带完整参数重新发射，前端通过 callId 去重更新
@@ -1421,6 +1785,35 @@ impl<R: Runtime> AgentExecutor<R> {
                                 iteration: Some(current_iteration),
                             })
                             .ok();
+                    }
+
+                    // Phase 2: 防御性校验 - 非 Document 模式下拒绝文档 Handler 调用
+                    let current_mode = self.agent_mode_manager.get_mode(&ctx.session_id).await;
+                    if is_document_handler(&tool_call.name)
+                        && !current_mode.includes_document_handlers()
+                    {
+                        let reject_msg = format!(
+                            "当前模式({:?})下不允许调用文档处理器: {}，请切换到 Document 模式",
+                            current_mode, tool_call.name
+                        );
+                        log::warn!(
+                            "文档 Handler 被模式过滤拒绝: session_id={}, tool={}, mode={:?}",
+                            ctx.session_id,
+                            tool_call.name,
+                            current_mode
+                        );
+                        self.emitter
+                            .emit_tool_result(ToolResultPayload {
+                                session_id: ctx.session_id.clone(),
+                                call_id: tool_call.id.clone(),
+                                success: false,
+                                result: json!(null),
+                                error: Some(reject_msg.clone()),
+                                duration_ms: 0,
+                            })
+                            .ok();
+                        ctx.add_tool_result(&tool_call.id, &reject_msg);
+                        continue;
                     }
 
                     let tool_start = std::time::Instant::now();

@@ -9,7 +9,9 @@ import { useAttachmentStore, inferAttachmentType, SUPPORTED_ATTACHMENT_MIME_TYPE
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useSessionStore } from "../../stores/useSessionStore";
 import { useWorkspaceStore } from "../../stores/useWorkspaceStore";
+import { useAgentModeStore } from "../../stores/useAgentModeStore";
 import { formatSize, matchesShortcut } from "../../utils/format";
+import { switchAgentMode } from "../../services/tauri";
 import type { PromptTemplate } from "../../types";
 
 interface InputAreaProps {
@@ -314,6 +316,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
               {centered && <WorkspaceSelector />}
             </div>
             <div className="input-inner-right">
+              <ModeSwitchButton />
               <ProviderSelector dropdownUp={!centered} />
               <div className="input-actions-right">
                 <button className="input-btn" title={t('inputArea.attachFile')} aria-label={t('inputArea.attachFile')} onClick={handleFileSelect}>
@@ -684,6 +687,99 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
         }
         .template-cards-section .template-card-more:hover .template-card-more-text {
           color: var(--color-accent);
+        }
+      `}</style>
+    </div>
+  );
+}
+
+/**
+ * Agent 模式切换按钮组（Plan/Build/Document）
+ * 模式切换仅通过前端按钮触发，不提供让 LLM 自主切换的工具
+ * 按钮组样式与 ProviderSelector 对称，使用相同的 CSS 变量
+ */
+function ModeSwitchButton() {
+  const { t } = useTranslation();
+  const mode = useAgentModeStore((s) => s.mode);
+  const setMode = useAgentModeStore((s) => s.setMode);
+  const currentSessionId = useSessionStore((s) => s.currentSessionId);
+
+  // 模式切换：立即更新前端状态（乐观更新），异步通知后端
+  // 当前会话为空时仅更新前端状态，不调用后端
+  const handleSwitch = async (newMode: 'plan' | 'build' | 'document') => {
+    if (newMode === mode) return;
+    setMode(newMode);
+    if (currentSessionId) {
+      try {
+        await switchAgentMode(currentSessionId, newMode);
+      } catch (err) {
+        console.error('切换 Agent 模式失败:', err);
+      }
+    }
+  };
+
+  // 三种模式定义：图标与标签
+  const modes: Array<{ key: 'plan' | 'build' | 'document'; label: string; icon: 'edit' | 'code' | 'file' }> = [
+    { key: 'plan', label: t('agentMode.plan'), icon: 'edit' },
+    { key: 'build', label: t('agentMode.build'), icon: 'code' },
+    { key: 'document', label: t('agentMode.document'), icon: 'file' },
+  ];
+
+  return (
+    <div className="mode-switch-group" role="group" aria-label={t('agentMode.switchGroup')}>
+      {modes.map((m) => (
+        <button
+          key={m.key}
+          className={`mode-switch-btn ${mode === m.key ? `mode-${m.key} active` : ''}`}
+          onClick={() => handleSwitch(m.key)}
+          title={t(`agentMode.${m.key}Mode`)}
+          aria-pressed={mode === m.key}
+          type="button"
+        >
+          <Icon name={m.icon} size={12} />
+          <span>{m.label}</span>
+        </button>
+      ))}
+      <style>{`
+        .mode-switch-group {
+          display: inline-flex;
+          align-items: center;
+          gap: 1px;
+          background: var(--color-bg-sub);
+          border-radius: var(--radius-sm);
+          padding: 2px;
+        }
+        .mode-switch-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 4px 8px;
+          border-radius: calc(var(--radius-sm) - 1px);
+          font-size: 12px;
+          font-weight: 500;
+          color: var(--color-text-tertiary);
+          cursor: pointer;
+          transition: all 0.15s;
+          white-space: nowrap;
+          user-select: none;
+        }
+        .mode-switch-btn:hover {
+          color: var(--color-text-secondary);
+          background: var(--color-bg-hover);
+        }
+        .mode-switch-btn.active {
+          color: var(--color-text-primary);
+          background: var(--color-bg);
+          box-shadow: var(--shadow-xs);
+        }
+        .mode-switch-btn.mode-plan.active {
+          color: var(--color-warning, #f59e0b);
+        }
+        .mode-switch-btn.mode-build.active {
+          color: var(--color-accent);
+        }
+        .mode-switch-btn.mode-document.active {
+          color: var(--color-success, #10b981);
         }
       `}</style>
     </div>

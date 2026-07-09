@@ -22,6 +22,16 @@ pub struct ConfirmDecision {
     pub feedback: Option<String>,
 }
 
+/// 权限审批决策（Phase 2 三态权限系统）
+/// 用于 permission_channels 传递用户的三态回复（once/always/reject）
+#[derive(Debug, Clone)]
+pub struct PermissionDecision {
+    /// 用户回复：Once/Always/Reject
+    pub response: crate::services::permission::types::PermissionResponse,
+    /// 用户反馈（可选）
+    pub feedback: Option<String>,
+}
+
 /// 应用全局状态，通过 tauri::State 在命令中共享
 pub struct AppState {
     pub db: Arc<crate::db::Database>,
@@ -29,6 +39,17 @@ pub struct AppState {
     pub active_agents: Arc<tokio::sync::Mutex<HashMap<String, bool>>>,
     pub confirm_channels:
         Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<ConfirmDecision>>>>,
+    /// 权限审批通道（Phase 2 三态权限系统，once/always/reject）
+    pub permission_channels:
+        Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<PermissionDecision>>>>,
+    /// 权限注册表（默认规则 + 用户规则合并）
+    pub permission_registry: Arc<crate::services::permission::registry::PermissionRegistry>,
+    /// 会话级白名单（always 规则缓存）
+    pub session_whitelist: Arc<crate::services::permission::session_whitelist::SessionWhitelist>,
+    /// Doom loop 检测器
+    pub doom_loop_detector: Arc<crate::services::permission::doom_loop::DoomLoopDetector>,
+    /// Agent 模式管理器（Plan/Build/Document）
+    pub agent_mode_manager: Arc<crate::services::agent::AgentModeManager>,
     pub doc_service: Arc<crate::services::document::DocumentService>,
     pub llm_router: Arc<tokio::sync::RwLock<Arc<crate::services::llm::router::LlmRouter>>>,
     pub tool_registry: Arc<crate::services::tool::registry::ToolRegistry>,
@@ -41,7 +62,6 @@ pub struct AppState {
     pub scratchpad_states: crate::services::tool::builtin::SharedScratchpadStates,
 }
 
-// TODO(Phase 2): permission_registry: Arc<PermissionRegistry>
 // TODO(Phase 3): skill_service: Arc<SkillService>
 // TODO(Phase 5): lsp_manager: Arc<LspManager>
 
@@ -344,10 +364,24 @@ pub fn run() {
                 .load_app_settings()
                 .map(|s| s.git_bash_path)
                 .unwrap_or_default();
+
+            // Phase 2: 初始化权限系统组件
+            // 先创建 db_arc，permission_registry 需要 Arc<Database>
+            let db_arc = Arc::new(database);
+            let permission_registry = Arc::new(
+                crate::services::permission::registry::PermissionRegistry::new(Arc::clone(&db_arc)),
+            );
+            let session_whitelist =
+                Arc::new(crate::services::permission::session_whitelist::SessionWhitelist::new());
+            let doom_loop_detector =
+                Arc::new(crate::services::permission::doom_loop::DoomLoopDetector::new());
+            let agent_mode_manager = Arc::new(crate::services::agent::AgentModeManager::new());
+
             let mut tool_registry = crate::services::tool::registry::ToolRegistry::new();
             let scratchpad_states = crate::services::tool::builtin::register_builtin_tools(
                 &mut tool_registry,
                 git_bash_path,
+                Arc::clone(&agent_mode_manager),
             );
 
             log::info!("DocAgent 应用初始化完成");
@@ -363,10 +397,15 @@ pub fn run() {
             );
 
             let state = AppState {
-                db: Arc::new(database),
+                db: db_arc,
                 config: Arc::new(tokio::sync::Mutex::new(config_manager)),
                 active_agents: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
                 confirm_channels: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+                permission_channels: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+                permission_registry,
+                session_whitelist,
+                doom_loop_detector,
+                agent_mode_manager,
                 doc_service: doc_service_for_handlers,
                 llm_router: llm_router_arc,
                 tool_registry: Arc::new(tool_registry),
@@ -533,6 +572,8 @@ pub fn run() {
             commands::agent::start_agent,
             commands::agent::stop_agent,
             commands::agent::confirm_operation,
+            commands::agent::permission_respond,
+            commands::agent::switch_agent_mode,
             commands::agent::get_context_usage,
             commands::agent::is_agent_running,
             // 模板命令
@@ -541,6 +582,11 @@ pub fn run() {
             commands::template::create_template,
             commands::template::update_template,
             commands::template::delete_template,
+            // 权限规则命令
+            commands::permission::list_permission_rules,
+            commands::permission::add_permission_rule,
+            commands::permission::update_permission_rule,
+            commands::permission::delete_permission_rule,
             // 日志命令
             commands::log::get_log_path,
             commands::log::open_directory,

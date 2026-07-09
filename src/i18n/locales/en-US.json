@@ -73,12 +73,80 @@
     "selectModel": "Select Model",
     "configureModel": "Configure Model"
   },
+  "agentMode": {
+    "plan": "Plan",
+    "build": "Build",
+    "document": "Document",
+    "planMode": "Plan mode: read-only analysis, no modifications",
+    "buildMode": "Build mode: full programming execution",
+    "documentMode": "Document mode: generate and process Word/Excel/PPT/PDF documents",
+    "switchGroup": "Agent Mode Switch"
+  },
   "confirmNode": {
     "userConfirmed": "✓ User confirmed execution",
     "userCancelled": "✗ User cancelled operation",
     "confirmExecute": "Confirm Execution",
     "cancelOperation": "Cancel Operation",
     "feedbackPlaceholder": "Enter reason (optional)…"
+  },
+  "permission": {
+    "once": "Allow Once",
+    "always": "Allow Always",
+    "reject": "Reject",
+    "onceAllowed": "✓ Allowed (once)",
+    "alwaysAllowed": "✓ Allowed (always)",
+    "rejected": "✗ Rejected",
+    "feedbackPlaceholder": "Enter reason (optional)…",
+    "tabTitle": "Permission Rules Management",
+    "title": "Permission Rules",
+    "addRule": "Add Rule",
+    "editRule": "Edit Rule",
+    "refresh": "Refresh",
+    "confirmDelete": "Are you sure you want to delete this permission rule?",
+    "noRules": "No custom rules",
+    "noDefaults": "No default rules",
+    "scope": "Scope",
+    "type": "Type",
+    "pattern": "Pattern",
+    "action": "Action",
+    "description": "Description",
+    "enabled": "Enabled",
+    "defaultRules": "Default Rules",
+    "userRules": "Custom Rules",
+    "defaultBadge": "Default",
+    "scopeOptions": {
+      "global": "Global",
+      "project": "Project",
+      "session": "Session"
+    },
+    "actionOptions": {
+      "allow": "Allow",
+      "deny": "Deny",
+      "ask": "Ask"
+    },
+    "typeOptions": {
+      "wildcard": "Wildcard",
+      "read": "Read",
+      "edit": "Edit",
+      "glob": "Glob",
+      "grep": "Grep",
+      "list": "List",
+      "bash": "Bash",
+      "write_script": "Write Script",
+      "task": "Task",
+      "skill": "Skill",
+      "lsp": "LSP",
+      "web_fetch": "Web Fetch",
+      "web_search": "Web Search",
+      "external_directory": "External Directory",
+      "doom_loop": "Doom Loop",
+      "document": "Document",
+      "question": "Question"
+    },
+    "patternPlaceholder": "e.g. src/**/*.ts, git *, *.env",
+    "descriptionPlaceholder": "Optional: rule description",
+    "save": "Save",
+    "cancel": "Cancel"
   },
   "errorNode": {
     "errorDetails": "Error Details",
@@ -150,6 +218,7 @@
       "workspace": "Workspace",
       "handler": "Tools & Handlers",
       "template": "Prompt Templates",
+      "permission": "Permission Rules",
       "appearance": "Appearance",
       "shortcuts": "Shortcuts",
       "general": "General",
@@ -592,6 +661,7 @@
     "templateMessage": "Are you sure you want to delete template \"{{name}}\"?",
     "versionMessage": "Are you sure you want to roll back to version \"{{name}}\"?",
     "clearSessionsMessage": "Are you sure you want to clear all sessions in workspace \"{{name}}\"?",
+    "permissionMessage": "Are you sure you want to delete permission rule \"{{name}}\"?",
     "permanentWarning": "This action is permanent and cannot be undone."
   },
   "errorBoundary": {

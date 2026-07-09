@@ -22,6 +22,7 @@ import {
 } from "../services/event";
 import { useWorkflowStore, setCurrentSessionId, type BackgroundAgentEvent } from "../stores/useWorkflowStore";
 import { useAttachmentStore } from "../stores/useAttachmentStore";
+import { useAgentModeStore } from "../stores/useAgentModeStore";
 
 export interface UseAgentReturn {
   isLoading: boolean;
@@ -39,6 +40,8 @@ export interface UseAgentReturn {
   sendMessage: (prompt: string, options?: Record<string, unknown>) => Promise<void>;
   stopAgent: () => Promise<void>;
   confirmOperation: (operationId: string, approved: boolean, feedback?: string) => Promise<void>;
+  /** Phase 2 权限审批回复（once/always/reject 三态） */
+  respondPermission: (operationId: string, response: 'once' | 'always' | 'reject', feedback?: string) => Promise<void>;
   reset: () => void;
   setSessionId: (id: string) => void;
 }
@@ -310,9 +313,11 @@ export function useAgent(): UseAgentReturn {
           sessionIdRef.current = sid;
         }
 
-        // 将附件信息合并到 options 中
+        // 将附件信息和当前 Agent 模式合并到 options 中
+        const agentMode = useAgentModeStore.getState().mode;
         const agentOptions = {
           ...options,
+          agentMode,
           ...(currentAttachments.length > 0 ? { attachments: currentAttachments } : {}),
         };
 
@@ -361,6 +366,21 @@ export function useAgent(): UseAgentReturn {
     [sessionId],
   );
 
+  // Phase 2: 权限审批回复（三态权限系统），与 confirmOperation 并存以保持向后兼容
+  const respondPermission = useCallback(
+    async (operationId: string, response: 'once' | 'always' | 'reject', feedback?: string) => {
+      if (!sessionId) return;
+
+      try {
+        await tauriCmd.permissionRespond(sessionId, operationId, response, feedback);
+        setPendingConfirmation(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [sessionId],
+  );
+
   const reset = useCallback(() => {
     setIsLoading(initialState.isLoading);
     setError(initialState.error);
@@ -401,6 +421,7 @@ export function useAgent(): UseAgentReturn {
     sendMessage,
     stopAgent,
     confirmOperation,
+    respondPermission,
     reset,
     setSessionId: setSessionIdExternal,
   };

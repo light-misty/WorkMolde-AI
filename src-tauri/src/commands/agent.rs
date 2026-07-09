@@ -5,7 +5,8 @@ use tauri::{AppHandle, State};
 
 use crate::db::session_repo;
 use crate::errors::{
-    CommandError, AGENT_ALREADY_RUNNING, AGENT_NOT_RUNNING, AGENT_SESSION_NOT_FOUND,
+    CommandError, AGENT_ALREADY_RUNNING, AGENT_NOT_RUNNING, AGENT_OPERATION_REJECTED,
+    AGENT_SESSION_NOT_FOUND,
 };
 use crate::events::types;
 use crate::events::AgentEmitter;
@@ -99,6 +100,12 @@ pub async fn start_agent(
     let db = Arc::clone(&state.db);
     let confirm_channels = Arc::clone(&state.confirm_channels);
     let scratchpad_states = Arc::clone(&state.scratchpad_states);
+    // Phase 2: 权限系统组件
+    let permission_channels = Arc::clone(&state.permission_channels);
+    let permission_registry = Arc::clone(&state.permission_registry);
+    let session_whitelist = Arc::clone(&state.session_whitelist);
+    let doom_loop_detector = Arc::clone(&state.doom_loop_detector);
+    let agent_mode_manager = Arc::clone(&state.agent_mode_manager);
 
     let max_iterations = options
         .as_ref()
@@ -195,6 +202,12 @@ pub async fn start_agent(
             &config,
             &doc_service,
             &scratchpad_states,
+            // Phase 2: 权限系统组件
+            &permission_channels,
+            &permission_registry,
+            &session_whitelist,
+            &doom_loop_detector,
+            &agent_mode_manager,
         )
         .await;
 
@@ -696,6 +709,153 @@ pub async fn confirm_operation(
     }
 }
 
+/// Phase 2: 权限审批回复命令（三态 once/always/reject）
+/// 优先查找 permission_channels（Phase 2 三态权限通道）
+/// 未命中时回退到 confirm_channels（兼容旧版 confirm_operation 调用）
+#[tauri::command]
+pub async fn permission_respond(
+    session_id: String,
+    operation_id: String,
+    response: String,
+    feedback: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<(), CommandError> {
+    log::info!(
+        "permission_respond 请求: session_id={}, operation_id={}, response={}",
+        session_id,
+        operation_id,
+        response
+    );
+
+    // 解析用户回复字符串为 PermissionResponse
+    let perm_response = crate::services::permission::types::PermissionResponse::from_str(&response)
+        .ok_or_else(|| {
+            CommandError::agent(
+                AGENT_OPERATION_REJECTED,
+                format!("无效的权限回复: {}", response),
+            )
+        })?;
+
+    // 优先查找 permission_channels（Phase 2 三态权限通道）
+    let perm_sender = {
+        let mut channels = state.permission_channels.lock().await;
+        channels.remove(&operation_id)
+    };
+
+    if let Some(tx) = perm_sender {
+        // Phase 2 通道命中，发送 PermissionDecision
+        let decision = crate::PermissionDecision {
+            response: perm_response,
+            feedback: feedback.clone(),
+        };
+        if tx.send(decision).is_err() {
+            log::warn!(
+                "permission_respond: 接收端已关闭, operation_id={}",
+                operation_id
+            );
+            return Err(CommandError::agent(
+                AGENT_SESSION_NOT_FOUND,
+                "Agent 执行已结束，无法回复权限审批".to_string(),
+            ));
+        }
+        log::info!(
+            "permission_respond: 权限回复已发送, operation_id={}, response={}",
+            operation_id,
+            response
+        );
+        return Ok(());
+    }
+
+    // 回退到 confirm_channels（兼容旧版 confirm_operation 机制）
+    log::info!(
+        "permission_respond: permission_channels 未命中, 回退到 confirm_channels, operation_id={}",
+        operation_id
+    );
+    let confirm_sender = {
+        let mut channels = state.confirm_channels.lock().await;
+        channels.remove(&operation_id)
+    };
+
+    match confirm_sender {
+        Some(tx) => {
+            // 将 PermissionResponse 转换为旧 ConfirmDecision
+            // Reject → approved=false, Once/Always → approved=true
+            let approved = !matches!(
+                perm_response,
+                crate::services::permission::types::PermissionResponse::Reject
+            );
+            let decision = crate::ConfirmDecision { approved, feedback };
+            if tx.send(decision).is_err() {
+                log::warn!(
+                    "permission_respond: 接收端已关闭, operation_id={}",
+                    operation_id
+                );
+                return Err(CommandError::agent(
+                    AGENT_SESSION_NOT_FOUND,
+                    "Agent 执行已结束，无法确认操作".to_string(),
+                ));
+            }
+            log::info!(
+                "permission_respond: 兼容模式确认结果已发送, operation_id={}, approved={}",
+                operation_id,
+                approved
+            );
+            Ok(())
+        }
+        None => {
+            log::error!(
+                "permission_respond 失败: 未找到权限审批通道, operation_id={}",
+                operation_id
+            );
+            Err(CommandError::agent(
+                AGENT_SESSION_NOT_FOUND,
+                format!("未找到权限审批通道: {}", operation_id),
+            ))
+        }
+    }
+}
+
+/// 切换 Agent 模式（Plan/Build/Document）
+/// 由前端按钮触发，调用 AgentModeManager 切换会话模式
+/// 模式切换仅通过前端按钮实现，不提供让 LLM 自主切换的工具
+#[tauri::command]
+pub async fn switch_agent_mode(
+    session_id: String,
+    mode: String,
+    state: State<'_, AppState>,
+) -> Result<(), CommandError> {
+    log::info!(
+        "switch_agent_mode 请求: session_id={}, mode={}",
+        session_id,
+        mode
+    );
+
+    // 将字符串参数解析为 AgentMode 枚举
+    let agent_mode = match mode.as_str() {
+        "plan" => AgentMode::Plan,
+        "build" => AgentMode::Build,
+        "document" => AgentMode::Document,
+        _ => {
+            return Err(CommandError::agent(
+                AGENT_OPERATION_REJECTED,
+                format!("无效的 Agent 模式: {}", mode),
+            ));
+        }
+    };
+
+    // 调用 AgentModeManager 切换会话模式
+    state
+        .agent_mode_manager
+        .set_mode(&session_id, agent_mode)
+        .await;
+    log::info!(
+        "switch_agent_mode 成功: session_id={}, mode={:?}",
+        session_id,
+        agent_mode
+    );
+    Ok(())
+}
+
 /// 将消息列表持久化到数据库
 /// 支持多 tool_calls：将所有 tool_calls 序列化为 JSON 数组存储
 /// assistant 消息的 tool_call_id 字段存储所有 tool_call 的 id 列表（JSON 数组）
@@ -796,6 +956,19 @@ async fn run_agent(
     config: &Arc<tokio::sync::Mutex<crate::config::ConfigManager>>,
     doc_service: &Arc<crate::services::document::DocumentService>,
     scratchpad_states: &crate::services::tool::builtin::SharedScratchpadStates,
+    // Phase 2: 权限系统组件
+    permission_channels: &Arc<
+        tokio::sync::Mutex<
+            std::collections::HashMap<
+                String,
+                tokio::sync::oneshot::Sender<crate::PermissionDecision>,
+            >,
+        >,
+    >,
+    permission_registry: &Arc<crate::services::permission::registry::PermissionRegistry>,
+    session_whitelist: &Arc<crate::services::permission::session_whitelist::SessionWhitelist>,
+    doom_loop_detector: &Arc<crate::services::permission::doom_loop::DoomLoopDetector>,
+    agent_mode_manager: &Arc<crate::services::agent::AgentModeManager>,
 ) -> Result<(), CommandError> {
     log::info!(
         "run_agent 开始: session_id={}, workspace={}",
@@ -928,6 +1101,14 @@ async fn run_agent(
         }
     };
 
+    // Phase 2: 从 AgentModeManager 获取当前会话的实际模式（替代硬编码 Build）
+    let agent_mode = agent_mode_manager.get_mode(session_id).await;
+    log::info!(
+        "Agent 模式: session_id={}, mode={:?}",
+        session_id,
+        agent_mode
+    );
+
     let dynamic_prompt = AgentContext::build_system_prompt_with_task(
         workspace_path,
         &task_type,
@@ -937,7 +1118,7 @@ async fn run_agent(
         author_info.as_ref(),
         &env_info,
         agents_md_content.as_deref(), // AGENTS.md 自定义规则
-        &AgentMode::Build,            // agent_mode
+        &agent_mode,                  // agent_mode（从 AgentModeManager 获取）
     );
     ctx.system_prompt = dynamic_prompt;
     log::info!("任务类型: {:?}, 系统提示词已动态构建", task_type);
@@ -1164,6 +1345,12 @@ async fn run_agent(
         Arc::clone(handler_registry),
         emitter.clone(),
         Arc::clone(confirm_channels),
+        // Phase 2: 权限系统组件
+        Arc::clone(permission_channels),
+        Arc::clone(permission_registry),
+        Arc::clone(session_whitelist),
+        Arc::clone(doom_loop_detector),
+        Arc::clone(agent_mode_manager),
     )
     .with_stop_check(should_stop)
     .with_max_iterations(max_iterations)

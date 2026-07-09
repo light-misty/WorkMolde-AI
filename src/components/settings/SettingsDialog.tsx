@@ -6,6 +6,7 @@ import { LLMConfigTab } from "./LLMConfig";
 import { WorkspaceTab } from "./WorkspaceTab";
 import { HandlersTab } from "./HandlersTab";
 import { TemplatesTab } from "./TemplatesTab";
+import { PermissionTab } from "./PermissionTab";
 import { AppearanceTab } from "./AppearanceTab";
 import { ShortcutsTab } from "./ShortcutsTab";
 import { GeneralTab } from "./GeneralTab";
@@ -21,6 +22,7 @@ export function SettingsDialog() {
     { id: "workspace" as const, label: t('settings.tabs.workspace'), icon: "folder" },
     { id: "handler" as const, label: t('settings.tabs.handler'), icon: "tool" },
     { id: "template" as const, label: t('settings.tabs.template'), icon: "template" },
+    { id: "permission" as const, label: t('settings.tabs.permission'), icon: "warning" },
     { id: "appearance" as const, label: t('settings.tabs.appearance'), icon: "theme" },
     { id: "shortcuts" as const, label: t('settings.tabs.shortcuts'), icon: "keyboard" },
     { id: "general" as const, label: t('settings.tabs.general'), icon: "code" },
@@ -44,6 +46,7 @@ export function SettingsDialog() {
       case "workspace": return <WorkspaceTab />;
       case "handler": return <HandlersTab />;
       case "template": return <TemplatesTab />;
+      case "permission": return <PermissionTab />;
       case "appearance": return <AppearanceTab />;
       case "shortcuts": return <ShortcutsTab />;
       case "general": return <GeneralTab />;

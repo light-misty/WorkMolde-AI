@@ -49,3 +49,9 @@ ignore = "0.4"
 globset = "0.4"
 # grep 工具:正则表达式引擎
 regex = "1"
+# 阶段 2 新增:权限系统通配符匹配(支持 * 和 ? 通配符,适用于命令字符串和文件路径)
+wildmatch = "2.4"
+
+[dev-dependencies]
+# 测试用临时文件
+tempfile = "3"

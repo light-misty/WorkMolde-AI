@@ -3,6 +3,9 @@ use super::prompts::token_budget::TokenBudgetManager;
 use crate::models::llm::{ChatMessage, ChatUsage, LlmToolCall};
 use crate::services::tool::builtin::{format_scratchpad_summary, SharedScratchpadStates};
 
+// Phase 2: AgentMode 统一由 mod.rs 定义（含 serde 派生），context.rs re-export 保持兼容
+pub use super::AgentMode;
+
 /// 文档作者信息，从应用设置和工作区配置中解析
 pub struct AuthorInfo {
     /// 作者名（优先使用工作区覆盖，否则使用全局设置）
@@ -171,18 +174,6 @@ impl EnvironmentInfo {
     pub fn has_any(&self) -> bool {
         !self.python_path.is_empty() || !self.git_bash_path.is_empty()
     }
-}
-
-/// Agent 模式（阶段 2 实现 Plan/Build/Document 切换，本阶段仅用 Build 默认值）
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum AgentMode {
-    /// Build 模式：默认编程模式，允许所有编程操作
-    #[default]
-    Build,
-    /// Plan 模式：只读规划模式，禁止修改类操作（阶段 2 实现）
-    Plan,
-    /// Document 模式：文档处理模式，启用 4 个文档 Handler（阶段 2 实现）
-    Document,
 }
 
 /// reasoning_content 压缩阈值（字符数），超过此长度的早期思考内容将被截断
@@ -894,11 +885,8 @@ impl AgentContext {
             }
         }
 
-        // 段 4：Agent 特定 prompt（build/plan/document 模式特定指令，阶段 2 实现）
-        // 本阶段（build 模式）基础 prompt 已涵盖所有必要内容，Agent 特定 prompt 暂为空
-        // 阶段 2 实现 plan/document 模式时，在此追加模式特定指令
-        // 阶段 2 实施时：parts.push(Self::layer_agent_mode(agent_mode));
-        // TODO(Phase 2): 实现 Plan/Document 模式特定 prompt(layer_agent_mode)
+        // 段 4：Agent 模式特定提示词（Plan/Build/Document 模式指令）
+        parts.push(Self::layer_agent_mode(agent_mode));
         // TODO(Phase 3): 实现 Skill 清单注入(可用 Skill 列表注入系统提示词)
         // TODO(Phase 3): 实现 SessionCompaction(上下文压缩机制)
 
@@ -1221,6 +1209,81 @@ When your tool call is intercepted by the confirmation mechanism:
 - You will receive feedback that "the user rejected the operation"
 - Do not repeatedly call the same tool with the same parameters
 - Explain to the user that the operation was cancelled and provide alternatives"#.to_string()
+    }
+
+    /// Agent 模式特定提示词层（阶段 2 实现）
+    /// 根据当前 Agent 模式注入不同的执行指导
+    /// - Plan: 只读规划模式，禁止修改类操作，输出结构化计划
+    /// - Build: 完整执行模式，提示文档 Handler 不可用
+    /// - Document: 文档处理模式，列出可用 Handler 和最佳实践
+    fn layer_agent_mode(mode: &AgentMode) -> String {
+        match mode {
+            AgentMode::Plan => {
+                // Plan 模式：只读规划，禁止修改类操作
+                r#"# Plan Mode (Read-Only Planning)
+You are currently in Plan mode. In this mode, you MUST NOT perform any modifications to the system. This includes:
+- No file edits (edit, write, apply_patch)
+- No command execution that modifies state (bash with write/rm/mkdir etc.)
+- No document generation or modification (docx/xlsx/pptx/pdf)
+- No script writing and execution (write_script)
+
+Allowed operations (read-only):
+- Reading files (read, file_info, exists, hash)
+- Searching files (glob, grep, search, list)
+- Analyzing code structure and dependencies
+- Creating plans and proposing solutions
+
+When the user asks you to implement something, you should:
+1. Analyze the current state of the codebase
+2. Identify all files that need to be modified or created
+3. Present a detailed implementation plan with specific file paths and changes
+4. Wait for the user to switch to Build or Document mode to execute the plan
+
+Your output should be a structured plan, not actual code changes."#.to_string()
+            }
+            AgentMode::Build => {
+                // Build 模式：完整执行，文档 Handler 不可用
+                r#"# Build Mode (Full Execution)
+You are currently in Build mode. In this mode, you have full access to file system operations and code execution tools.
+
+Available capabilities:
+- Read, search, and analyze files
+- Edit, write, and create files
+- Execute shell commands and scripts
+- Version control operations
+
+Note: Document handlers (docx, xlsx, pptx, pdf) are NOT available in Build mode. If the user needs to generate or process Word/Excel/PPT/PDF documents, please inform them to switch to Document mode.
+
+Focus on software engineering tasks: writing code, fixing bugs, refactoring, running tests, and managing project files."#.to_string()
+            }
+            AgentMode::Document => {
+                // Document 模式：文档处理，4 个 Handler 可用
+                r#"# Document Mode (Document Processing)
+You are currently in Document mode. In this mode, you have access to all Build mode capabilities PLUS four document handlers for generating and processing structured documents.
+
+Available document handlers:
+- docx: Generate and process Microsoft Word documents (.docx)
+- xlsx: Generate and process Microsoft Excel spreadsheets (.xlsx)
+- pptx: Generate and process PowerPoint presentations (.pptx)
+- pdf: Generate and process PDF documents (.pdf)
+
+Best practices for document generation:
+1. Always specify the output file path with proper extension
+2. Provide clear structure and content in the request
+3. For complex documents, break down the content into sections
+4. Verify the generated document by reading it back after creation
+5. Use appropriate formatting (headings, tables, lists) for readability
+6. Include metadata (title, author) when generating new documents
+
+When the user asks for document creation or processing:
+1. Clarify the document type and requirements
+2. Use the appropriate handler (docx/xlsx/pptx/pdf)
+3. Provide detailed content and formatting instructions
+4. Verify the output and report any issues
+
+Note: Author information (name, email, company) will be automatically injected into generated documents if configured in settings."#.to_string()
+            }
+        }
     }
 }
 
