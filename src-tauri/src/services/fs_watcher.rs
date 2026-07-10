@@ -25,11 +25,16 @@ pub struct FsWatcherService<R: Runtime> {
     active_watch: Arc<Mutex<Option<(String, PathBuf, String)>>>,
     /// 标记是否已经发射过目录删除事件，防止重复发射
     deletion_emitted: Arc<AtomicBool>,
+    /// LSP 结果缓存（文件变更时联动失效缓存）
+    lsp_cache: Option<Arc<crate::services::lsp::cache::LspResultCache>>,
 }
 
 impl<R: Runtime> FsWatcherService<R> {
     /// 创建文件监听服务实例
-    pub fn new(app_handle: AppHandle<R>) -> Self {
+    pub fn new(
+        app_handle: AppHandle<R>,
+        lsp_cache: Option<Arc<crate::services::lsp::cache::LspResultCache>>,
+    ) -> Self {
         Self {
             app_handle,
             workspace_watcher: Arc::new(Mutex::new(None)),
@@ -37,6 +42,7 @@ impl<R: Runtime> FsWatcherService<R> {
             skill_watcher: Arc::new(Mutex::new(None)),
             active_watch: Arc::new(Mutex::new(None)),
             deletion_emitted: Arc::new(AtomicBool::new(false)),
+            lsp_cache,
         }
     }
 
@@ -90,6 +96,7 @@ impl<R: Runtime> FsWatcherService<R> {
         let ws_wname = wname.clone();
         let ws_wpath = wpath.clone();
         let ws_deletion_emitted = deletion_emitted.clone();
+        let ws_lsp_cache = self.lsp_cache.clone();
         let workspace_callback = move |res: Result<Event, notify::Error>| {
             match res {
                 Ok(event) => {
@@ -115,6 +122,15 @@ impl<R: Runtime> FsWatcherService<R> {
                             change_type,
                             path_str
                         );
+
+                        // 文件变更时联动失效 LSP 缓存，避免返回过期的定义/悬停信息
+                        if let Some(ref cache) = ws_lsp_cache {
+                            let cache = Arc::clone(cache);
+                            let p = path_str.clone();
+                            tauri::async_runtime::spawn(async move {
+                                cache.invalidate_file(&p).await;
+                            });
+                        }
 
                         // 当收到删除事件时，检查工作区根目录是否仍然存在
                         if change_type == "deleted" && !ws_deletion_emitted.load(Ordering::SeqCst) {

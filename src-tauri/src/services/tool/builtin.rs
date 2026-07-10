@@ -62,6 +62,7 @@ pub struct BuiltinToolsRegistration {
 /// lsp_manager: LSP 服务器管理器（阶段 5）
 /// lsp_router: LSP 语言路由器（阶段 5）
 /// lsp_cache: LSP 结果缓存（阶段 5）
+/// skill_registry: Skill 注册表（阶段 3，用于 SkillTool 注册）
 /// lsp_experimental_enabled: 是否启用 LSP 实验性工具（阶段 5）
 #[allow(clippy::too_many_arguments)]
 pub fn register_builtin_tools(
@@ -74,6 +75,7 @@ pub fn register_builtin_tools(
     lsp_manager: Arc<crate::services::lsp::manager::LspServerManager>,
     lsp_router: Arc<crate::services::lsp::router::LanguageRouter>,
     lsp_cache: Arc<crate::services::lsp::cache::LspResultCache>,
+    skill_registry: Arc<crate::services::skill::registry::SkillRegistry>,
     lsp_experimental_enabled: bool,
 ) -> BuiltinToolsRegistration {
     log::info!("开始注册内置工具");
@@ -120,6 +122,11 @@ pub fn register_builtin_tools(
         sourcecode::SourceCodeTool::new().expect("创建 SourceCodeTool 失败"),
     ));
 
+    // 阶段 3: Skill 工具（按需加载领域能力）
+    registry.register(Box::new(crate::services::skill::tool::SkillTool::new(
+        skill_registry,
+    )));
+
     // 阶段 4 新增工具：Task（子 Agent 委托）、WebFetch（URL 获取）、WebSearch（网络搜索）、Question（向用户提问）
     // TaskTool 采用延迟注入模式：先创建不含 sub_executor 的实例并注册，
     // 后续在 lib.rs 中通过 set_sub_executor 注入 SubAgentExecutor
@@ -132,7 +139,7 @@ pub fn register_builtin_tools(
         app_handle,
     )));
 
-    log::info!("内置工具注册完成, 共注册 24 个工具");
+    log::info!("内置工具注册完成, 共注册 25 个工具");
 
     // 阶段 5: 注册 LSP 工具(实验性,仅在 lsp_experimental_enabled = true 时注册)
     // LSP 工具为单一工具,通过 operation 参数路由 8 种操作
@@ -1031,12 +1038,19 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
 
-        // 验证 24 个工具都已注册（8 个原有 + 4 个阶段三新增 + 1 个 scratchpad + 2 个代码执行工具 + 3 个阶段 1 新增 edit/glob/grep + 1 个 todowrite + 1 个 source_code + 4 个阶段 4 新增 task/webfetch/websearch/question）
+        // 验证 25 个工具都已注册（8 个原有 + 4 个阶段三新增 + 1 个 scratchpad + 2 个代码执行工具 + 3 个阶段 1 新增 edit/glob/grep + 1 个 todowrite + 1 个 source_code + 1 个 skill + 4 个阶段 4 新增 task/webfetch/websearch/question）
         let tools = registry.list_tools();
-        assert_eq!(tools.len(), 24);
+        assert_eq!(tools.len(), 25);
 
         // 验证每个工具的基本属性
         let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
@@ -1066,6 +1080,8 @@ mod tests {
         assert!(tool_names.contains(&"todowrite"));
         // SourceCode 工具
         assert!(tool_names.contains(&"source_code"));
+        // Skill 工具
+        assert!(tool_names.contains(&"skill"));
         // 阶段 4 新增工具
         assert!(tool_names.contains(&"task"));
         assert!(tool_names.contains(&"webfetch"));
@@ -1089,11 +1105,18 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
 
         let defs = registry.tool_definitions();
-        assert_eq!(defs.len(), 24);
+        assert_eq!(defs.len(), 25);
 
         // 验证每个定义都有 type 和 function 字段
         for def in &defs {
@@ -1120,6 +1143,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
 
@@ -1130,13 +1160,14 @@ mod tests {
             assert_eq!(tool.version, "1.0.0");
             assert!(!tool.name.is_empty());
             assert!(!tool.description.is_empty());
-            // 工具类别：filesystem/memory/code（阶段 1-3）、agent/web（阶段 4 新增）
+            // 工具类别：filesystem/memory/code（阶段 1-3）、agent/web（阶段 4 新增）、skill（阶段 3）
             assert!(
                 tool.category == "filesystem"
                     || tool.category == "memory"
                     || tool.category == "code"
                     || tool.category == "agent"
                     || tool.category == "web"
+                    || tool.category == "skill"
             );
         }
     }
@@ -1157,6 +1188,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
 
@@ -1190,6 +1228,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
 
@@ -1238,6 +1283,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
         let tool = registry.get_arc("read").unwrap();
@@ -1295,6 +1347,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
         let tool = registry.get_arc("read").unwrap();
@@ -1349,6 +1408,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
         let tool = registry.get_arc("edit").unwrap();
@@ -1401,6 +1467,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
         let tool = registry.get_arc("edit").unwrap();
@@ -1452,6 +1525,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
         let tool = registry.get_arc("edit").unwrap();
@@ -1497,6 +1577,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
         let tool = registry.get_arc("edit").unwrap();
@@ -1554,6 +1641,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
         let tool = registry.get_arc("glob").unwrap();
@@ -1616,6 +1710,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
         let tool = registry.get_arc("glob").unwrap();
@@ -1671,6 +1772,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
         let tool = registry.get_arc("grep").unwrap();
@@ -1727,6 +1835,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
         let tool = registry.get_arc("grep").unwrap();
@@ -1779,6 +1894,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
         let tool = registry.get_arc("grep").unwrap();
@@ -1828,6 +1950,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
         let tool = registry.get_arc("grep").unwrap();
@@ -1877,6 +2006,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
 
@@ -1909,6 +2045,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
 
@@ -1942,6 +2085,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
 
@@ -1974,6 +2124,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
 
@@ -2005,6 +2162,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
 
@@ -2039,6 +2203,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
 
@@ -2115,6 +2286,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
 
@@ -2174,6 +2352,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
 
@@ -2233,6 +2418,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
 
@@ -2284,6 +2476,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
         let tool = registry.get_arc("scratchpad").unwrap();
@@ -2337,6 +2536,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
         let tool = registry.get_arc("scratchpad").unwrap();
@@ -2389,6 +2595,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
         let tool = registry.get_arc("scratchpad").unwrap();
@@ -2451,6 +2664,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
         let tool = registry.get_arc("scratchpad").unwrap();
@@ -2484,6 +2704,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
         let tool = registry.get_arc("scratchpad").unwrap();
@@ -2517,6 +2744,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
         let tool = registry.get_arc("scratchpad").unwrap();
@@ -2549,6 +2783,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
         let tool = registry.get_arc("scratchpad").unwrap();
@@ -2802,6 +3043,13 @@ mod tests {
             )),
             std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
             std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
             false,
         );
 
@@ -4603,7 +4851,7 @@ impl Tool for EditTool {
         "edit"
     }
     fn description(&self) -> &str {
-        "精确字符串替换工具。oldString 必须在文件中唯一匹配（0 匹配报错，多匹配报错）。当 oldString 为空且文件不存在时，创建新文件。生成 diff 摘要显示修改前后内容。"
+        "精确字符串替换工具。oldString 必须在文件中唯一匹配（0 匹配报错，多匹配报错，除非 replace_all=true）。当 oldString 为空且文件不存在时，创建新文件。生成 diff 摘要显示修改前后内容。"
     }
     fn category(&self) -> &str {
         "filesystem"
@@ -4618,11 +4866,16 @@ impl Tool for EditTool {
                 },
                 "old_string": {
                     "type": "string",
-                    "description": "要替换的原字符串（必须唯一匹配）。为空且文件不存在时创建新文件"
+                    "description": "要替换的原字符串（必须唯一匹配，除非 replace_all=true）。为空且文件不存在时创建新文件"
                 },
                 "new_string": {
                     "type": "string",
                     "description": "替换后的新字符串"
+                },
+                "replace_all": {
+                    "type": "boolean",
+                    "description": "是否替换所有匹配项（默认 false，仅替换第一个匹配）。设为 true 时替换所有匹配项，不要求唯一匹配",
+                    "default": false
                 }
             },
             "required": ["path", "old_string", "new_string"]
@@ -4634,6 +4887,7 @@ impl Tool for EditTool {
         let old_string = params["old_string"].as_str().unwrap_or("");
         let new_string = params["new_string"].as_str().unwrap_or("");
         let workspace_root = params["workspace_root"].as_str().unwrap_or("");
+        let replace_all = params["replace_all"].as_bool().unwrap_or(false);
 
         if file_path.is_empty() {
             log::warn!("edit 失败: 缺少文件路径");
@@ -4799,35 +5053,45 @@ impl Tool for EditTool {
                     error_code: None,
                 };
             }
-            if match_count > 1 {
+            // 多匹配处理：replace_all=true 时替换所有，否则报错
+            if match_count > 1 && !replace_all {
                 log::warn!(
-                    "edit 失败: 找到 {} 处匹配，需要唯一匹配, path={}",
+                    "edit 失败: 找到 {} 处匹配，需要唯一匹配（或设置 replace_all=true）, path={}",
                     match_count,
                     file_path
                 );
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some(format!("找到 {} 处匹配，需要唯一匹配", match_count)),
+                    error: Some(format!(
+                        "找到 {} 处匹配，需要唯一匹配。如需替换所有匹配，请设置 replace_all=true",
+                        match_count
+                    )),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: None,
                 };
             }
 
-            // 唯一匹配，执行替换
-            let new_content = old_content.replacen(old_string, new_string, 1);
+            // 执行替换：replace_all=true 时替换所有匹配，否则仅替换第一个
+            let new_content = if replace_all {
+                old_content.replace(old_string, new_string)
+            } else {
+                old_content.replacen(old_string, new_string, 1)
+            };
             let diff_summary = format_diff_summary(&old_content, &new_content);
 
             // 写回文件
             match tokio::fs::write(&resolved_path, new_content.as_bytes()).await {
                 Ok(_) => {
-                    log::info!("edit 替换成功: {}, 替换 {} 处", file_path, match_count);
+                    let replaced_count = if replace_all { match_count } else { 1 };
+                    log::info!("edit 替换成功: {}, 替换 {} 处", file_path, replaced_count);
                     ToolResult {
                         success: true,
                         output: Some(json!({
                             "path": file_path,
                             "operation": "edit",
                             "matches": match_count,
+                            "replacedCount": replaced_count,
                             "diff": diff_summary,
                         })),
                         error: None,

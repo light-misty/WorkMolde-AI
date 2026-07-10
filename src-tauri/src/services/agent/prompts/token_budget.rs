@@ -66,11 +66,6 @@ impl TokenBudgetManager {
         self.context_window
     }
 
-    /// 根据剩余 Token 空间决定是否注入规范层
-    pub fn should_inject_guides(&self, current_system_tokens: usize) -> bool {
-        current_system_tokens < self.budget.system_prompt
-    }
-
     /// 估算字符串的 Token 数
     /// 采用分语言估算策略：
     /// - 中文字符: 约 1 字符 = 1.5 Token (CJK 字符)
@@ -142,17 +137,6 @@ mod tests {
         // 最小上下文窗口的预算分配
         assert!(budget.system_prompt > 0);
         assert!(budget.conversation > 0);
-    }
-
-    #[test]
-    fn test_should_inject_guides() {
-        let manager = TokenBudgetManager::default_context();
-
-        // 远低于配额，应注入
-        assert!(manager.should_inject_guides(1000));
-
-        // 超过配额，不应注入
-        assert!(!manager.should_inject_guides(20000));
     }
 
     #[test]

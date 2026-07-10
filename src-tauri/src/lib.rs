@@ -429,10 +429,16 @@ pub fn run() {
                 std::time::Duration::from_secs(lsp_config.request_timeout_seconds),
             ));
             let lsp_router = Arc::new(crate::services::lsp::router::LanguageRouter::new());
-            let lsp_cache = Arc::new(crate::services::lsp::cache::LspResultCache::new(
-                lsp_config.cache.ttl_seconds,
-                lsp_config.cache.max_entries,
-            ));
+            let lsp_cache = Arc::new(if lsp_config.cache.enabled {
+                crate::services::lsp::cache::LspResultCache::new(
+                    lsp_config.cache.ttl_seconds,
+                    lsp_config.cache.max_entries,
+                )
+            } else {
+                // 缓存禁用时创建 TTL=0 的缓存（所有查询立即过期，相当于禁用）
+                log::info!("LSP 结果缓存已禁用（lsp.cache.enabled=false）");
+                crate::services::lsp::cache::LspResultCache::new(0, 0)
+            });
 
             // 注册 LSP 服务器配置（仅在 lsp.enabled = true 时）
             if lsp_config.enabled {
@@ -452,44 +458,7 @@ pub fn run() {
                 }
             }
 
-            // 阶段 4: register_builtin_tools 注册 Task/WebFetch/WebSearch/Question 工具
-            // TaskTool 采用延迟注入模式：先注册不含 sub_executor 的实例，后续通过 set_sub_executor 注入
-            let registration = crate::services::tool::builtin::register_builtin_tools(
-                &mut tool_registry,
-                git_bash_path,
-                Arc::clone(&db_arc),
-                web_search_config,
-                question_channels.clone(),
-                Some(app.handle().clone()),
-                Arc::clone(&lsp_manager),
-                Arc::clone(&lsp_router),
-                Arc::clone(&lsp_cache),
-                lsp_config.experimental_enabled,
-            );
-            let scratchpad_states = registration.scratchpad_states;
-            let task_tool = registration.task_tool;
-
-            // 阶段 4: 初始化 SubAgentExecutor（需要 tool_registry，故在工具注册后创建）
-            // 共享 llm_router、tool_registry、permission_registry、session_whitelist、app_handle
-            let tool_registry_arc = Arc::new(tool_registry);
-            let sub_executor =
-                Arc::new(crate::services::agent::sub_executor::SubAgentExecutor::new(
-                    Arc::clone(&llm_router_arc),
-                    Arc::clone(&tool_registry_arc),
-                    Arc::clone(&permission_registry),
-                    Arc::clone(&session_whitelist),
-                    Some(app.handle().clone()),
-                ));
-            // 延迟注入 SubAgentExecutor 到 TaskTool（setup 为同步上下文，使用 block_on 调用 async setter）
-            // 使用 trait 对象 Arc<dyn SubAgentExecTrait> 避免 SubAgentExecutor 的 Drop glue 在 cdylib 模式下的符号导出问题
-            tauri::async_runtime::block_on(async {
-                task_tool
-                    .set_sub_executor(Arc::clone(&sub_executor)
-                        as Arc<dyn crate::services::agent::SubAgentExecTrait>)
-                    .await;
-            });
-
-            // 初始化 Skill 注册表
+            // 初始化 Skill 注册表（需在 register_builtin_tools 之前，供 SkillTool 注册使用）
             // 全局目录: ~/.agent/skills/，项目目录: .agent/skills/（当前工作目录下）
             let global_skill_dir = {
                 #[cfg(target_os = "windows")]
@@ -524,11 +493,51 @@ pub fn run() {
                 Err(e) => log::warn!("加载 Skill 失败: {}", e.message),
             }
 
+            // 阶段 4: register_builtin_tools 注册 Task/WebFetch/WebSearch/Question 工具
+            // TaskTool 采用延迟注入模式：先注册不含 sub_executor 的实例，后续通过 set_sub_executor 注入
+            let registration = crate::services::tool::builtin::register_builtin_tools(
+                &mut tool_registry,
+                git_bash_path,
+                Arc::clone(&db_arc),
+                web_search_config,
+                question_channels.clone(),
+                Some(app.handle().clone()),
+                Arc::clone(&lsp_manager),
+                Arc::clone(&lsp_router),
+                Arc::clone(&lsp_cache),
+                Arc::clone(&skill_registry),
+                lsp_config.experimental_enabled,
+            );
+            let scratchpad_states = registration.scratchpad_states;
+            let task_tool = registration.task_tool;
+
+            // 阶段 4: 初始化 SubAgentExecutor（需要 tool_registry，故在工具注册后创建）
+            // 共享 llm_router、tool_registry、permission_registry、session_whitelist、app_handle
+            let tool_registry_arc = Arc::new(tool_registry);
+            let sub_executor =
+                Arc::new(crate::services::agent::sub_executor::SubAgentExecutor::new(
+                    Arc::clone(&llm_router_arc),
+                    Arc::clone(&tool_registry_arc),
+                    Arc::clone(&permission_registry),
+                    Arc::clone(&session_whitelist),
+                    Some(app.handle().clone()),
+                ));
+            // 延迟注入 SubAgentExecutor 到 TaskTool（setup 为同步上下文，使用 block_on 调用 async setter）
+            // 使用 trait 对象 Arc<dyn SubAgentExecTrait> 避免 SubAgentExecutor 的 Drop glue 在 cdylib 模式下的符号导出问题
+            tauri::async_runtime::block_on(async {
+                task_tool
+                    .set_sub_executor(Arc::clone(&sub_executor)
+                        as Arc<dyn crate::services::agent::SubAgentExecTrait>)
+                    .await;
+            });
+
             log::info!("DocAgent 应用初始化完成");
 
             // 初始化文件监听服务
-            let fs_watcher =
-                crate::services::fs_watcher::FsWatcherService::new(app.handle().clone());
+            let fs_watcher = crate::services::fs_watcher::FsWatcherService::new(
+                app.handle().clone(),
+                Some(Arc::clone(&lsp_cache)),
+            );
 
             // 初始化网络监控服务
             let network_monitor = crate::services::network_monitor::NetworkMonitor::new(

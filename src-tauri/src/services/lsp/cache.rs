@@ -88,6 +88,10 @@ impl LspResultCache {
         character: u32,
         locations: Vec<LspLocation>,
     ) {
+        // max_entries=0 时不存储任何条目（缓存禁用模式）
+        if self.max_entries == 0 {
+            return;
+        }
         let key = CacheKey {
             method: "definition".to_string(),
             file_path: file_path.to_string(),
@@ -138,6 +142,10 @@ impl LspResultCache {
         character: u32,
         hover: Option<LspHover>,
     ) {
+        // max_entries=0 时不存储任何条目（缓存禁用模式）
+        if self.max_entries == 0 {
+            return;
+        }
         let key = CacheKey {
             method: "hover".to_string(),
             file_path: file_path.to_string(),

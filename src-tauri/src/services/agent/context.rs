@@ -896,8 +896,6 @@ impl AgentContext {
 
         // 段 4：Agent 模式特定提示词（Plan/Build/Document 模式指令）
         parts.push(Self::layer_agent_mode(agent_mode));
-        // TODO(Phase 3): 实现 Skill 清单注入(可用 Skill 列表注入系统提示词)
-        // TODO(Phase 3): 实现 SessionCompaction(上下文压缩机制)
 
         // Token 预算控制：跳过规范层和示例层（已不再需要文档设计规范）
         let _ = token_budget;
@@ -1932,25 +1930,6 @@ mod tests {
         // 压缩功能已删除，仅验证 token 统计正确
         let usage_pct = usage.total_used_tokens as f64 / usage.context_window as f64;
         assert!(usage_pct > 0.5);
-    }
-
-    /// 测试 should_inject_guides 在小上下文窗口中跳过规范层
-    #[test]
-    fn test_should_inject_guides_small_context() {
-        // 8K 上下文窗口，系统提示词预算只有 1228 tokens
-        let budget = TokenBudgetManager::new(8192);
-        // 基础系统提示词通常超过 1228 tokens，应跳过规范层
-        let long_prompt_tokens = 2000;
-        assert!(!budget.should_inject_guides(long_prompt_tokens));
-    }
-
-    /// 测试 should_inject_guides 在大上下文窗口中注入规范层
-    #[test]
-    fn test_should_inject_guides_large_context() {
-        // 1M 上下文窗口，系统提示词预算有 150000 tokens
-        let budget = TokenBudgetManager::new(1_000_000);
-        let normal_prompt_tokens = 5000;
-        assert!(budget.should_inject_guides(normal_prompt_tokens));
     }
 
     /// 测试 Token 预算分配比例

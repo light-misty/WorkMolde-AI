@@ -2041,6 +2041,24 @@ impl<R: Runtime> AgentExecutor<R> {
                         safe_params["_session_id"] = json!(ctx.session_id);
                     }
 
+                    // 阶段 4: 为 task 工具注入父 Agent 上下文（session_id/workspace_root/nesting_depth/system_prompt/agent_mode）
+                    // 这些参数以下划线开头，不暴露给 LLM，用于子 Agent 继承父 Agent 配置
+                    if tool_call.name == "task" {
+                        safe_params["_session_id"] = json!(ctx.session_id);
+                        if !ctx.workspace_path.is_empty() {
+                            safe_params["_workspace_root"] = json!(ctx.workspace_path);
+                        }
+                        safe_params["_nesting_depth"] = json!(0u32); // 主 Agent 的嵌套深度为 0
+                        safe_params["_system_prompt"] = json!(ctx.system_prompt);
+                        // current_mode 在上方已获取，复用以避免重复查询
+                        let mode_str = match current_mode {
+                            super::AgentMode::Plan => "plan",
+                            super::AgentMode::Build => "build",
+                            super::AgentMode::Document => "document",
+                        };
+                        safe_params["_agent_mode"] = json!(mode_str);
+                    }
+
                     // 在文件修改/删除操作前自动创建版本快照
                     if let Some(ref snapshot_fn) = self.snapshot_fn {
                         let files_to_snapshot =

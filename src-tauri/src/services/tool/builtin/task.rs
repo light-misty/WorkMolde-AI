@@ -274,9 +274,15 @@ impl TaskTool {
             };
         }
 
-        // 9. 读取 parent_system_prompt 和 agent_mode
-        let parent_prompt = self.parent_system_prompt.read().await.clone();
-        let agent_mode = self.agent_mode.read().await.clone();
+        // 9. 读取 parent_system_prompt 和 agent_mode（优先从 params 读取，回退到字段值）
+        let parent_prompt = match params.get("_system_prompt").and_then(|v| v.as_str()) {
+            Some(s) => s.to_string(),
+            None => self.parent_system_prompt.read().await.clone(),
+        };
+        let agent_mode = match params.get("_agent_mode").and_then(|v| v.as_str()) {
+            Some(s) => s.to_string(),
+            None => self.agent_mode.read().await.clone(),
+        };
 
         // 10. 构建 SubAgentConfig
         let agent_id = Uuid::new_v4().to_string();
@@ -411,9 +417,15 @@ impl TaskTool {
             };
         }
 
-        // 8. 读取 parent_system_prompt 和 agent_mode
-        let parent_prompt = self.parent_system_prompt.read().await.clone();
-        let agent_mode = self.agent_mode.read().await.clone();
+        // 8. 读取 parent_system_prompt 和 agent_mode（优先从 params 读取，回退到字段值）
+        let parent_prompt = match params.get("_system_prompt").and_then(|v| v.as_str()) {
+            Some(s) => s.to_string(),
+            None => self.parent_system_prompt.read().await.clone(),
+        };
+        let agent_mode = match params.get("_agent_mode").and_then(|v| v.as_str()) {
+            Some(s) => s.to_string(),
+            None => self.agent_mode.read().await.clone(),
+        };
 
         // 9. 为每个 task 构建 SubAgentConfig 并使用 tokio::spawn 并行执行
         let mut handles = Vec::with_capacity(tasks.len());

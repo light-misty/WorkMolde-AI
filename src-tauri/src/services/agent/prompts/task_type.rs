@@ -135,21 +135,6 @@ impl TaskType {
             _ => TaskType::Unknown,
         }
     }
-
-    /// 获取此任务类型需要注入的文档设计规范类型列表
-    /// 返回 doc_type 字符串列表，用于 get_design_guide_by_type()
-    pub fn required_guide_types(&self) -> Vec<&'static str> {
-        match self {
-            TaskType::Docx => vec!["docx"],
-            TaskType::Xlsx => vec!["xlsx"],
-            TaskType::Pptx => vec!["pptx"],
-            TaskType::Pdf => vec!["pdf"],
-            TaskType::Markdown => vec![],
-            TaskType::FileSystem => vec![],
-            TaskType::General => vec![],
-            TaskType::Unknown => vec![], // 未知类型不注入设计规范，避免浪费 Token 和误导 LLM
-        }
-    }
 }
 
 /// 检查字符串是否包含任一关键词
@@ -270,23 +255,6 @@ mod tests {
         assert_eq!(TaskType::from_document_format("pdf"), TaskType::Pdf);
         assert_eq!(TaskType::from_document_format("md"), TaskType::Markdown);
         assert_eq!(TaskType::from_document_format("unknown"), TaskType::Unknown);
-    }
-
-    #[test]
-    fn test_required_guide_types() {
-        assert_eq!(TaskType::Docx.required_guide_types(), vec!["docx"]);
-        assert_eq!(TaskType::Xlsx.required_guide_types(), vec!["xlsx"]);
-        assert_eq!(TaskType::Pptx.required_guide_types(), vec!["pptx"]);
-        assert_eq!(TaskType::Pdf.required_guide_types(), vec!["pdf"]);
-        assert_eq!(
-            TaskType::Markdown.required_guide_types(),
-            Vec::<&str>::new()
-        );
-        assert_eq!(
-            TaskType::FileSystem.required_guide_types(),
-            Vec::<&str>::new()
-        );
-        assert_eq!(TaskType::Unknown.required_guide_types(), Vec::<&str>::new());
     }
 
     #[test]

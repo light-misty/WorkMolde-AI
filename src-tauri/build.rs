@@ -12,7 +12,8 @@ fn main() {
 
     if builtin_config.exists() {
         println!("cargo:rustc-cfg=builtin_provider");
-        println!("cargo:warning=内置 Provider 配置文件已检测到，启用内置模型");
+        // 信息性输出（不使用 cargo:warning 以避免被误判为编译警告）
+        println!("builtin_provider.json detected, builtin_provider cfg enabled");
     }
 
     // Windows: 嵌入 ComCtl32 v6 清单依赖
