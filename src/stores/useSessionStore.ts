@@ -136,10 +136,7 @@ export const useSessionStore = create<SessionState>((set) => ({
       const count = await tauriCmd.clearWorkspaceSessions(workspaceId);
       set((state) => ({
         sessions: state.sessions.filter((s) => s.workspaceId !== workspaceId),
-        currentSessionId:
-          state.currentSessionId && state.sessions.find((s) => s.id === state.currentSessionId)?.workspaceId === workspaceId
-            ? null
-            : state.currentSessionId,
+        // 不再置 currentSessionId 为 null，由 App.tsx 的会话失效检测 useEffect 统一处理 UI 清理
       }));
       return count;
     } catch (error) {

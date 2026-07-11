@@ -137,6 +137,24 @@ pub async fn start_agent(
         .unwrap_or("")
         .to_string();
 
+    // 从 options 提取 Agent 模式（待机状态切换模式后需通过此参数同步到后端）
+    let agent_mode_str = options
+        .as_ref()
+        .and_then(|o| o.get("agentMode"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("build")
+        .to_string();
+
+    let agent_mode = match agent_mode_str.as_str() {
+        "plan" => AgentMode::Plan,
+        "build" => AgentMode::Build,
+        "document" => AgentMode::Document,
+        other => {
+            log::warn!("未知的 agentMode: {}，使用默认 Build", other);
+            AgentMode::Build
+        }
+    };
+
     // 校验工作区目录是否存在（仅当指定了非默认工作区路径时检查）
     if !workspace_path.is_empty() && workspace_path != "." {
         let ws_path = std::path::Path::new(&workspace_path);
@@ -166,6 +184,13 @@ pub async fn start_agent(
 
     let config = Arc::clone(&state.config);
     let doc_service = Arc::clone(&state.doc_service);
+
+    // 同步前端传入的 Agent 模式，确保待机状态切换后新会话使用正确模式
+    state.agent_mode_manager.set_mode(&session_id, agent_mode).await;
+    log::info!(
+        "start_agent: 会话 '{}' Agent 模式已设置为 {:?}",
+        session_id, agent_mode
+    );
 
     tokio::spawn(async move {
         // 清理守卫：确保 active_agents 在 panic 时也被清理

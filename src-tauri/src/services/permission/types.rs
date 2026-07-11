@@ -176,6 +176,20 @@ impl PermissionType {
                 | PermissionType::Document
         )
     }
+
+    /// 返回用于错误消息的工具类别名称
+    pub fn category_name(&self) -> &'static str {
+        match self {
+            PermissionType::Edit => "edit",
+            PermissionType::Bash => "bash",
+            PermissionType::WriteScript => "write_script",
+            PermissionType::Task => "task",
+            PermissionType::WebFetch => "webfetch",
+            PermissionType::WebSearch => "websearch",
+            PermissionType::Document => "document",
+            _ => "modification",
+        }
+    }
 }
 
 /// 权限规则作用域

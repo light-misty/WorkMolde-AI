@@ -105,6 +105,15 @@ const MAX_TOKENS_CEILING: u32 = 131072;
 /// 且每次读取内容不同导致缓存无法命中，截断后缓存命中率显著提升
 const MAX_TOOL_RESULT_CHARS: usize = 6000;
 
+/// 权限检查结果
+#[derive(Debug, Clone)]
+pub enum PermissionResult {
+    /// 允许执行
+    Allow,
+    /// 拒绝执行，附带拒绝原因
+    Deny { reason: String },
+}
+
 /// 检查错误码是否可重试
 fn is_retryable_error(code: u32) -> bool {
     matches!(
@@ -556,24 +565,29 @@ impl<R: Runtime> AgentExecutor<R> {
 
     /// Phase 2: 权限系统检查（替代原有 ConfirmationLevel 机制）
     /// 按以下顺序检查：Plan 模式 → Doom loop → 白名单 → 外部目录 → 规则评估
-    /// 返回 Ok(true) 表示允许执行，Ok(false) 表示拒绝（已发射 tool_result 失败事件）
+    /// 返回 Ok(PermissionResult::Allow) 表示允许执行，Ok(PermissionResult::Deny) 表示拒绝（附带拒绝原因）
     async fn check_permission(
         &self,
         ctx: &AgentContext,
         tool_name: &str,
         params: &serde_json::Value,
-    ) -> Result<bool, CommandError> {
+    ) -> Result<PermissionResult, CommandError> {
         // 1. 获取当前 AgentMode
         let mode = self.agent_mode_manager.get_mode(&ctx.session_id).await;
 
         // 2. Plan 模式拒绝修改类操作
-        if mode.is_plan() && PermissionType::from_tool_name(tool_name).is_modification() {
+        let perm_type = PermissionType::from_tool_name(tool_name);
+        if mode.is_plan() && perm_type.is_modification() {
+            let category = perm_type.category_name();
             log::warn!(
-                "权限拒绝(Plan 模式): session_id={}, tool={}",
+                "权限拒绝(Plan 模式): session_id={}, tool={}, category={}",
                 ctx.session_id,
-                tool_name
+                tool_name,
+                category
             );
-            return Ok(false);
+            return Ok(PermissionResult::Deny {
+                reason: format!("Plan mode prohibits using {} tools: {}", category, tool_name),
+            });
         }
 
         // 3. Doom loop 检测：连续多次相同调用
@@ -587,7 +601,12 @@ impl<R: Runtime> AgentExecutor<R> {
                 ctx.session_id,
                 tool_name
             );
-            return Ok(false);
+            return Ok(PermissionResult::Deny {
+                reason: format!(
+                    "Doom loop detected: tool {} called too many times consecutively",
+                    tool_name
+                ),
+            });
         }
 
         // 4. 构造权限评估请求
@@ -604,7 +623,7 @@ impl<R: Runtime> AgentExecutor<R> {
                 ctx.session_id,
                 tool_name
             );
-            return Ok(true);
+            return Ok(PermissionResult::Allow);
         }
 
         // 6. 外部目录检查：文件操作且路径在工作区外时强制 Ask
@@ -650,7 +669,7 @@ impl<R: Runtime> AgentExecutor<R> {
                     ctx.session_id,
                     tool_name
                 );
-                Ok(true)
+                Ok(PermissionResult::Allow)
             }
             PermissionAction::Deny => {
                 log::warn!(
@@ -660,7 +679,12 @@ impl<R: Runtime> AgentExecutor<R> {
                     decision.matched_rule_id,
                     decision.matched_description
                 );
-                Ok(false)
+                Ok(PermissionResult::Deny {
+                    reason: format!(
+                        "Operation denied by permission rules: {} ({})",
+                        tool_name, decision.matched_description
+                    ),
+                })
             }
             PermissionAction::Ask => {
                 // 询问用户，等待三态回复
@@ -675,7 +699,9 @@ impl<R: Runtime> AgentExecutor<R> {
                             ctx.session_id,
                             tool_name
                         );
-                        Ok(false)
+                        Ok(PermissionResult::Deny {
+                            reason: format!("User rejected the operation: {}", tool_name),
+                        })
                     }
                     PermissionResponse::Once => {
                         log::info!(
@@ -683,7 +709,7 @@ impl<R: Runtime> AgentExecutor<R> {
                             ctx.session_id,
                             tool_name
                         );
-                        Ok(true)
+                        Ok(PermissionResult::Allow)
                     }
                     PermissionResponse::Always => {
                         // 生成会话级 Allow 规则并加入白名单
@@ -700,7 +726,7 @@ impl<R: Runtime> AgentExecutor<R> {
                             ctx.session_id,
                             tool_name
                         );
-                        Ok(true)
+                        Ok(PermissionResult::Allow)
                     }
                 }
             }
@@ -1878,10 +1904,11 @@ impl<R: Runtime> AgentExecutor<R> {
                     // Phase 2: 权限系统检查（替代原有 ConfirmationLevel 机制）
                     // 按顺序检查：Plan 模式 → Doom loop → 白名单 → 外部目录 → 规则评估
                     let permitted = self.check_permission(ctx, &tool_call.name, &params).await?;
-                    if !permitted {
+                    if let PermissionResult::Deny { reason } = permitted {
                         // 权限被拒绝（Plan 模式/Doom loop/规则拒绝/用户拒绝）
+                        // 直接使用 check_permission 返回的拒绝原因
                         // 发射带正确 call_id 的 tool_result，确保前端能关闭对应工具节点
-                        let reject_msg = format!("Operation denied by permission system: {}", tool_call.name);
+                        let reject_msg = reason;
                         log::info!(
                             "操作被权限系统拒绝: session_id={}, tool={}",
                             ctx.session_id,

@@ -108,6 +108,8 @@ export default function App() {
   const lastClosedStreamingNodeIdRef = useRef<string | null>(null);
   // 追踪 Agent 上一次的 sessionId，用于检测新会话创建
   const prevAgentSessionIdRef = useRef<string | null>(null);
+  // 标记新会话创建过程中（loadSessions 尚未完成），避免失效检测误清空
+  const creatingNewSessionRef = useRef(false);
   // 保存最后一次发送的文本，用于错误重试
   const lastSentTextRef = useRef<string | null>(null);
   // 保存最后一次发送的选项，用于错误重试
@@ -216,15 +218,13 @@ export default function App() {
   // 失效时清空工作流和 Agent 状态，避免 UI 残留已删除会话的内容
   useEffect(() => {
     if (!currentSessionId) return;
-    // sessions 为空时不触发（避免初始化阶段误清空）
-    if (sessions.length === 0) return;
-    const stillExists = sessions.some((s) => s.id === currentSessionId);
+    // sessions 为空时视为会话已失效（初始化阶段 currentSessionId 为 null，已有上一行守卫保护）
+    const stillExists = sessions.length > 0 && sessions.some((s) => s.id === currentSessionId);
     if (stillExists) return;
 
-    // 跳过刚创建的新会话：agentSessionId 由 useAgent 管理，
-    // 新会话创建后 sessions 可能因 loadSessions 失败或时序问题短暂不包含该会话，
-    // 此时不应误判为失效。仅当 currentSessionId 与 agentSessionId 不同时才视为真正失效。
-    if (currentSessionId === agentSessionId) return;
+    // 新会话创建过程中（loadSessions 尚未完成），sessions 可能短暂不包含新会话 ID
+    // 此时不应误判为失效，由 creatingNewSessionRef 精确标记该窗口
+    if (creatingNewSessionRef.current) return;
 
     // 当前会话已不在列表中，说明已被外部删除（如工作区删除）
     console.warn("[App] 当前会话已失效，清空状态:", currentSessionId);
@@ -233,7 +233,7 @@ export default function App() {
     clearContextUsage();
     clearCurrentSession();
     resetRefs();
-  }, [currentSessionId, sessions, agentSessionId, clearNodes, resetAgent, clearContextUsage, clearCurrentSession]);
+  }, [currentSessionId, sessions, clearNodes, resetAgent, clearContextUsage, clearCurrentSession]);
 
   // 监听会话标题自动更新事件（后端生成标题后通知前端）
   useEffect(() => {
@@ -297,13 +297,16 @@ export default function App() {
   // 当 Agent 创建新会话时，同步刷新 session store 并选中新会话
   // 必须先 await loadSessions() 确保 sessions 列表已包含新会话，
   // 再调用 switchSession() 更新 currentSessionId。
-  // 否则会触发"当前会话失效" useEffect（line ~216）的竞态：
+  // 否则会触发"当前会话失效" useEffect 的竞态：
   // currentSessionId 已更新但 sessions 还未包含新会话，导致误判会话失效并 clearNodes()。
+  // 使用 creatingNewSessionRef 精确标记新会话创建窗口，避免失效检测误清空
   useEffect(() => {
     if (agentSessionId && !prevAgentSessionIdRef.current) {
+      creatingNewSessionRef.current = true;
       (async () => {
         await loadSessions();
         switchSession(agentSessionId);
+        creatingNewSessionRef.current = false;
       })();
     }
     prevAgentSessionIdRef.current = agentSessionId;
