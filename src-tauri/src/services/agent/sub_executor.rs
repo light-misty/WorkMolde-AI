@@ -282,6 +282,7 @@ impl SubAgentExecutor {
             tool_call_id: None,
             reasoning_content: None,
             attachments: None,
+            metadata: None,
         });
 
         // 添加 user 消息（子任务描述）
@@ -296,6 +297,7 @@ impl SubAgentExecutor {
             tool_call_id: None,
             reasoning_content: None,
             attachments: None,
+            metadata: None,
         });
 
         // 构建工具定义列表：从 Vec<Value> 转换为 Vec<ToolDefinition>
@@ -365,6 +367,7 @@ impl SubAgentExecutor {
                         tool_call_id: None,
                         reasoning_content: message.reasoning_content.clone(),
                         attachments: None,
+                        metadata: None,
                     });
 
                     // 执行工具调用
@@ -379,6 +382,7 @@ impl SubAgentExecutor {
                         tool_call_id: Some(tool_call.id.clone()),
                         reasoning_content: None,
                         attachments: None,
+                        metadata: None,
                     });
 
                     continue;

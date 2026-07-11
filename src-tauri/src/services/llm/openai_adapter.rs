@@ -383,6 +383,7 @@ impl OpenAiAdapter {
                                     .as_str()
                                     .map(String::from),
                                 attachments: None,
+                                metadata: None,
                             },
                             finish_reason,
                         }
@@ -810,6 +811,7 @@ impl LlmProvider for OpenAiAdapter {
             tool_call_id: None,
             reasoning_content: None,
             attachments: None,
+            metadata: None,
         }];
         let url = format!(
             "{}/chat/completions",
@@ -964,6 +966,7 @@ mod tests {
             tool_call_id: None,
             reasoning_content: Some("这是思考过程".to_string()),
             attachments: None,
+            metadata: None,
         }];
 
         let body = adapter.build_request_body(&messages, &[], false, None);
@@ -992,6 +995,7 @@ mod tests {
             tool_call_id: None,
             reasoning_content: Some("这是思考过程".to_string()),
             attachments: None,
+            metadata: None,
         }];
 
         let body = adapter.build_request_body(&messages, &[], false, None);
@@ -1016,6 +1020,7 @@ mod tests {
             tool_call_id: None,
             reasoning_content: None,
             attachments: None,
+            metadata: None,
         }];
 
         let body = adapter.build_request_body(&messages, &[], false, None);

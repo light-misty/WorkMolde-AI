@@ -56,6 +56,8 @@ export interface Message {
   reasoningContent?: string;
   /** 附件元信息列表 */
   attachments?: AttachmentMeta[];
+  /** 工作流节点扩展信息 (用于持久化 question/confirm/error 节点详情) */
+  metadata?: Record<string, unknown>;
   createdAt: string;
 }
 

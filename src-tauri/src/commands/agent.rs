@@ -493,6 +493,7 @@ async fn generate_session_title(
             tool_call_id: None,
             reasoning_content: None,
             attachments: None,
+            metadata: None,
         },
         ChatMessage {
             role: "user".to_string(),
@@ -502,6 +503,7 @@ async fn generate_session_title(
             tool_call_id: None,
             reasoning_content: None,
             attachments: None,
+            metadata: None,
         },
     ];
 
@@ -1013,6 +1015,12 @@ fn persist_messages_to_db(
         let tool_result_ref = tool_result.as_deref();
         let tool_call_id_ref = tool_call_id.as_deref();
 
+        // 将 metadata 序列化为 JSON 字符串存储
+        let metadata_str = msg
+            .metadata
+            .as_ref()
+            .map(|m| serde_json::to_string(m).unwrap_or_default());
+
         crate::db::message_repo::create_message(
             &conn,
             &msg_id,
@@ -1026,6 +1034,7 @@ fn persist_messages_to_db(
             None,
             msg.reasoning_content.as_deref(),
             msg.attachments.as_deref(),
+            metadata_str.as_deref(),
         )?;
     }
     Ok(())

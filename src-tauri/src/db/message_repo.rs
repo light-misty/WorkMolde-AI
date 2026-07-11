@@ -17,6 +17,7 @@ pub fn create_message(
     thinking_content: Option<&str>,
     reasoning_content: Option<&str>,
     attachments: Option<&[AttachmentMeta]>,
+    metadata: Option<&str>,
 ) -> Result<(), CommandError> {
     let now = Utc::now().to_rfc3339();
     // 附件序列化为 JSON 字符串存储
@@ -25,8 +26,8 @@ pub fn create_message(
     conn.execute(
         "INSERT INTO session_messages
             (id, session_id, role, content, tool_name, tool_args, tool_result,
-             tool_call_id, thinking_content, reasoning_content, attachments, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+             tool_call_id, thinking_content, reasoning_content, attachments, metadata, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         rusqlite::params![
             id,
             session_id,
@@ -39,6 +40,7 @@ pub fn create_message(
             thinking_content,
             reasoning_content,
             attachments_json,
+            metadata,
             now,
         ],
     )?;
@@ -48,7 +50,7 @@ pub fn create_message(
 pub fn list_messages(conn: &Connection, session_id: &str) -> Vec<Message> {
     let mut stmt = match conn.prepare(
         "SELECT id, session_id, role, content, tool_name, tool_args, tool_result,
-                tool_call_id, thinking_content, reasoning_content, attachments, created_at
+                tool_call_id, thinking_content, reasoning_content, attachments, metadata, created_at
          FROM session_messages
          WHERE session_id = ?1
          ORDER BY created_at ASC",
@@ -78,11 +80,12 @@ pub fn list_messages(conn: &Connection, session_id: &str) -> Vec<Message> {
         let tool_call_id: Option<String> = row.get(7).ok().flatten();
         let reasoning_content: Option<String> = row.get(9).ok().flatten();
         let attachments_json: Option<String> = row.get(10).ok().flatten();
+        let metadata_json: Option<String> = row.get(11).ok().flatten();
         let msg_id: String = match row.get(0) {
             Ok(v) => v,
             Err(_) => continue,
         };
-        let created_at: String = match row.get(11) {
+        let created_at: String = match row.get(12) {
             Ok(v) => v,
             Err(_) => continue,
         };
@@ -184,6 +187,7 @@ pub fn list_messages(conn: &Connection, session_id: &str) -> Vec<Message> {
             tool_calls,
             reasoning_content,
             attachments,
+            metadata: metadata_json.and_then(|json| serde_json::from_str(&json).ok()),
             created_at,
         });
     }

@@ -1219,14 +1219,27 @@ impl<R: Runtime> AgentExecutor<R> {
                         );
 
                         if !is_retryable_error(e.code) || llm_retry_count >= MAX_LLM_RETRIES {
+                            let error_msg = user_facing_error_message(e.code);
                             self.emitter
                                 .emit_error(ErrorPayload {
                                     session_id: ctx.session_id.clone(),
                                     code: e.code,
-                                    message: user_facing_error_message(e.code),
+                                    message: error_msg.clone(),
                                     recoverable: is_retryable_error(e.code),
                                 })
                                 .ok();
+                            // 持久化 error 节点信息（LLM 调用失败且不可重试，Agent 终止）
+                            ctx.add_assistant_message_with_metadata(
+                                &error_msg,
+                                Some(serde_json::json!({
+                                    "nodeType": "error",
+                                    "code": e.code,
+                                    "message": error_msg,
+                                    "recoverable": is_retryable_error(e.code),
+                                })),
+                            );
+                            self.persist_new_messages(ctx);
+                            ctx.mark_persisted();
                             return Err(e);
                         }
 
@@ -1942,6 +1955,8 @@ impl<R: Runtime> AgentExecutor<R> {
 
                     // Phase 2: 权限系统检查（替代原有 ConfirmationLevel 机制）
                     // 按顺序检查：Plan 模式 → Doom loop → 白名单 → 外部目录 → 规则评估
+                    // confirm_metadata 用于持久化 confirm 节点信息（权限审批/用户确认）
+                    let mut confirm_metadata: Option<serde_json::Value> = None;
                     let permitted = self.check_permission(ctx, &tool_call.name, &params).await?;
                     if let PermissionResult::Deny { reason } = permitted {
                         // 权限被拒绝（Plan 模式/Doom loop/规则拒绝/用户拒绝）
@@ -1963,13 +1978,27 @@ impl<R: Runtime> AgentExecutor<R> {
                                 duration_ms: 0,
                             })
                             .ok();
+                        // 持久化权限拒绝的 confirm 节点信息
+                        let deny_metadata = serde_json::json!({
+                            "nodeType": "confirm",
+                            "operationType": tool_call.name.clone(),
+                            "approved": false,
+                        });
                         // 添加失败结果到上下文，让 LLM 感知被拒绝
-                        ctx.add_tool_result(&tool_call.id, &reject_msg);
+                        ctx.add_tool_result_with_metadata(&tool_call.id, &reject_msg, Some(deny_metadata));
                         continue;
                     }
 
                     // 判断是否已通过权限弹窗批准(避免双重弹窗)
                     let already_confirmed = matches!(permitted, PermissionResult::AllowWithPermissionAsked);
+                    if already_confirmed {
+                        // 已通过权限弹窗批准，记录 confirm 节点信息
+                        confirm_metadata = Some(serde_json::json!({
+                            "nodeType": "confirm",
+                            "operationType": tool_call.name.clone(),
+                            "approved": true,
+                        }));
+                    }
 
                     if !already_confirmed && self.needs_confirmation(&tool_call.name, &params) {
                         // 高风险技能：始终发射 tool_call 事件
@@ -2007,9 +2036,22 @@ impl<R: Runtime> AgentExecutor<R> {
                                 })
                                 .ok();
 
-                            ctx.add_tool_result(&tool_call.id, &skip_msg);
+                            // 持久化用户拒绝确认的 confirm 节点信息
+                            let user_deny_metadata = serde_json::json!({
+                                "nodeType": "confirm",
+                                "operationType": tool_call.name.clone(),
+                                "approved": false,
+                            });
+                            ctx.add_tool_result_with_metadata(&tool_call.id, &skip_msg, Some(user_deny_metadata));
                             continue;
                         }
+
+                        // 用户确认批准，记录 confirm 节点信息
+                        confirm_metadata = Some(serde_json::json!({
+                            "nodeType": "confirm",
+                            "operationType": tool_call.name.clone(),
+                            "approved": true,
+                        }));
                     } else {
                         // 普通工具：始终发射 tool_call 事件
                         // 若流式阶段已提前发射，此处携带完整参数重新发射，前端通过 callId 去重更新
@@ -2049,7 +2091,7 @@ impl<R: Runtime> AgentExecutor<R> {
                                 duration_ms: 0,
                             })
                             .ok();
-                        ctx.add_tool_result(&tool_call.id, &reject_msg);
+                        ctx.add_tool_result_with_metadata(&tool_call.id, &reject_msg, confirm_metadata.take());
                         continue;
                     }
 
@@ -2170,6 +2212,13 @@ impl<R: Runtime> AgentExecutor<R> {
                             }
                         }
                     }
+
+                    // 提前捕获 question 工具的 questions 参数（safe_params 在 execute 时会被 move）
+                    let question_questions = if tool_call.name == "question" {
+                        safe_params.get("questions").cloned()
+                    } else {
+                        None
+                    };
 
                     // 执行 Tool 或 Handler
                     let result = if let Some(tool) = tool_arc {
@@ -2330,7 +2379,19 @@ impl<R: Runtime> AgentExecutor<R> {
                     } else {
                         format!("Error: {}", result.error.clone().unwrap_or_default())
                     };
-                    ctx.add_tool_result(&tool_call.id, &result_content);
+                    // 构建 tool_result 的 metadata：
+                    // - question 工具：持久化 questions/answers 作为 question 节点
+                    // - 其他工具：若经历了 confirm/permission 流程，持久化 confirm 节点信息
+                    let tool_metadata = if tool_call.name == "question" {
+                        Some(serde_json::json!({
+                            "nodeType": "question",
+                            "questions": question_questions.unwrap_or(serde_json::Value::Array(vec![])),
+                            "answers": result.output.as_ref().and_then(|o| o.get("answers")).cloned().unwrap_or(serde_json::Value::Array(vec![])),
+                        }))
+                    } else {
+                        confirm_metadata.take()
+                    };
+                    ctx.add_tool_result_with_metadata(&tool_call.id, &result_content, tool_metadata);
                 }
 
                 // 每轮迭代后增量持久化，防止崩溃丢失消息
@@ -2461,6 +2522,18 @@ impl<R: Runtime> AgentExecutor<R> {
                 recoverable: false,
             })
             .ok();
+        // 持久化 error 节点信息（超过最大迭代次数，Agent 终止）
+        ctx.add_assistant_message_with_metadata(
+            &error.message,
+            Some(serde_json::json!({
+                "nodeType": "error",
+                "code": error.code,
+                "message": error.message,
+                "recoverable": false,
+            })),
+        );
+        self.persist_new_messages(ctx);
+        ctx.mark_persisted();
 
         Err(error)
     }
@@ -2501,6 +2574,7 @@ impl<R: Runtime> AgentExecutor<R> {
             },
             tool_call_id: None,
             attachments: None,
+            metadata: None,
         });
 
         messages.push(ChatMessage {
@@ -2511,6 +2585,7 @@ impl<R: Runtime> AgentExecutor<R> {
             tool_calls: None,
             tool_call_id: None,
             attachments: None,
+            metadata: None,
         });
 
         messages

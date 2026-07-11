@@ -57,6 +57,9 @@ pub struct Message {
     /// 附件元信息列表 (JSON 序列化存储)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attachments: Option<Vec<AttachmentMeta>>,
+    /// 工作流节点扩展信息 (JSON 格式，用于持久化 question/confirm/error 节点详情)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
     pub created_at: String,
 }
 
@@ -74,6 +77,12 @@ impl Message {
     /// 将数据库消息模型转换为 LLM ChatMessage
     /// 用于从历史消息恢复 Agent 上下文
     pub fn to_chat_message(&self) -> Option<crate::models::llm::ChatMessage> {
+        // 跳过错误节点消息（不发送给 LLM）
+        if let Some(ref meta) = self.metadata {
+            if meta.get("nodeType").and_then(|v| v.as_str()) == Some("error") {
+                return None;
+            }
+        }
         match self.role {
             MessageRole::User => Some(crate::models::llm::ChatMessage {
                 role: "user".to_string(),
@@ -83,6 +92,7 @@ impl Message {
                 tool_call_id: None,
                 reasoning_content: None,
                 attachments: None,
+                metadata: None,
             }),
             MessageRole::Assistant => {
                 // 将数据库 ToolCall 转换为 LlmToolCall
@@ -120,6 +130,7 @@ impl Message {
                     tool_call_id: None,
                     reasoning_content: self.reasoning_content.clone(),
                     attachments: None,
+                    metadata: None,
                 })
             }
             MessageRole::Tool => {
@@ -145,6 +156,7 @@ impl Message {
                     tool_call_id: Some(call_id),
                     reasoning_content: None,
                     attachments: None,
+                    metadata: None,
                 })
             }
             MessageRole::System => {
@@ -169,6 +181,7 @@ mod tests {
             tool_calls: None,
             reasoning_content: None,
             attachments: None,
+            metadata: None,
             created_at: "2026-01-01T00:00:00Z".to_string(),
         };
 
@@ -189,6 +202,7 @@ mod tests {
             tool_calls: None,
             reasoning_content: Some("思考中...".to_string()),
             attachments: None,
+            metadata: None,
             created_at: "2026-01-01T00:00:01Z".to_string(),
         };
 
@@ -214,6 +228,7 @@ mod tests {
             }]),
             reasoning_content: None,
             attachments: None,
+            metadata: None,
             created_at: "2026-01-01T00:00:02Z".to_string(),
         };
 
@@ -243,6 +258,7 @@ mod tests {
             }]),
             reasoning_content: None,
             attachments: None,
+            metadata: None,
             created_at: "2026-01-01T00:00:03Z".to_string(),
         };
 
@@ -263,6 +279,7 @@ mod tests {
             tool_calls: None,
             reasoning_content: None,
             attachments: None,
+            metadata: None,
             created_at: "2026-01-01T00:00:00Z".to_string(),
         };
 
@@ -279,6 +296,7 @@ mod tests {
             tool_calls: None,
             reasoning_content: None,
             attachments: None,
+            metadata: None,
             created_at: "2026-01-01T00:00:04Z".to_string(),
         };
 
@@ -308,6 +326,7 @@ mod tests {
             ]),
             reasoning_content: None,
             attachments: None,
+            metadata: None,
             created_at: "2026-01-01T00:00:05Z".to_string(),
         };
 

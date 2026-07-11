@@ -111,6 +111,7 @@ impl ContextCompactor {
             tool_call_id: None,
             reasoning_content: None,
             attachments: None,
+            metadata: None,
         };
 
         let mut result_messages = Vec::with_capacity(recent_messages.len() + 1);
@@ -164,6 +165,7 @@ Requirements:\n\
             tool_call_id: None,
             reasoning_content: None,
             attachments: None,
+            metadata: None,
         });
         summary_messages.extend(messages.iter().cloned());
 

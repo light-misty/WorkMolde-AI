@@ -445,6 +445,7 @@ impl AgentContext {
             tool_call_id: None,
             reasoning_content: None,
             attachments: None,
+            metadata: None,
         });
     }
 
@@ -496,6 +497,7 @@ impl AgentContext {
             } else {
                 Some(attachments.to_vec())
             },
+            metadata: None,
         });
     }
 
@@ -514,11 +516,42 @@ impl AgentContext {
             tool_call_id: None,
             reasoning_content,
             attachments: None,
+            metadata: None,
+        });
+    }
+
+    /// 添加助手消息（带 metadata）
+    /// metadata 用于持久化 error 等工作流节点的扩展信息
+    pub fn add_assistant_message_with_metadata(
+        &mut self,
+        content: &str,
+        metadata: Option<serde_json::Value>,
+    ) {
+        self.messages.push(ChatMessage {
+            role: "assistant".to_string(),
+            content: content.to_string(),
+            content_parts: None,
+            tool_calls: None,
+            tool_call_id: None,
+            reasoning_content: None,
+            attachments: None,
+            metadata,
         });
     }
 
     /// 添加工具执行结果消息
     pub fn add_tool_result(&mut self, call_id: &str, content: &str) {
+        self.add_tool_result_with_metadata(call_id, content, None);
+    }
+
+    /// 添加工具执行结果消息（带 metadata）
+    /// metadata 用于持久化 question/confirm 等工作流节点的扩展信息
+    pub fn add_tool_result_with_metadata(
+        &mut self,
+        call_id: &str,
+        content: &str,
+        metadata: Option<serde_json::Value>,
+    ) {
         self.messages.push(ChatMessage {
             role: "tool".to_string(),
             content: content.to_string(),
@@ -527,6 +560,7 @@ impl AgentContext {
             tool_call_id: Some(call_id.to_string()),
             reasoning_content: None,
             attachments: None,
+            metadata,
         });
     }
 
@@ -649,6 +683,7 @@ impl AgentContext {
             tool_call_id: None,
             reasoning_content: None,
             attachments: None,
+            metadata: None,
         }];
         all.extend(self.messages.clone());
         all
@@ -679,6 +714,7 @@ impl AgentContext {
             tool_call_id: None,
             reasoning_content: None,
             attachments: None,
+            metadata: None,
         }];
 
         // 找出最后一条包含 reasoning_content 的 assistant 消息的索引
@@ -1729,6 +1765,7 @@ mod tests {
                 tool_call_id: None,
                 reasoning_content: None,
                 attachments: None,
+                metadata: None,
             },
             ChatMessage {
                 role: "assistant".to_string(),
@@ -1738,6 +1775,7 @@ mod tests {
                 tool_call_id: None,
                 reasoning_content: None,
                 attachments: None,
+                metadata: None,
             },
         ];
 
@@ -1770,6 +1808,7 @@ mod tests {
                 tool_call_id: None,
                 reasoning_content: None,
                 attachments: None,
+                metadata: None,
             },
             ChatMessage {
                 role: "assistant".to_string(),
@@ -1784,6 +1823,7 @@ mod tests {
                 tool_call_id: None,
                 reasoning_content: None,
                 attachments: None,
+                metadata: None,
             },
         ];
 

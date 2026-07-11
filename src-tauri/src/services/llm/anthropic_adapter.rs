@@ -552,6 +552,7 @@ impl AnthropicAdapter {
                     tool_call_id: None,
                     reasoning_content,
                     attachments: None,
+                    metadata: None,
                 },
                 finish_reason,
             }],
@@ -1313,6 +1314,7 @@ impl LlmProvider for AnthropicAdapter {
             tool_call_id: None,
             reasoning_content: None,
             attachments: None,
+            metadata: None,
         }];
         let url = self.build_api_url();
         let body = self.build_request_body(&test_messages, &[], false, None);

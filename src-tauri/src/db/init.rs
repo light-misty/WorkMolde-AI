@@ -43,6 +43,7 @@ fn create_tables(conn: &Connection) -> Result<(), CommandError> {
             thinking_content  TEXT        DEFAULT NULL,
             reasoning_content TEXT        DEFAULT NULL,
             attachments       TEXT        DEFAULT NULL,
+            metadata          TEXT        DEFAULT NULL,
             created_at        TEXT        NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
         );",
     )?;
@@ -144,6 +145,12 @@ fn create_tables(conn: &Connection) -> Result<(), CommandError> {
             UNIQUE(skill_name, workspace_id)
         );",
     )?;
+
+    // 迁移：为已有数据库的 session_messages 表添加 metadata 字段（新字段已存在时忽略错误）
+    let _ = conn.execute(
+        "ALTER TABLE session_messages ADD COLUMN metadata TEXT DEFAULT NULL",
+        [],
+    );
 
     log::info!("数据表创建完成");
     Ok(())

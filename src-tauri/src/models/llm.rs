@@ -155,6 +155,9 @@ pub struct ChatMessage {
     /// 附件元信息 (用于持久化，不发送给 LLM)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attachments: Option<Vec<crate::models::message::AttachmentMeta>>,
+    /// 工作流节点扩展信息 (用于持久化，不发送给 LLM)
+    #[serde(skip)]
+    pub metadata: Option<serde_json::Value>,
 }
 
 /// LLM 聊天请求

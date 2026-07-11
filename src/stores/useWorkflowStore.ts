@@ -205,7 +205,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
     // 第一遍：收集 tool 消息的执行结果，按 callId 索引
     // tc.result 为实际值表示成功（JSON 解析成功）；为 null 时结合 msg.content 判断
-    const toolResultMap = new Map<string, { success: boolean; error?: string }>();
+    // 同时收集 metadata，用于恢复 question/confirm 节点
+    const toolResultMap = new Map<string, { success: boolean; error?: string; metadata?: Record<string, unknown> }>();
     for (const msg of messages) {
       if (msg.role === "tool" && msg.toolCalls) {
         for (const tc of msg.toolCalls) {
@@ -214,6 +215,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
             toolResultMap.set(tc.id, {
               success: !failed,
               error: failed ? msg.content : undefined,
+              metadata: msg.metadata,
             });
           }
         }
@@ -241,6 +243,24 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           isExpanded: true,
         });
       } else if (msg.role === "assistant") {
+        // 检查是否为 error 节点
+        if (msg.metadata?.nodeType === "error") {
+          nodes.push({
+            id: `node_${++nodeCounter}`,
+            type: "error",
+            status: "failed",
+            timestamp: msgTimestamp,
+            data: {
+              code: (msg.metadata.code as number) ?? 0,
+              message: (msg.metadata.message as string) ?? msg.content,
+              recoverable: (msg.metadata.recoverable as boolean) ?? false,
+              module: "",
+            },
+            isExpanded: true,
+          });
+          continue; // 跳过 thinking/content/tool 节点创建
+        }
+
         // 每条 assistant 消息递增迭代计数
         iterationCounter += 1;
         const currentIteration = iterationCounter;
@@ -270,23 +290,62 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         }
         if (msg.toolCalls && msg.toolCalls.length > 0) {
           for (const tc of msg.toolCalls) {
-            const { success, error } = toolResultMap.get(tc.id) ?? { success: true };
-            nodes.push({
-              id: `node_${++nodeCounter}`,
-              type: "tool",
-              status: success ? "completed" as NodeStatus : "failed" as NodeStatus,
-              timestamp: msgTimestamp,
-              data: {
-                toolName: tc.name,
-                briefDescription: generateToolBrief(tc.name, (tc.arguments ?? {}) as Record<string, unknown>),
-                input: (tc.arguments ?? {}) as Record<string, unknown>,
-                callId: tc.id,
-                success,
-                ...(error ? { error } : {}),
-              },
-              isExpanded: true,
-              iteration: currentIteration,
-            });
+            const { success, error, metadata } = toolResultMap.get(tc.id) ?? { success: true };
+
+            // 根据 metadata.nodeType 创建不同类型的节点
+            if (metadata?.nodeType === "question") {
+              // 创建 question 节点
+              nodes.push({
+                id: `node_${++nodeCounter}`,
+                type: "question",
+                status: "completed",
+                timestamp: msgTimestamp,
+                data: {
+                  questionId: (metadata.questionId as string) ?? tc.id,
+                  questions: (metadata.questions as any[]) ?? [],
+                  answers: (metadata.answers as any[]) ?? [],
+                  answered: true,
+                },
+                isExpanded: true,
+                iteration: currentIteration,
+              });
+            } else if (metadata?.nodeType === "confirm") {
+              // 创建 confirm 节点
+              nodes.push({
+                id: `node_${++nodeCounter}`,
+                type: "confirm",
+                status: "completed",
+                timestamp: msgTimestamp,
+                data: {
+                  title: (metadata.operationType as string) ?? tc.name,
+                  description: (metadata.description as string) ?? "",
+                  confirmLabel: "确认",
+                  cancelLabel: "取消",
+                  confirmed: (metadata.approved as boolean) ?? false,
+                  riskLevel: (metadata.riskLevel as string) ?? "normal",
+                },
+                isExpanded: true,
+                iteration: currentIteration,
+              });
+            } else {
+              // 普通 tool 节点（现有逻辑）
+              nodes.push({
+                id: `node_${++nodeCounter}`,
+                type: "tool",
+                status: success ? "completed" as NodeStatus : "failed" as NodeStatus,
+                timestamp: msgTimestamp,
+                data: {
+                  toolName: tc.name,
+                  briefDescription: generateToolBrief(tc.name, (tc.arguments ?? {}) as Record<string, unknown>),
+                  input: (tc.arguments ?? {}) as Record<string, unknown>,
+                  callId: tc.id,
+                  success,
+                  ...(error ? { error } : {}),
+                },
+                isExpanded: true,
+                iteration: currentIteration,
+              });
+            }
           }
         }
       }
