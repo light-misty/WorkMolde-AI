@@ -692,6 +692,9 @@ export function SessionListSection({
           overflow: hidden;
           transition: max-height 0.25s ease, opacity 0.2s ease;
         }
+        .workspace-sessions .session-item:first-child {
+          margin-top: 1px;
+        }
         .session-item {
           display: flex;
           align-items: center;

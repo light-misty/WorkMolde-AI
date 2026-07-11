@@ -60,7 +60,7 @@ export function MainLayout({ mainArea, sidebar, sidebarVisible = true }: MainLay
           margin-left: 260px;
           position: relative;
           z-index: 2;
-          padding-bottom: 12px;
+          padding: 0 6px 6px 0;
           transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .main-area-wrap.sb-collapsed {
