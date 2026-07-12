@@ -228,7 +228,7 @@ export function LeftSidebar({
           <div ref={moreRef} className="more-section">
             <button
               type="button"
-              className="new-session-trigger"
+              className={`new-session-trigger${moreOpen ? " dropdown-open" : ""}`}
               aria-haspopup="true"
               aria-expanded={moreOpen}
               onClick={() => setMoreOpen((prev) => !prev)}
@@ -319,7 +319,8 @@ export function LeftSidebar({
           flex-shrink: 0;
           color: var(--color-text-primary);
         }
-        .new-session-trigger:hover {
+        .new-session-trigger:hover,
+        .new-session-trigger.dropdown-open {
           background: var(--color-bg-hover);
         }
         /* 删除全局 button:active 的 scale 缩小动画反馈 */

@@ -101,30 +101,61 @@ impl LspServerManager {
     }
 
     /// 获取所有服务器状态
+    /// 先遍历 configs 生成 Stopped 占位,再用 clients 真实状态覆盖
+    /// 三个 RwLock 独立获取读锁,不嵌套持锁,避免死锁
     pub async fn get_all_status(&self) -> Vec<LspServerInfo> {
-        let clients = self.clients.read().await;
-        let workspace_root = self.workspace_root.read().await;
+        let workspace_root = self.workspace_root.read().await.clone();
+        let mut status_map: HashMap<String, LspServerInfo> = HashMap::new();
 
-        let mut statuses = Vec::new();
-        for (_, client) in clients.iter() {
-            if let Some(info) = client.get_server_info().await {
-                statuses.push(info);
-            } else {
-                // 服务器尚未初始化,构造占位信息
-                statuses.push(LspServerInfo {
-                    language: client.language().to_string(),
-                    server_name: None,
-                    server_version: None,
-                    workspace_root: workspace_root.clone(),
-                    status: client.get_status().await,
-                    capabilities: None,
-                    started_at: 0,
-                    last_activity_at: 0,
-                    error: Some("服务器信息尚未初始化".to_string()),
-                });
+        // 遍历已注册配置,生成占位信息(状态为 Stopped)
+        {
+            let configs = self.configs.read().await;
+            for (language, _config) in configs.iter() {
+                status_map.insert(
+                    language.clone(),
+                    LspServerInfo {
+                        language: language.clone(),
+                        server_name: None,
+                        server_version: None,
+                        workspace_root: workspace_root.clone(),
+                        status: LspServerStatus::Stopped,
+                        capabilities: None,
+                        started_at: 0,
+                        last_activity_at: 0,
+                        error: None,
+                    },
+                );
             }
         }
-        statuses
+
+        // 遍历已启动客户端,用真实状态覆盖同语言占位信息
+        {
+            let clients = self.clients.read().await;
+            for (_, client) in clients.iter() {
+                let language = client.language().to_string();
+                if let Some(info) = client.get_server_info().await {
+                    status_map.insert(language, info);
+                } else {
+                    // 服务器尚未初始化,用 get_status 状态构造信息覆盖
+                    status_map.insert(
+                        language.clone(),
+                        LspServerInfo {
+                            language,
+                            server_name: None,
+                            server_version: None,
+                            workspace_root: workspace_root.clone(),
+                            status: client.get_status().await,
+                            capabilities: None,
+                            started_at: 0,
+                            last_activity_at: 0,
+                            error: Some("服务器信息尚未初始化".to_string()),
+                        },
+                    );
+                }
+            }
+        }
+
+        status_map.into_values().collect()
     }
 
     /// 搜索工作区符号(遍历所有已启动且就绪的服务器)

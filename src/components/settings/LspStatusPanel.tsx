@@ -132,18 +132,20 @@ export function LspStatusPanel() {
           size="sm"
           onClick={loadStatus}
           disabled={loading}
+          className="lsp-action-btn"
         >
           <Icon name="refresh" size={14} />
-          <span style={{ marginLeft: 4 }}>{t("settings.lsp.refresh")}</span>
+          <span>{t("settings.lsp.refresh")}</span>
         </Button>
         <Button
           variant="ghost"
           size="sm"
           onClick={handleStopAll}
           disabled={stoppingAll || loading || servers.length === 0}
+          className="lsp-action-btn"
         >
           <Icon name="stop" size={14} />
-          <span style={{ marginLeft: 4 }}>{t("settings.lsp.stopAll")}</span>
+          <span>{t("settings.lsp.stopAll")}</span>
         </Button>
       </div>
 
@@ -216,6 +218,11 @@ export function LspStatusPanel() {
           display: flex;
           gap: 8px;
           margin-bottom: 16px;
+        }
+        .lsp-action-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
         }
         .lsp-error-banner {
           padding: 8px 12px;

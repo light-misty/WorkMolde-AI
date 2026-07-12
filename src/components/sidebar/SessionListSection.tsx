@@ -375,7 +375,7 @@ export function SessionListSection({
               return (
                 <div key={workspace.id} className="workspace-group">
                   <div
-                    className="workspace-header"
+                    className={`workspace-header${activeDropdownWsId === workspace.id ? " dropdown-open" : ""}`}
                     role="button"
                     aria-expanded={isExpanded}
                     onClick={() => toggleWorkspace(workspace.id)}
@@ -417,7 +417,7 @@ export function SessionListSection({
                         <Icon name="folder" size={13} />
                       </button>
                       <button
-                        className="workspace-action-btn"
+                        className={`workspace-action-btn${activeDropdownWsId === workspace.id ? " dropdown-open" : ""}`}
                         title={t("sessionList.moreActions")}
                         aria-label={t("sessionList.moreActions")}
                         data-dropdown-btn={workspace.id}
@@ -671,6 +671,9 @@ export function SessionListSection({
         .workspace-header:hover .workspace-actions {
           opacity: 1;
         }
+        .workspace-header.dropdown-open .workspace-actions {
+          opacity: 1;
+        }
         .workspace-action-btn {
           width: 24px;
           height: 24px;
@@ -684,7 +687,8 @@ export function SessionListSection({
           cursor: pointer;
           transition: all 0.15s;
         }
-        .workspace-action-btn:hover {
+        .workspace-action-btn:hover,
+        .workspace-action-btn.dropdown-open {
           background: var(--color-bg-hover);
           color: var(--color-text-primary);
         }
