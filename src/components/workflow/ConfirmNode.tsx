@@ -24,7 +24,7 @@ export function ConfirmNode({ node }: ConfirmNodeProps) {
     switch (level) {
       case 'critical': return 'var(--color-error, #ef4444)';
       case 'high': return 'var(--color-warning, #f59e0b)';
-      case 'medium': return 'var(--color-accent, #3b82f6)';
+      case 'medium': return 'var(--color-accent)';
       default: return 'var(--color-text-tertiary, #6b7280)';
     }
   };
@@ -165,9 +165,9 @@ export function ConfirmNode({ node }: ConfirmNodeProps) {
           white-space: nowrap;
         }
         .wf-perm-once {
-          background: var(--color-accent, #3b82f6);
+          background: var(--color-accent);
           color: white;
-          border-color: var(--color-accent, #3b82f6);
+          border-color: var(--color-accent);
         }
         .wf-perm-once:hover {
           filter: brightness(0.9);
