@@ -1,5 +1,12 @@
 // ===== 工作区类型定义 - 与 Rust 后端对齐 =====
 
+/** Git 仓库状态（与 Rust 后端 WorkspaceGitStatus 对齐） */
+export interface GitStatus {
+  isGitRepo: boolean;
+  branchName: string | null;
+  changedFileCount: number;
+}
+
 export interface WorkspaceInfo {
   id: string;
   name: string;

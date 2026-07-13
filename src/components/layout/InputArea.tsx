@@ -3,6 +3,7 @@ import { useState, useRef, useCallback, useEffect, useLayoutEffect, type Keyboar
 import { Icon } from "../common/Icon";
 import { ProviderSelector } from "../common/ProviderSelector";
 import { WorkspaceSelector } from "./WorkspaceSelector";
+import { WorkspaceGitStatus } from "./WorkspaceGitStatus";
 import type { ExecutionStatus } from "../../types/workflow";
 import type { AttachmentMeta } from "../../types/session";
 import { useAttachmentStore, inferAttachmentType, SUPPORTED_ATTACHMENT_MIME_TYPES, MAX_IMAGE_SIZE, MAX_TEXT_SIZE, MAX_DOCUMENT_SIZE, MAX_ATTACHMENT_COUNT, hasImageAttachments } from "../../stores/useAttachmentStore";
@@ -313,7 +314,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
 
           <div className="input-inner-bottom">
             <div className="input-inner-left">
-              {centered && <WorkspaceSelector />}
+              {centered ? <WorkspaceSelector /> : <WorkspaceGitStatus />}
             </div>
             <div className="input-inner-right">
               <ModeSelector dropdownUp={!centered} />

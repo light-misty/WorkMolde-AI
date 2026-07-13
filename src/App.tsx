@@ -6,6 +6,7 @@ import { MainLayout } from "./components/layout/MainLayout";
 import { MainArea } from "./components/layout/MainArea";
 import { InputArea } from "./components/layout/InputArea";
 import { WorkflowTimeline } from "./components/workflow/WorkflowTimeline";
+import { WorkspaceGitStatus } from "./components/layout/WorkspaceGitStatus";
 import { LeftSidebar } from "./components/layout/LeftSidebar";
 
 import { ToastContainer } from "./components/common/Toast";
@@ -971,7 +972,8 @@ export default function App() {
         mainArea={
           // 主工作流始终挂载以保留滚动位置；子 Agent 详情页通过 display 叠加显示
           <>
-            <div style={{ display: currentSubAgentId ? 'none' : 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+            <div style={{ display: currentSubAgentId ? 'none' : 'flex', flexDirection: 'column', height: '100%', minHeight: 0, position: 'relative' }}>
+              {nodes.length === 0 && <WorkspaceGitStatus pageLevel />}
               <MainArea
                 isEmpty={nodes.length === 0}
                 workflow={<WorkflowTimeline onRetryError={handleRetryError} typewriterVisible={typewriterVisible} />}

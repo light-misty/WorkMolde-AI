@@ -6,7 +6,7 @@ use crate::db::session_repo;
 use crate::errors::{CommandError, FS_NOT_A_DIRECTORY, FS_PATH_NOT_FOUND};
 use crate::events::types;
 use crate::events::AgentEmitter;
-use crate::models::workspace::{FileNode, SearchOptions, SearchResult, WorkspaceInfo};
+use crate::models::workspace::{FileNode, SearchOptions, SearchResult, WorkspaceGitStatus, WorkspaceInfo};
 use crate::AppState;
 
 /// 列出所有工作区
@@ -303,6 +303,55 @@ pub async fn search_files(
 
     log::info!("search_files: 搜索完成, 结果数={}", results.len());
     Ok(results)
+}
+
+#[tauri::command]
+pub async fn get_workspace_git_status(
+    workspace_path: String,
+) -> Result<WorkspaceGitStatus, CommandError> {
+    log::info!("get_workspace_git_status: 检查 Git 状态, path={}", workspace_path);
+
+    let is_git_repo = std::process::Command::new("git")
+        .args(["rev-parse", "--is-inside-work-tree"])
+        .current_dir(&workspace_path)
+        .output()
+        .map_or(false, |o| o.status.success());
+
+    if !is_git_repo {
+        return Ok(WorkspaceGitStatus {
+            is_git_repo: false,
+            branch_name: None,
+            changed_file_count: 0,
+        });
+    }
+
+    let branch = std::process::Command::new("git")
+        .args(["branch", "--show-current"])
+        .current_dir(&workspace_path)
+        .output()
+        .ok()
+        .and_then(|o| o.status.success().then(|| String::from_utf8_lossy(&o.stdout).trim().to_string()))
+        .unwrap_or_else(|| "HEAD".to_string());
+
+    let changed_file_count = std::process::Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(&workspace_path)
+        .output()
+        .ok()
+        .map(|o| std::str::from_utf8(&o.stdout).unwrap_or("").lines().filter(|l| !l.is_empty()).count() as u32)
+        .unwrap_or(0);
+
+    log::info!(
+        "get_workspace_git_status: Git 仓库检测完成, branch={}, changed={}",
+        branch,
+        changed_file_count
+    );
+
+    Ok(WorkspaceGitStatus {
+        is_git_repo: true,
+        branch_name: Some(branch),
+        changed_file_count,
+    })
 }
 
 /// 递归构建文件树

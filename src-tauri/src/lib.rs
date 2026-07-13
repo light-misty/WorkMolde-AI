@@ -730,6 +730,7 @@ pub fn run() {
             commands::workspace::set_active_workspace,
             commands::workspace::get_file_tree,
             commands::workspace::search_files,
+            commands::workspace::get_workspace_git_status,
             // 文档命令
             commands::document::preview_document,
             commands::document::get_document_versions,

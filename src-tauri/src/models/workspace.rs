@@ -56,6 +56,18 @@ pub struct SearchOptions {
     pub include_content: Option<bool>,
 }
 
+/// Git 仓库状态
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceGitStatus {
+    /// 是否为 git 仓库
+    pub is_git_repo: bool,
+    /// 当前分支名（非 git 仓库时为 null）
+    pub branch_name: Option<String>,
+    /// 变更文件数量
+    pub changed_file_count: u32,
+}
+
 /// 搜索结果
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]

@@ -18,6 +18,7 @@ import type {
   SessionDetail,
   Message,
   WorkspaceInfo,
+  GitStatus,
   FileNode,
   SearchOptions,
   SearchResult,
@@ -197,6 +198,13 @@ export async function getFileTree(
     path: path ?? null,
     depth: depth ?? null,
   }), { context: "getFileTree" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
+/** 获取工作区的 Git 仓库状态 */
+export async function getWorkspaceGitStatus(workspacePath: string): Promise<GitStatus> {
+  const result = await safeInvoke(() => invoke<GitStatus>("get_workspace_git_status", { workspacePath }), { context: "getWorkspaceGitStatus" });
   if (!result.ok) throw result.error.raw;
   return result.data;
 }
