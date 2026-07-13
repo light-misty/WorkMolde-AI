@@ -1,5 +1,5 @@
 // 允许在测试模块之后定义工具：项目原有结构将测试模块置于文件中部，
-// WriteTextFileTool 及阶段三 3.5 新增的 5 个工具均位于测试模块之后。
+// WriteTextFileTool 等新增的 5 个工具均位于测试模块之后。
 // 完整重构文件结构（移动测试模块到末尾）超出当前任务范围，这里以 allow 抑制 lint。
 #![allow(clippy::items_after_test_module)]
 
@@ -59,11 +59,11 @@ pub struct BuiltinToolsRegistration {
 /// web_search_config: WebSearch 配置（从 AppSettings 读取）
 /// question_channels: Question 工具答案通道（与 submit_question_answer 命令共享）
 /// app_handle: Tauri AppHandle（用于 QuestionTool 发射事件）
-/// lsp_manager: LSP 服务器管理器（阶段 5）
-/// lsp_router: LSP 语言路由器（阶段 5）
-/// lsp_cache: LSP 结果缓存（阶段 5）
-/// skill_registry: Skill 注册表（阶段 3，用于 SkillTool 注册）
-/// lsp_experimental_enabled: 是否启用 LSP 实验性工具（阶段 5）
+/// lsp_manager: LSP 服务器管理器
+/// lsp_router: LSP 语言路由器
+/// lsp_cache: LSP 结果缓存
+/// skill_registry: Skill 注册表（用于 SkillTool 注册）
+/// lsp_experimental_enabled: 是否启用 LSP 实验性工具
 #[allow(clippy::too_many_arguments)]
 pub fn register_builtin_tools(
     registry: &mut ToolRegistry,
@@ -87,16 +87,16 @@ pub fn register_builtin_tools(
     registry.register(Box::new(DeleteFileTool));
     registry.register(Box::new(CreateDirectoryTool));
     registry.register(Box::new(WriteTextFileTool));
-    // 阶段三 3.5 新增的 5 个基础文件系统工具
+    // 新增的 5 个基础文件系统工具
     registry.register(Box::new(RenameFileTool));
     registry.register(Box::new(CopyFileTool));
     registry.register(Box::new(DeleteDirectoryTool));
     registry.register(Box::new(GetFileHashTool));
-    // 阶段 1 编程 Agent 改造: 精确字符串替换工具
+    // 编程 Agent 改造: 精确字符串替换工具
     registry.register(Box::new(EditTool));
-    // 阶段 1 编程 Agent 改造: glob 模式查找工具
+    // 编程 Agent 改造: glob 模式查找工具
     registry.register(Box::new(GlobTool));
-    // 阶段 1 编程 Agent 改造: 正则表达式搜索工具
+    // 编程 Agent 改造: 正则表达式搜索工具
     registry.register(Box::new(GrepTool));
 
     // Scratchpad 工具：智能体草稿本，由 agent 自主调用 update_notes 写入
@@ -122,12 +122,12 @@ pub fn register_builtin_tools(
         sourcecode::SourceCodeTool::new().expect("创建 SourceCodeTool 失败"),
     ));
 
-    // 阶段 3: Skill 工具（按需加载领域能力）
+    // Skill 工具（按需加载领域能力）
     registry.register(Box::new(crate::services::skill::tool::SkillTool::new(
         skill_registry,
     )));
 
-    // 阶段 4 新增工具：Task（子 Agent 委托）、WebFetch（URL 获取）、WebSearch（网络搜索）、Question（向用户提问）
+    // 新增工具：Task（子 Agent 委托）、WebFetch（URL 获取）、WebSearch（网络搜索）、Question（向用户提问）
     // TaskTool 采用延迟注入模式：先创建不含 sub_executor 的实例并注册，
     // 后续在 lib.rs 中通过 set_sub_executor 注入 SubAgentExecutor
     let task_tool = task::TaskTool::new();
@@ -141,7 +141,7 @@ pub fn register_builtin_tools(
 
     log::info!("内置工具注册完成, 共注册 25 个工具");
 
-    // 阶段 5: 注册 LSP 工具(实验性,仅在 lsp_experimental_enabled = true 时注册)
+    // 注册 LSP 工具(实验性,仅在 lsp_experimental_enabled = true 时注册)
     // LSP 工具为单一工具,通过 operation 参数路由 8 种操作
     if lsp_experimental_enabled {
         registry.register(Box::new(
@@ -1047,7 +1047,7 @@ mod tests {
             false,
         );
 
-        // 验证 25 个工具都已注册（8 个原有 + 4 个阶段三新增 + 1 个 scratchpad + 2 个代码执行工具 + 3 个阶段 1 新增 edit/glob/grep + 1 个 todowrite + 1 个 source_code + 1 个 skill + 4 个阶段 4 新增 task/webfetch/websearch/question）
+        // 验证 25 个工具都已注册（8 个原有 + 4 个文件系统 + 1 个 scratchpad + 2 个代码执行 + 3 个搜索编辑 + 1 个 todowrite + 1 个 source_code + 1 个 skill + 4 个 task/web/question）
         let tools = registry.list_tools();
         assert_eq!(tools.len(), 25);
 
@@ -1061,7 +1061,7 @@ mod tests {
         assert!(tool_names.contains(&"remove"));
         assert!(tool_names.contains(&"mkdir"));
         assert!(tool_names.contains(&"write"));
-        // 阶段三 3.5 新增工具
+        // 新增工具
         assert!(tool_names.contains(&"rename"));
         assert!(tool_names.contains(&"copy"));
         assert!(tool_names.contains(&"remove_dir"));
@@ -1071,7 +1071,7 @@ mod tests {
         // 代码执行工具
         assert!(tool_names.contains(&"write_script"));
         assert!(tool_names.contains(&"bash"));
-        // 阶段 1 编程 Agent 改造新增工具
+        // 编程 Agent 改造新增工具
         assert!(tool_names.contains(&"edit"));
         assert!(tool_names.contains(&"glob"));
         assert!(tool_names.contains(&"grep"));
@@ -1081,7 +1081,7 @@ mod tests {
         assert!(tool_names.contains(&"source_code"));
         // Skill 工具
         assert!(tool_names.contains(&"skill"));
-        // 阶段 4 新增工具
+        // 新增工具
         assert!(tool_names.contains(&"task"));
         assert!(tool_names.contains(&"webfetch"));
         assert!(tool_names.contains(&"websearch"));
@@ -1159,7 +1159,7 @@ mod tests {
             assert_eq!(tool.version, "1.0.0");
             assert!(!tool.name.is_empty());
             assert!(!tool.description.is_empty());
-            // 工具类别：filesystem/memory/code（阶段 1-3）、agent/web（阶段 4 新增）、skill（阶段 3）
+            // 工具类别：filesystem/memory/code、agent/web、skill
             assert!(
                 tool.category == "filesystem"
                     || tool.category == "memory"
@@ -4010,7 +4010,7 @@ impl Tool for WriteTextFileTool {
 }
 
 // ============================================================
-// 阶段三 3.5 新增工具：rename_file / copy_file / delete_directory
+// 3.5 新增工具：rename_file / copy_file / delete_directory
 // / get_file_hash
 // ============================================================
 

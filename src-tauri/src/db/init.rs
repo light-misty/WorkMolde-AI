@@ -105,7 +105,7 @@ fn create_tables(conn: &Connection) -> Result<(), CommandError> {
         );",
     )?;
 
-    // permission_rules 权限规则表(阶段2)
+    // permission_rules 权限规则表
     // 存储用户配置的权限规则,支持全局、项目、会话三个作用域
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS permission_rules (

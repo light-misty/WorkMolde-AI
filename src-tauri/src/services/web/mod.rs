@@ -1,5 +1,5 @@
 //! Web 服务模块入口
-//! 提供 URL 验证、网页内容获取、网络搜索功能（阶段 4）
+//! 提供 URL 验证、网页内容获取、网络搜索功能
 
 pub mod fetcher;
 pub mod searcher;

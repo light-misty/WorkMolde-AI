@@ -112,7 +112,7 @@ pub struct GeneralSettings {
     pub author_company: String,
     #[serde(default)]
     pub confirmation_level: ConfirmationLevel,
-    /// 上下文压缩配置（阶段 3）
+    /// 上下文压缩配置
     #[serde(default)]
     pub compaction: CompactionConfig,
 }
@@ -220,7 +220,7 @@ impl Default for UpdateSettings {
     }
 }
 
-/// WebSearch 配置（网页搜索，阶段 4）
+/// WebSearch 配置（网页搜索）
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct WebSearchConfig {
@@ -277,7 +277,7 @@ impl Default for WebSearchConfig {
     }
 }
 
-/// LSP 集成配置（阶段 5）
+/// LSP 集成配置
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct LspConfig {
@@ -453,10 +453,10 @@ pub struct AppSettings {
     /// 用于 bash 工具执行 Shell 命令
     #[serde(default)]
     pub git_bash_path: String,
-    /// WebSearch 配置（阶段 4）
+    /// WebSearch 配置
     #[serde(default)]
     pub web_search: WebSearchConfig,
-    /// LSP 配置（阶段 5）
+    /// LSP 配置
     #[serde(default)]
     pub lsp: LspConfig,
 }

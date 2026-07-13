@@ -60,15 +60,15 @@ pub enum PermissionType {
     Bash,
     /// 写入并执行脚本:write_script
     WriteScript,
-    /// 子 Agent 调用:task(阶段4实现)
+    /// 子 Agent 调用:task
     Task,
-    /// Skill 加载(阶段3实现)
+    /// Skill 加载
     Skill,
-    /// LSP 调用(阶段5实现)
+    /// LSP 调用
     Lsp,
-    /// 网页抓取:webfetch(阶段4实现)
+    /// 网页抓取:webfetch
     WebFetch,
-    /// 网络搜索:websearch(阶段4实现)
+    /// 网络搜索:websearch
     WebSearch,
     /// 外部目录访问:工作区外的路径
     ExternalDirectory,

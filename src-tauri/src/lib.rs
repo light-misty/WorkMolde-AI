@@ -42,7 +42,7 @@ pub struct AppState {
     /// 权限审批通道（双态权限系统，once/reject）
     pub permission_channels:
         Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<PermissionDecision>>>>,
-    /// Question 工具答案通道（阶段 4，按 question_id 隔离）
+    /// Question 工具答案通道（按 question_id 隔离）
     /// QuestionTool 创建 oneshot::Sender 存入，前端通过 submit_question_answer 命令回复
     pub question_channels: crate::services::tool::builtin::question::QuestionChannels,
     /// 权限注册表（默认规则 + 用户规则合并）
@@ -54,7 +54,7 @@ pub struct AppState {
     pub doc_service: Arc<crate::services::document::DocumentService>,
     pub llm_router: Arc<tokio::sync::RwLock<Arc<crate::services::llm::router::LlmRouter>>>,
     pub tool_registry: Arc<crate::services::tool::registry::ToolRegistry>,
-    /// 子 Agent 执行器（阶段 4）：由 TaskTool 委托执行子任务
+    /// 子 Agent 执行器：由 TaskTool 委托执行子任务
     /// 通过延迟注入模式在 setup 中初始化并注入到 TaskTool
     pub sub_executor: Arc<crate::services::agent::sub_executor::SubAgentExecutor>,
     pub handler_registry:
@@ -66,7 +66,7 @@ pub struct AppState {
     pub scratchpad_states: crate::services::tool::builtin::SharedScratchpadStates,
     /// Skill 注册表：管理已加载的 Skill，在 Agent 启动时注入 AgentContext
     pub skill_registry: Arc<crate::services::skill::registry::SkillRegistry>,
-    /// LSP 服务器管理器（阶段 5）：管理 LSP 语言服务器进程
+    /// LSP 服务器管理器：管理 LSP 语言服务器进程
     pub lsp_manager: Arc<crate::services::lsp::manager::LspServerManager>,
 }
 
@@ -364,19 +364,19 @@ pub fn run() {
             );
 
             // 初始化 Tool 注册表并注册内置工具
-            // 读取 Git Bash 路径配置（命令超时由 LLM 自主决定）+ WebSearch 配置（阶段 4）
+            // 读取 Git Bash 路径配置（命令超时由 LLM 自主决定）+ WebSearch 配置
             let (git_bash_path, web_search_config) = config_manager
                 .load_app_settings()
                 .map(|s| (s.git_bash_path, s.web_search))
                 .unwrap_or_default();
 
-            // 阶段 5: 读取 LSP 配置
+            // 读取 LSP 配置
             let lsp_config = config_manager
                 .load_app_settings()
                 .map(|s| s.lsp)
                 .unwrap_or_default();
 
-            // Phase 2: 初始化权限系统组件
+            // 初始化权限系统组件
             // 先创建 db_arc，permission_registry 需要 Arc<Database>
             let db_arc = Arc::new(database);
             let permission_registry = Arc::new(
@@ -386,13 +386,13 @@ pub fn run() {
                 Arc::new(crate::services::permission::doom_loop::DoomLoopDetector::new());
             let agent_mode_manager = Arc::new(crate::services::agent::AgentModeManager::new());
 
-            // 阶段 4: 创建 question_channels（QuestionTool 与 submit_question_answer 命令共享）
+            // 创建 question_channels（QuestionTool 与 submit_question_answer 命令共享）
             let question_channels: crate::services::tool::builtin::question::QuestionChannels =
                 Arc::new(tokio::sync::Mutex::new(HashMap::new()));
 
             let mut tool_registry = crate::services::tool::registry::ToolRegistry::new();
 
-            // 阶段 5: 初始化 LSP 组件
+            // 初始化 LSP 组件
             // 优先使用当前活动工作区路径作为 LSP 根目录(便于 rust-analyzer 找到 Cargo.toml 等)
             // 若无活动工作区或路径不存在,回退到应用数据目录
             let lsp_workspace_root = {
@@ -489,7 +489,7 @@ pub fn run() {
                 Err(e) => log::warn!("加载 Skill 失败: {}", e.message),
             }
 
-            // 阶段 4: register_builtin_tools 注册 Task/WebFetch/WebSearch/Question 工具
+            // register_builtin_tools 注册 Task/WebFetch/WebSearch/Question 工具
             // TaskTool 采用延迟注入模式：先注册不含 sub_executor 的实例，后续通过 set_sub_executor 注入
             let registration = crate::services::tool::builtin::register_builtin_tools(
                 &mut tool_registry,
@@ -507,7 +507,7 @@ pub fn run() {
             let scratchpad_states = registration.scratchpad_states;
             let task_tool = registration.task_tool;
 
-            // 阶段 4: 初始化 SubAgentExecutor（需要 tool_registry，故在工具注册后创建）
+            // 初始化 SubAgentExecutor（需要 tool_registry，故在工具注册后创建）
             // 共享 llm_router、tool_registry、permission_registry、app_handle、db
             let tool_registry_arc = Arc::new(tool_registry);
             let sub_executor =
@@ -635,7 +635,7 @@ pub fn run() {
                 }
             });
 
-            // 阶段 5: 启动 LSP 定期健康检查（间隔 > 0 时启动）
+            // 启动 LSP 定期健康检查（间隔 > 0 时启动）
             let lsp_manager_for_health = Arc::clone(&app.state::<AppState>().lsp_manager);
             let lsp_health_interval = lsp_config.health_check_interval_seconds;
             if lsp_health_interval > 0 {

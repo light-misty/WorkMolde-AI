@@ -19,9 +19,9 @@ pub const AGENT_NETWORK_RETRY: &str = "agent:network_retry";
 pub const AGENT_COMPACTION_START: &str = "agent:compaction_start";
 /// 上下文压缩完成事件
 pub const AGENT_COMPACTION_DONE: &str = "agent:compaction_done";
-/// 子 Agent 状态变更事件（阶段 4）
+/// 子 Agent 状态变更事件
 pub const AGENT_SUB_AGENT_STATUS: &str = "agent:sub_agent_status";
-/// 子 Agent 工具调用事件（阶段 4）
+/// 子 Agent 工具调用事件
 pub const AGENT_SUB_AGENT_TOOL_CALL: &str = "agent:sub_agent_tool_call";
 /// 子 Agent 思考链增量事件（流式）
 pub const AGENT_SUB_AGENT_THINKING: &str = "agent:sub_agent_thinking";
@@ -29,7 +29,7 @@ pub const AGENT_SUB_AGENT_THINKING: &str = "agent:sub_agent_thinking";
 pub const AGENT_SUB_AGENT_CONTENT: &str = "agent:sub_agent_content";
 /// 子 Agent 工具执行结果事件
 pub const AGENT_SUB_AGENT_TOOL_RESULT: &str = "agent:sub_agent_tool_result";
-/// 向用户提问事件（阶段 4，T4.19 使用）
+/// 向用户提问事件
 pub const AGENT_QUESTION: &str = "agent:question";
 
 // ================================================================
@@ -189,10 +189,10 @@ pub struct StoppedPayload {
 }
 
 // ================================================================
-// 子 Agent 事件 Payload 类型（阶段 4）
+// 子 Agent 事件 Payload 类型
 // ================================================================
 
-/// 子 Agent 状态变更事件 Payload（阶段 4）
+/// 子 Agent 状态变更事件 Payload
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SubAgentStatusPayload {
@@ -211,7 +211,7 @@ pub struct SubAgentStatusPayload {
     pub iteration: u32,
 }
 
-/// 子 Agent 工具调用事件 Payload（阶段 4）
+/// 子 Agent 工具调用事件 Payload
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SubAgentToolCallPayload {
@@ -285,7 +285,7 @@ pub struct SubAgentToolResultPayload {
     pub iteration: u32,
 }
 
-/// 向用户提问事件 Payload（阶段 4，T4.19 使用）
+/// 向用户提问事件 Payload
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct QuestionPayload {
@@ -297,7 +297,7 @@ pub struct QuestionPayload {
     pub questions: Vec<QuestionItem>,
 }
 
-/// 单个问题项（阶段 4）
+/// 单个问题项
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct QuestionItem {
@@ -311,7 +311,7 @@ pub struct QuestionItem {
     pub multi_select: bool,
 }
 
-/// 问题选项（阶段 4）
+/// 问题选项
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct QuestionOption {

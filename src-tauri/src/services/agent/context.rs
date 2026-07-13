@@ -7,7 +7,7 @@ use crate::models::llm::{ChatMessage, ChatUsage, LlmToolCall};
 use crate::services::skill::registry::SkillRegistry;
 use crate::services::tool::builtin::{format_scratchpad_summary, SharedScratchpadStates};
 
-// Phase 2: AgentMode 统一由 mod.rs 定义（含 serde 派生），context.rs re-export 保持兼容
+// AgentMode 统一由 mod.rs 定义（含 serde 派生），context.rs re-export 保持兼容
 pub use super::AgentMode;
 
 /// 文档作者信息，从应用设置和工作区配置中解析
@@ -1254,7 +1254,7 @@ When your tool call is intercepted by the confirmation mechanism:
 - Explain to the user that the operation was cancelled and provide alternatives"#.to_string()
     }
 
-    /// Agent 模式特定提示词层（阶段 2 实现）
+    /// Agent 模式特定提示词层
     /// 根据当前 Agent 模式注入不同的执行指导
     /// - Plan: 只读规划模式，禁止修改类操作，输出结构化计划
     /// - Build: 完整执行模式，提示文档 Handler 不可用

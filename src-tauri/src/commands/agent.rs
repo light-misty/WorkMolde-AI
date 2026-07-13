@@ -103,7 +103,7 @@ pub async fn start_agent(
     let db = Arc::clone(&state.db);
     let confirm_channels = Arc::clone(&state.confirm_channels);
     let scratchpad_states = Arc::clone(&state.scratchpad_states);
-    // Phase 2: 权限系统组件
+    // 权限系统组件
     let permission_channels = Arc::clone(&state.permission_channels);
     let permission_registry = Arc::clone(&state.permission_registry);
     let doom_loop_detector = Arc::clone(&state.doom_loop_detector);
@@ -230,7 +230,7 @@ pub async fn start_agent(
             &config,
             &doc_service,
             &scratchpad_states,
-            // Phase 2: 权限系统组件
+            // 权限系统组件
             &permission_channels,
             &permission_registry,
             &doom_loop_detector,
@@ -773,7 +773,7 @@ pub async fn permission_respond(
     };
 
     if let Some(tx) = perm_sender {
-        // Phase 2 通道命中，发送 PermissionDecision
+        // 权限审批通道命中，发送 PermissionDecision
         let decision = crate::PermissionDecision {
             response: perm_response,
             feedback: feedback.clone(),
@@ -886,7 +886,7 @@ pub async fn switch_agent_mode(
     Ok(())
 }
 
-/// 提交 question 工具的用户答案（阶段 4，T4.19）
+/// 提交 question 工具的用户答案
 /// 前端用户回答问题后调用此命令，通过 question_id 找到 oneshot Sender 发送答案
 #[tauri::command]
 pub async fn submit_question_answer(
@@ -1076,7 +1076,7 @@ async fn run_agent(
     config: &Arc<tokio::sync::Mutex<crate::config::ConfigManager>>,
     doc_service: &Arc<crate::services::document::DocumentService>,
     scratchpad_states: &crate::services::tool::builtin::SharedScratchpadStates,
-    // Phase 2: 权限系统组件
+    // 权限系统组件
     permission_channels: &Arc<
         tokio::sync::Mutex<
             std::collections::HashMap<
@@ -1239,7 +1239,7 @@ async fn run_agent(
         }
     };
 
-    // Phase 2: 从 AgentModeManager 获取当前会话的实际模式（替代硬编码 Build）
+    // 从 AgentModeManager 获取当前会话的实际模式（替代硬编码 Build）
     let agent_mode = agent_mode_manager.get_mode(session_id).await;
     log::info!(
         "Agent 模式: session_id={}, mode={:?}",
@@ -1483,7 +1483,7 @@ async fn run_agent(
         Arc::clone(handler_registry),
         emitter.clone(),
         Arc::clone(confirm_channels),
-        // Phase 2: 权限系统组件
+        // 权限系统组件
         Arc::clone(permission_channels),
         Arc::clone(permission_registry),
         Arc::clone(doom_loop_detector),

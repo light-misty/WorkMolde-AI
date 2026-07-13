@@ -124,7 +124,7 @@ impl PermissionRegistry {
                 PermissionAction::Allow,
             )
             .with_description("文档 Handler(docx/xlsx/pptx/pdf)默认允许,仅 Document 模式下可见"),
-            // 网络类:默认允许(阶段4实现)
+            // 网络类:默认允许
             PermissionRule::new(
                 RuleScope::Global,
                 PermissionType::WebFetch,
@@ -137,21 +137,21 @@ impl PermissionRegistry {
                 "*".into(),
                 PermissionAction::Allow,
             ),
-            // 子 Agent:默认允许(阶段4实现)
+            // 子 Agent:默认允许
             PermissionRule::new(
                 RuleScope::Global,
                 PermissionType::Task,
                 "*".into(),
                 PermissionAction::Allow,
             ),
-            // Skill:默认允许(阶段3实现)
+            // Skill:默认允许
             PermissionRule::new(
                 RuleScope::Global,
                 PermissionType::Skill,
                 "*".into(),
                 PermissionAction::Allow,
             ),
-            // LSP:默认允许(阶段5实现)
+            // LSP:默认允许
             PermissionRule::new(
                 RuleScope::Global,
                 PermissionType::Lsp,

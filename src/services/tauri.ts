@@ -395,7 +395,7 @@ export async function confirmOperation(
   if (!result.ok) throw result.error.raw;
 }
 
-/** 权限审批回复（Phase 2 双态权限系统：once/reject） */
+/** 权限审批回复（双态权限系统：once/reject） */
 export async function permissionRespond(
   sessionId: string,
   operationId: string,

@@ -180,11 +180,11 @@ pub struct AgentExecutor<R: Runtime> {
             HashMap<String, tokio::sync::oneshot::Sender<crate::PermissionDecision>>,
         >,
     >,
-    /// Phase 2: 权限注册表（默认规则 + 用户规则合并）
+    /// 权限注册表（默认规则 + 用户规则合并）
     permission_registry: Arc<PermissionRegistry>,
-    /// Phase 2: Doom loop 检测器
+    /// Doom loop 检测器
     doom_loop_detector: Arc<DoomLoopDetector>,
-    /// Phase 2: Agent 模式管理器（Plan/Build/Document）
+    /// Agent 模式管理器（Plan/Build/Document）
     agent_mode_manager: Arc<super::AgentModeManager>,
     max_iterations: u32,
     should_stop: Arc<dyn Fn(&str) -> bool + Send + Sync>,
@@ -562,7 +562,7 @@ impl<R: Runtime> AgentExecutor<R> {
         }
     }
 
-    /// Phase 2: 权限系统检查（替代原有 ConfirmationLevel 机制）
+    /// 权限系统检查（替代原有 ConfirmationLevel 机制）
     /// 按以下顺序检查：Plan 模式 → Doom loop → 白名单 → 外部目录 → 规则评估
     /// 返回 Ok(PermissionResult::Allow) 表示允许执行，Ok(PermissionResult::Deny) 表示拒绝（附带拒绝原因）
     async fn check_permission(
@@ -966,7 +966,7 @@ impl<R: Runtime> AgentExecutor<R> {
         // 避免 TodoList 摘要在多轮迭代中重复追加
         let base_system_prompt = ctx.system_prompt.clone();
 
-        // Phase 2: 按 AgentMode 动态过滤工具列表（Document 模式加入文档 Handler）
+        // 按 AgentMode 动态过滤工具列表（Document 模式加入文档 Handler）
         let tool_defs_json = self.build_tool_definitions(&ctx.session_id).await;
         let tools: Vec<crate::models::llm::ToolDefinition> = tool_defs_json
             .iter()
@@ -1918,7 +1918,7 @@ impl<R: Runtime> AgentExecutor<R> {
                     // 更新任务类型（基于已调用的工具）
                     ctx.update_task_type_from_tool(&tool_call.name, Some(&params));
 
-                    // Phase 2: 权限系统检查（替代原有 ConfirmationLevel 机制）
+                    // 权限系统检查（替代原有 ConfirmationLevel 机制）
                     // 按顺序检查：Plan 模式 → Doom loop → 白名单 → 外部目录 → 规则评估
                     // confirm_metadata 用于持久化 confirm 节点信息（权限审批/用户确认）
                     let mut confirm_metadata: Option<serde_json::Value> = None;
@@ -2031,7 +2031,7 @@ impl<R: Runtime> AgentExecutor<R> {
                             .ok();
                     }
 
-                    // Phase 2: 防御性校验 - 非 Document 模式下拒绝文档 Handler 调用
+                    // 防御性校验 - 非 Document 模式下拒绝文档 Handler 调用
                     let current_mode = self.agent_mode_manager.get_mode(&ctx.session_id).await;
                     if is_document_handler(&tool_call.name)
                         && !current_mode.includes_document_handlers()
@@ -2123,7 +2123,7 @@ impl<R: Runtime> AgentExecutor<R> {
                         safe_params["_session_id"] = json!(ctx.session_id);
                     }
 
-                    // 阶段 4: 为 task 工具注入父 Agent 上下文（session_id/workspace_root/nesting_depth/system_prompt/agent_mode）
+                    // 为 task 工具注入父 Agent 上下文（session_id/workspace_root/nesting_depth/system_prompt/agent_mode）
                     // 这些参数以下划线开头，不暴露给 LLM，用于子 Agent 继承父 Agent 配置
                     if tool_call.name == "task" {
                         safe_params["_session_id"] = json!(ctx.session_id);
