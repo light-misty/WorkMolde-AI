@@ -1075,7 +1075,7 @@ When making changes to files, first understand the file's code conventions. Mimi
     /// 检测 Git 仓库状态
     /// 返回 None 表示非 git 仓库，返回 Some(String) 包含分支名和工作区状态
     fn detect_git_status(workspace_path: &str) -> Option<String> {
-        use std::process::Command;
+        use crate::utils::git_utils::create_git_command;
         let cwd = if workspace_path.is_empty() {
             "."
         } else {
@@ -1083,7 +1083,7 @@ When making changes to files, first understand the file's code conventions. Mimi
         };
 
         // 检测是否为 git 仓库
-        let rev_parse = Command::new("git")
+        let rev_parse = create_git_command()
             .args(["rev-parse", "--is-inside-work-tree"])
             .current_dir(cwd)
             .output()
@@ -1093,7 +1093,7 @@ When making changes to files, first understand the file's code conventions. Mimi
         }
 
         // 获取当前分支名
-        let branch = Command::new("git")
+        let branch = create_git_command()
             .args(["branch", "--show-current"])
             .current_dir(cwd)
             .output()
@@ -1108,7 +1108,7 @@ When making changes to files, first understand the file's code conventions. Mimi
             .unwrap_or_else(|| "HEAD".to_string());
 
         // 获取工作区状态摘要（有变更的文件数）
-        let status = Command::new("git")
+        let status = create_git_command()
             .args(["status", "--porcelain"])
             .current_dir(cwd)
             .output()

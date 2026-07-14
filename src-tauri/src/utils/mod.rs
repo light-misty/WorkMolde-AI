@@ -1,3 +1,4 @@
+pub mod git_utils;
 pub mod logger;
 
 use std::path::PathBuf;

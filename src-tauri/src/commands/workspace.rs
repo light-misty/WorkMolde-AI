@@ -311,11 +311,13 @@ pub async fn get_workspace_git_status(
 ) -> Result<WorkspaceGitStatus, CommandError> {
     log::info!("get_workspace_git_status: 检查 Git 状态, path={}", workspace_path);
 
-    let is_git_repo = std::process::Command::new("git")
+    use crate::utils::git_utils::create_git_command;
+
+    let is_git_repo = create_git_command()
         .args(["rev-parse", "--is-inside-work-tree"])
         .current_dir(&workspace_path)
         .output()
-        .map_or(false, |o| o.status.success());
+        .is_ok_and(|o| o.status.success());
 
     if !is_git_repo {
         return Ok(WorkspaceGitStatus {
@@ -325,7 +327,7 @@ pub async fn get_workspace_git_status(
         });
     }
 
-    let branch = std::process::Command::new("git")
+    let branch = create_git_command()
         .args(["branch", "--show-current"])
         .current_dir(&workspace_path)
         .output()
@@ -333,7 +335,7 @@ pub async fn get_workspace_git_status(
         .and_then(|o| o.status.success().then(|| String::from_utf8_lossy(&o.stdout).trim().to_string()))
         .unwrap_or_else(|| "HEAD".to_string());
 
-    let changed_file_count = std::process::Command::new("git")
+    let changed_file_count = create_git_command()
         .args(["status", "--porcelain"])
         .current_dir(&workspace_path)
         .output()
