@@ -1,6 +1,6 @@
-# DocAgent Tauri 命令接口文档
+# WorkMolde AI Tauri 命令接口文档
 
-> 项目：DocAgent AI文档处理桌面应用
+> 项目：WorkMolde AI文档处理桌面应用
 > 技术栈：Tauri 2 + Rust后端 + React前端
 > 版本：0.1.6
 > 最后更新：2026-06-14
@@ -29,7 +29,7 @@
 
 ## 1. 概述
 
-本文档定义了 DocAgent 桌面应用中所有 Tauri 命令、事件、Python Sidecar 通信协议及错误码的完整接口规范。
+本文档定义了 WorkMolde AI 桌面应用中所有 Tauri 命令、事件、Python Sidecar 通信协议及错误码的完整接口规范。
 
 - **Rust后端**：通过 `#[tauri::command]` 暴露 **48 个命令**（跨 10 个模块），供前端通过 `invoke` 调用
 - **React前端**：通过 `@tauri-apps/api/core` 的 `invoke` 调用后端命令，通过 `@tauri-apps/api/event` 的 `listen` 监听后端事件

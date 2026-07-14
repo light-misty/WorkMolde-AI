@@ -1,13 +1,13 @@
 [package]
-name = "docagent"
+name = "workmolde"
 version = "1.0.7"
-description = "AI文档处理Agent桌面应用"
-authors = ["DocAgent Team"]
+description = "AI工作助手桌面应用"
+authors = ["WorkMolde AI Team"]
 license = "MIT"
 edition = "2021"
 
 [lib]
-name = "docagent_lib"
+name = "workmolde_lib"
 crate-type = ["lib", "cdylib"]
 
 [build-dependencies]

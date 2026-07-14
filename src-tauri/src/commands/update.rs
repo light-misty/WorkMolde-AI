@@ -11,7 +11,7 @@ use tauri_plugin_updater::UpdaterExt;
 /// GitHub 更新端点
 #[cfg(desktop)]
 const UPDATE_ENDPOINT: &str =
-    "https://github.com/XuMingKe-06/DocAgent/releases/latest/download/latest.json";
+    "https://github.com/light-misty/WorkMolde-AI/releases/latest/download/latest.json";
 
 /// 构建 Updater 实例，使用 GitHub 端点
 #[cfg(desktop)]
@@ -189,7 +189,7 @@ pub async fn download_update(
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
                     .as_secs();
-                let installer_path = temp_dir.join(format!("docagent_update_{}.exe", timestamp));
+                let installer_path = temp_dir.join(format!("workmolde_update_{}.exe", timestamp));
                 std::fs::write(&installer_path, &bytes).map_err(|e| {
                     CommandError::update(UPDATE_INSTALL_FAILED, format!("保存更新文件失败: {}", e))
                 })?;

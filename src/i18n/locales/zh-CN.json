@@ -1,7 +1,7 @@
 {
   "app": {
-    "name": "DocAgent",
-    "desc": "基于 AI Agent 的智能文档处理桌面应用",
+    "name": "WorkMolde AI",
+    "desc": "基于 AI Agent 的智能工作助手桌面应用",
     "techStack": "Tauri 2 + React + Rust + Python",
     "engineVersion": "Python 3.12+ Sidecar"
   },
@@ -64,9 +64,9 @@
     "directoryDeletedToast": "工作区 \"{{name}}\" 的目录已被删除，已自动移除"
   },
   "workflow": {
-    "startNewSession": "Work with DocAgent",
-    "startNewSessionPlan": "Plan with DocAgent",
-    "startNewSessionCode": "Code with DocAgent",
+    "startNewSession": "Work with WorkMolde",
+    "startNewSessionPlan": "Plan with WorkMolde",
+    "startNewSessionCode": "Code with WorkMolde",
     "emptySession": "空会话",
     "timeline": "工作流时间线",
     "thinking": "思考过程"
@@ -167,14 +167,14 @@
     "failedWithError": "上下文压缩失败: {{error}}"
   },
   "subAgentNode": {
-    "running": "子 Agent 执行中",
-    "completed": "子 Agent 已完成",
-    "failed": "子 Agent 失败",
-    "cancelled": "子 Agent 已取消",
+    "running": "SubAgent 执行中",
+    "completed": "SubAgent 已完成",
+    "failed": "SubAgent 失败",
+    "cancelled": "SubAgent 已取消",
     "error": "错误: {{message}}"
   },
   "subAgentWorkflow": {
-    "title": "子 Agent 工作流",
+    "title": "SubAgent 工作流",
     "back": "返回",
     "loading": "加载中...",
     "empty": "暂无工作流数据"

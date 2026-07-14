@@ -229,7 +229,7 @@ mod tests {
     fn test_from_user_message_unknown() {
         assert_eq!(TaskType::from_user_message("你好"), TaskType::Unknown);
         assert_eq!(
-            TaskType::from_user_message("什么是DocAgent"),
+            TaskType::from_user_message("什么是WorkMolde AI"),
             TaskType::Unknown
         );
     }

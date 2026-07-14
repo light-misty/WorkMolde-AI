@@ -209,7 +209,7 @@ Function PageReinstall
   nsis_tauri_utils::SemverCompare "${VERSION}" $R0
   Pop $R0
   ; ============================================================
-  ; DocAgent 自定义修改：升级场景自动跳过重装页面
+  ; WorkMolde AI 自定义修改：升级场景自动跳过重装页面
   ; 当检测到旧版本且为升级（$R0 = 1）且非 WiX 迁移时，
   ; 直接 Abort 跳过 PageReinstall 页面，进入后续安装流程
   ; （目录选择 -> 安装文件覆盖 -> 完成），实现"升级"语义

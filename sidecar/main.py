@@ -1,4 +1,4 @@
-"""DocAgent Python Sidecar
+"""WorkMolde AI Python Sidecar
 文档处理引擎，通过 stdin/stdout JSON 协议与 Rust 后端通信
 支持 Word、Excel、PPT、PDF、Markdown 等文档的读取、转换、分析
 """
@@ -24,14 +24,14 @@ def setup_logging():
     """配置日志系统
 
     日志目录优先级：
-    1. 环境变量 DOCAGENT_LOG_DIR（由 Rust 端注入，生产环境使用）
+    1. 环境变量 WORKMOLDE_LOG_DIR（由 Rust 端注入，生产环境使用）
     2. 项目根目录的 log/ 子目录（开发环境回退，基于 __file__ 推导）
 
     每次启动生成带启动时间戳的独立日志文件（sidecar_YYYYMMDD_HHMMSS.log）
     不覆盖历史日志，历史日志由 Rust 端统一清理（保留 7 天）
     """
     # 日志目录：优先读取 Rust 端注入的环境变量，回退到项目根目录推导
-    log_dir = os.environ.get("DOCAGENT_LOG_DIR") or os.path.join(
+    log_dir = os.environ.get("WORKMOLDE_LOG_DIR") or os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "log",
     )

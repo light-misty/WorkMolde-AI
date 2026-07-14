@@ -1,4 +1,4 @@
-# DocAgent Dev Mode Sidecar Sync Script
+# WorkMolde AI Dev Mode Sidecar Sync Script
 # Sync sidecar/ source to src-tauri/target/debug/sidecar_dist/sidecar/
 #
 # Purpose:

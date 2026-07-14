@@ -1,4 +1,4 @@
-# DocAgent 编程 Agent 改造 - 阶段 2:权限系统与 Agent 模式
+# WorkMolde AI 编程 Agent 改造 - 阶段 2:权限系统与 Agent 模式
 
 > 文档版本:v1.1(2026-07-08 修订:新增 Document 模式,移除 plan_exit 工具,改为前端按钮切换)
 > 创建日期:2026-07-08
@@ -13,7 +13,7 @@
 
 ### 1.1 阶段目标
 
-在阶段 1 已经建立核心编程能力(文件读写、编辑、搜索、命令执行)的基础上,本阶段将 DocAgent 升级为具备精细化权限管控和模式切换的编程 Agent:
+在阶段 1 已经建立核心编程能力(文件读写、编辑、搜索、命令执行)的基础上,本阶段将 WorkMolde AI 升级为具备精细化权限管控和模式切换的编程 Agent:
 
 1. **三态权限系统(allow/deny/ask)**:替换现有的 `ConfirmationLevel` 三档确认级别,改为基于规则的细粒度权限管控,支持按工具类型、命令模式、文件路径匹配
 2. **用户审批双选项(once/reject)**:替换现有的 approve/feedback 二元决策,改为"确认/拒绝"双选项,去除 `always` 永久允许机制
@@ -54,7 +54,7 @@
 
 ### 1.3 验收标准
 
-- [ ] `cargo build -p docagent_lib` 编译通过,无警告
+- [ ] `cargo build -p workmolde_lib` 编译通过,无警告
 - [ ] `cargo test` 全部测试通过(含新增的权限系统测试)
 - [ ] `cargo clippy` 无警告
 - [ ] `cargo fmt --check` 通过
@@ -119,7 +119,7 @@ wildmatch = "2.4"
 
 **验证**:
 ```bash
-cargo build -p docagent_lib
+cargo build -p workmolde_lib
 ```
 预期:编译通过,无警告。
 
@@ -378,7 +378,7 @@ impl PermissionResponse {
 
 **验证**:
 ```bash
-cargo build -p docagent_lib
+cargo build -p workmolde_lib
 ```
 
 ---
@@ -577,7 +577,7 @@ pub mod permission_repo;
 
 **验证**:
 ```bash
-cargo build -p docagent_lib
+cargo build -p workmolde_lib
 ```
 预期:数据库初始化时自动创建新表。
 
@@ -1357,7 +1357,7 @@ impl PermissionEvaluator {
 
         if matching_rules.is_empty() {
             // 无匹配规则,默认允许(与 OpenCode 一致:OpenCode 默认为 ask,
-            // DocAgent 选择默认 allow 以减少对用户操作的干扰,可通过配置调整为 ask)
+            // WorkMolde AI 选择默认 allow 以减少对用户操作的干扰,可通过配置调整为 ask)
             return PermissionDecision {
                 action: PermissionAction::Allow,
                 matched_rule_id: None,
@@ -2171,7 +2171,7 @@ impl AgentMode {
 
 **验证**:
 ```bash
-cargo build -p docagent_lib
+cargo build -p workmolde_lib
 ```
 
 ---
@@ -2287,7 +2287,7 @@ crate::commands::agent::permission_respond,
 
 **验证**:
 ```bash
-cargo build -p docagent_lib
+cargo build -p workmolde_lib
 ```
 
 ---
@@ -2511,7 +2511,7 @@ drop(mode);
 **验证**:
 ```bash
 # 编译验证
-cargo build -p docagent_lib
+cargo build -p workmolde_lib
 
 # 单元测试:验证不同模式下的工具列表
 cargo test tool_definitions_filtering
@@ -2713,7 +2713,7 @@ pub fn build_system_prompt_with_task(
 
 **验证**:
 ```bash
-cargo build -p docagent_lib
+cargo build -p workmolde_lib
 ```
 
 ---
@@ -2799,7 +2799,7 @@ let permission_channels = Arc::clone(&state.permission_channels);
 
 **验证**:
 ```bash
-cargo build -p docagent_lib
+cargo build -p workmolde_lib
 ```
 
 ---
@@ -3057,7 +3057,7 @@ setMode: (mode) => {
 **验证**:
 ```bash
 npm run build
-cargo build -p docagent_lib
+cargo build -p workmolde_lib
 ```
 
 ---
@@ -3572,7 +3572,7 @@ const tabs = [
 **验证**:
 ```bash
 npm run build
-cargo build -p docagent_lib
+cargo build -p workmolde_lib
 ```
 
 ---
@@ -3590,14 +3590,14 @@ cargo build -p docagent_lib
 文件: `src-tauri/tests/permission_integration_test.rs`
 
 ```rust
-use docagent_lib::services::permission::*;
-use docagent_lib::models::permission::{PermissionRule, PermissionRuleFilter};
+use workmolde_lib::services::permission::*;
+use workmolde_lib::models::permission::{PermissionRule, PermissionRuleFilter};
 
 #[tokio::test]
 async fn test_full_permission_flow() {
     // 1. 初始化权限系统
     let tmp = tempfile::NamedTempFile::new().unwrap();
-    let db = std::sync::Arc::new(docagent_lib::db::Database::new(std::path::Path::new(tmp.path())).unwrap());
+    let db = std::sync::Arc::new(workmolde_lib::db::Database::new(std::path::Path::new(tmp.path())).unwrap());
     let registry = PermissionRegistry::new(db);
     let whitelist = SessionWhitelist::new();
     let doom_loop = DoomLoopDetector::new();
@@ -3637,7 +3637,7 @@ async fn test_full_permission_flow() {
 
 #[tokio::test]
 async fn test_plan_mode_blocks_modification() {
-    use docagent_lib::services::agent::AgentMode;
+    use workmolde_lib::services::agent::AgentMode;
 
     // Plan 模式下,修改类工具应被拒绝
     let mode = AgentMode::Plan;
@@ -3659,12 +3659,12 @@ async fn test_plan_mode_blocks_modification() {
 
 #[tokio::test]
 async fn test_agent_mode_manager() {
-    use docagent_lib::services::agent::AgentModeManager;
+    use workmolde_lib::services::agent::AgentModeManager;
 
     let manager = AgentModeManager::new();
 
     // 默认 Build 模式
-    assert_eq!(manager.get_mode("s1").await, docagent_lib::services::agent::AgentMode::Build);
+    assert_eq!(manager.get_mode("s1").await, workmolde_lib::services::agent::AgentMode::Build);
 
     // 切换到 Plan
     manager.switch_to_plan("s1").await;
@@ -3687,7 +3687,7 @@ async fn test_agent_mode_manager() {
 #[tokio::test]
 async fn test_document_mode_includes_handlers() {
     // v1.1 新增:验证 Document 模式下文档 Handler 可见性
-    use docagent_lib::services::agent::AgentMode;
+    use workmolde_lib::services::agent::AgentMode;
 
     // Document 模式应包含文档 Handler
     let mode = AgentMode::Document;
@@ -3706,7 +3706,7 @@ async fn test_document_mode_includes_handlers() {
 #[tokio::test]
 async fn test_tool_definitions_filtering_by_mode() {
     // v1.1 新增:验证工具列表按 AgentMode 过滤
-    use docagent_lib::services::agent::AgentMode;
+    use workmolde_lib::services::agent::AgentMode;
 
     // 文档 Handler 名称列表
     let document_handlers = ["docx", "xlsx", "pptx", "pdf"];
@@ -3749,7 +3749,7 @@ async fn test_tool_definitions_filtering_by_mode() {
 #[tokio::test]
 async fn test_permission_rule_persistence() {
     let tmp = tempfile::NamedTempFile::new().unwrap();
-    let db = std::sync::Arc::new(docagent_lib::db::Database::new(std::path::Path::new(tmp.path())).unwrap());
+    let db = std::sync::Arc::new(workmolde_lib::db::Database::new(std::path::Path::new(tmp.path())).unwrap());
     let registry = PermissionRegistry::new(db.clone());
 
     // 添加规则
@@ -3770,7 +3770,7 @@ async fn test_permission_rule_persistence() {
 #[test]
 fn test_default_rules_include_env_protection() {
     let tmp = tempfile::NamedTempFile::new().unwrap();
-    let db = std::sync::Arc::new(docagent_lib::db::Database::new(std::path::Path::new(tmp.path())).unwrap());
+    let db = std::sync::Arc::new(workmolde_lib::db::Database::new(std::path::Path::new(tmp.path())).unwrap());
     let registry = PermissionRegistry::new(db);
 
     let defaults = registry.default_rules();
@@ -3798,7 +3798,7 @@ cargo test --test permission_integration_test -- --nocapture
 
 ```bash
 # 1. Rust 编译
-cargo build -p docagent_lib
+cargo build -p workmolde_lib
 
 # 2. Rust 测试
 cargo test
@@ -3834,7 +3834,7 @@ npm run build
 
 ### 4.3 日志验证
 
-检查 `log/docagent.log` 中包含以下关键日志:
+检查 `log/workmolde.log` 中包含以下关键日志:
 - `已插入权限规则`
 - `已更新权限规则`
 - `检测到 Doom loop`
@@ -3943,7 +3943,7 @@ npm run build
 
 > 说明:`edit` 权限类别统一覆盖 `edit`、`write`、`apply_patch` 三个文件修改工具(参照 OpenCode 官方模型);`question` 是独立权限类别,控制向用户提问的工具。
 
-### 7.3 DocAgent 相关文档
+### 7.3 WorkMolde AI 相关文档
 
 - [阶段 1:核心架构与工具链](./2026-07-08-coding-agent-refactor-phase1-core.md)
 - [总体改造计划](./2026-07-08-coding-agent-refactor-overview.md)

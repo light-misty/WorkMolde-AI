@@ -173,7 +173,7 @@ pub fn run() {
             }
 
             // 初始化数据库（含损坏检测和自动恢复）
-            let db_path = app_data_dir.join("docagent.db");
+            let db_path = app_data_dir.join("workmolde.db");
             let database = match crate::db::Database::new(&db_path) {
                 Ok(db) => db,
                 Err(e) => {
@@ -220,15 +220,15 @@ pub fn run() {
 
             // 解析 Python 可执行文件路径
             // 优先级：
-            // 1. 环境变量 DOCAGENT_PYTHON（开发模式覆盖，最高优先级）
+            // 1. 环境变量 WORKMOLDE_PYTHON（开发模式覆盖，最高优先级）
             // 2. 应用资源目录的嵌入式 Python（生产环境，sidecar_dist/python/python.exe）
             // 3. 系统 PATH 中的 py/python/python3（开发模式兜底）
             //
             // 开发模式（debug_assertions）下，跳过嵌入式 Python 检测，
             // 避免误用过期的 sidecar_dist/python/python.exe，
             // 强制使用系统 PATH 中的 Python，确保与源码目录的 sidecar 配套
-            let python_path = if let Ok(p) = std::env::var("DOCAGENT_PYTHON") {
-                log::info!("使用环境变量 DOCAGENT_PYTHON 指定的 Python: {}", p);
+            let python_path = if let Ok(p) = std::env::var("WORKMOLDE_PYTHON") {
+                log::info!("使用环境变量 WORKMOLDE_PYTHON 指定的 Python: {}", p);
                 p
             } else {
                 #[cfg(debug_assertions)]
@@ -527,7 +527,7 @@ pub fn run() {
                     .await;
             });
 
-            log::info!("DocAgent 应用初始化完成");
+            log::info!("WorkMolde AI 应用初始化完成");
 
             // 初始化文件监听服务
             let fs_watcher = crate::services::fs_watcher::FsWatcherService::new(

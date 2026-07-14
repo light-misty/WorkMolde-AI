@@ -1,4 +1,4 @@
-; DocAgent NSIS 安装器 Hook 脚本
+; WorkMolde AI NSIS 安装器 Hook 脚本
 ; 通过 Tauri NsisConfig.installerHooks 引入，提供安装/卸载时的自定义逻辑
 ;
 ; 支持的 Hook 点（参见 tauri-utils config.rs NsisConfig.installer_hooks 文档）：
@@ -19,7 +19,7 @@
   RMDir /r "$INSTDIR\sidecar_dist\sidecar\__pycache__"
 
   ; 清理 sidecar 运行时可能产生的日志目录
-  ; （注意：code_audit.log 已改为写到 DOCAGENT_LOG_DIR，但兼容旧版本残留）
+  ; （注意：日志文件写到 WORKMOLDE_LOG_DIR，但防止异常情况下安装目录残留）
   RMDir /r "$INSTDIR\sidecar_dist\sidecar\log"
   RMDir /r "$INSTDIR\sidecar_dist\log"
 !macroend

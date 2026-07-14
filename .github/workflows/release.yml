@@ -51,7 +51,7 @@ jobs:
           # 标签名，__VERSION__ 会被替换为 tauri.conf.json 中的版本号
           tagName: v__VERSION__
           # Release 标题
-          releaseName: 'DocAgent v__VERSION__'
+          releaseName: 'WorkMolde AI v__VERSION__'
           # Release 草稿，方便检查后再发布
           releaseDraft: true
           prerelease: false

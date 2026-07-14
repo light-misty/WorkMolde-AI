@@ -1256,7 +1256,7 @@ mod tests {
         use std::io::Write;
         let mut tmp_path = std::env::temp_dir();
         tmp_path.push(format!(
-            "docagent_test_read_ln_{}.txt",
+            "workmolde_test_read_ln_{}.txt",
             uuid::Uuid::new_v4()
         ));
         {
@@ -1320,7 +1320,7 @@ mod tests {
         use std::io::Write;
         let mut tmp_path = std::env::temp_dir();
         tmp_path.push(format!(
-            "docagent_test_read_range_{}.txt",
+            "workmolde_test_read_range_{}.txt",
             uuid::Uuid::new_v4()
         ));
         {
@@ -1387,7 +1387,7 @@ mod tests {
     async fn test_edit_tool_create_new_file() {
         // 验证 edit 工具创建新文件（old_string 为空且文件不存在）
         let temp_dir =
-            std::env::temp_dir().join(format!("docagent_edit_create_{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("workmolde_edit_create_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&temp_dir).await.unwrap();
 
         let file_path = "new_file.txt";
@@ -1444,7 +1444,7 @@ mod tests {
     async fn test_edit_tool_replace_unique() {
         // 验证 edit 工具唯一匹配替换
         let temp_dir =
-            std::env::temp_dir().join(format!("docagent_edit_replace_{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("workmolde_edit_replace_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&temp_dir).await.unwrap();
 
         let file_path = "edit_test.txt";
@@ -1502,7 +1502,7 @@ mod tests {
     async fn test_edit_tool_multiple_matches_error() {
         // 验证 edit 工具多处匹配时报错
         let temp_dir =
-            std::env::temp_dir().join(format!("docagent_edit_multi_{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("workmolde_edit_multi_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&temp_dir).await.unwrap();
 
         let file_path = "multi_test.txt";
@@ -1554,7 +1554,7 @@ mod tests {
     async fn test_edit_tool_no_match_error() {
         // 验证 edit 工具 0 匹配时报错
         let temp_dir =
-            std::env::temp_dir().join(format!("docagent_edit_nomatch_{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("workmolde_edit_nomatch_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&temp_dir).await.unwrap();
 
         let file_path = "nomatch_test.txt";
@@ -1605,7 +1605,7 @@ mod tests {
     #[tokio::test]
     async fn test_glob_find_rust_files() {
         // 验证 glob 工具查找 .rs 文件
-        let temp_dir = std::env::temp_dir().join(format!("docagent_glob_{}", uuid::Uuid::new_v4()));
+        let temp_dir = std::env::temp_dir().join(format!("workmolde_glob_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&temp_dir).await.unwrap();
 
         // 创建测试文件
@@ -1682,7 +1682,7 @@ mod tests {
     async fn test_glob_with_excludes() {
         // 验证 glob 工具的 exclude_patterns 参数
         let temp_dir =
-            std::env::temp_dir().join(format!("docagent_glob_exc_{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("workmolde_glob_exc_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&temp_dir).await.unwrap();
 
         tokio::fs::write(temp_dir.join("keep.rs"), "")
@@ -1740,7 +1740,7 @@ mod tests {
     #[tokio::test]
     async fn test_grep_basic_search() {
         // 验证 grep 工具基本正则搜索：搜索 "fn " 模式，应只匹配 .rs 文件中的函数定义
-        let temp_dir = std::env::temp_dir().join(format!("docagent_grep_{}", uuid::Uuid::new_v4()));
+        let temp_dir = std::env::temp_dir().join(format!("workmolde_grep_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&temp_dir).await.unwrap();
 
         // 创建测试文件
@@ -1809,7 +1809,7 @@ mod tests {
     async fn test_grep_with_include() {
         // 验证 grep 工具的 include 参数（文件扩展名过滤）：仅搜索匹配的文件
         let temp_dir =
-            std::env::temp_dir().join(format!("docagent_grep_inc_{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("workmolde_grep_inc_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&temp_dir).await.unwrap();
 
         // 在 .rs 和 .md 文件中都写入 "fn "
@@ -1868,7 +1868,7 @@ mod tests {
     async fn test_grep_case_insensitive() {
         // 验证 grep 工具的 case_insensitive 参数：大小写不敏感匹配
         let temp_dir =
-            std::env::temp_dir().join(format!("docagent_grep_ci_{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("workmolde_grep_ci_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&temp_dir).await.unwrap();
 
         // 写入不同大小写的内容
@@ -1926,7 +1926,7 @@ mod tests {
     async fn test_grep_with_context() {
         // 验证 grep 工具的 context_before 和 context_after 参数：返回上下文行
         let temp_dir =
-            std::env::temp_dir().join(format!("docagent_grep_ctx_{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("workmolde_grep_ctx_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&temp_dir).await.unwrap();
 
         // 写入多行内容，匹配行在中间
@@ -2213,7 +2213,7 @@ mod tests {
         );
 
         // 创建临时工作区目录
-        let temp_dir = std::env::temp_dir().join("docagent_encoding_test");
+        let temp_dir = std::env::temp_dir().join("workmolde_encoding_test");
         tokio::fs::create_dir_all(&temp_dir).await.unwrap();
 
         let test_content = "你好，世界！这是 GBK 编码测试。";
@@ -2296,7 +2296,7 @@ mod tests {
         );
 
         // 创建临时工作区目录
-        let temp_dir = std::env::temp_dir().join("docagent_utf8_test");
+        let temp_dir = std::env::temp_dir().join("workmolde_utf8_test");
         tokio::fs::create_dir_all(&temp_dir).await.unwrap();
 
         let test_content = "Hello, 世界！UTF-8 默认编码测试。";
@@ -2362,7 +2362,7 @@ mod tests {
         );
 
         // 创建临时工作区目录
-        let temp_dir = std::env::temp_dir().join("docagent_fallback_test");
+        let temp_dir = std::env::temp_dir().join("workmolde_fallback_test");
         tokio::fs::create_dir_all(&temp_dir).await.unwrap();
 
         let test_content = "Fallback test 你好";
@@ -2904,7 +2904,7 @@ mod tests {
         let workspace_root = "D:\\DeskTop\\test";
 
         // 日志中的实际命令：cp 脚本到工作区（Windows 风格路径）
-        let cmd = "cp \"C:/Users/a1926/AppData/Local/Temp/docagent/scripts/modify_resume_pdf.py\" \"D:/DeskTop/test/modify_resume_pdf.py\" && cd \"D:/DeskTop/test\" && python modify_resume_pdf.py 2>&1";
+        let cmd = "cp \"C:/Users/a1926/AppData/Local/Temp/workmolde/scripts/modify_resume_pdf.py\" \"D:/DeskTop/test/modify_resume_pdf.py\" && cd \"D:/DeskTop/test\" && python modify_resume_pdf.py 2>&1";
         assert!(
             is_script_leak_command(cmd, workspace_root),
             "Windows 风格路径的 cp 命令应被识别为脚本泄露"
@@ -2917,7 +2917,7 @@ mod tests {
         let workspace_root = "D:\\DeskTop\\test";
 
         // 日志中的实际命令：cp 脚本到工作区（Git Bash 风格路径 /d/DeskTop/test）
-        let cmd = "cp \"C:/Users/a1926/AppData/Local/Temp/docagent/scripts/fix_resume.py\" \"/d/DeskTop/test/fix_resume.py\" && cd /d/DeskTop/test && python -u fix_resume.py 2>&1";
+        let cmd = "cp \"C:/Users/a1926/AppData/Local/Temp/workmolde/scripts/fix_resume.py\" \"/d/DeskTop/test/fix_resume.py\" && cd /d/DeskTop/test && python -u fix_resume.py 2>&1";
         assert!(
             is_script_leak_command(cmd, workspace_root),
             "Git Bash 风格路径的 cp 命令应被识别为脚本泄露"
@@ -2929,7 +2929,7 @@ mod tests {
     fn test_is_script_leak_command_mv_to_workspace() {
         let workspace_root = "D:\\DeskTop\\test";
 
-        let cmd = "mv /tmp/docagent/scripts/script.py /d/DeskTop/test/script.py";
+        let cmd = "mv /tmp/workmolde/scripts/script.py /d/DeskTop/test/script.py";
         assert!(
             is_script_leak_command(cmd, workspace_root),
             "mv 命令将脚本移动到工作区应被识别为脚本泄露"
@@ -2962,7 +2962,7 @@ mod tests {
         let workspace_root = "D:\\DeskTop\\test";
 
         // 直接执行 temp 目录中的脚本（不复制到工作区）
-        let cmd1 = "python \"C:/Users/a1926/AppData/Local/Temp/docagent/scripts/script.py\" 2>&1";
+        let cmd1 = "python \"C:/Users/a1926/AppData/Local/Temp/workmolde/scripts/script.py\" 2>&1";
         assert!(
             !is_script_leak_command(cmd1, workspace_root),
             "直接执行 temp 目录脚本不应被识别为脚本泄露"
@@ -3084,7 +3084,7 @@ mod tests {
         assert!(!result2.success, "写入 .sh 文件应被拒绝");
 
         // 写入普通文本文件应成功（不被拒绝）
-        let tmp_dir = std::env::temp_dir().join("docagent_test_write_file");
+        let tmp_dir = std::env::temp_dir().join("workmolde_test_write_file");
         let _ = std::fs::create_dir_all(&tmp_dir);
         let result3 = tool
             .execute(json!({
@@ -5837,7 +5837,7 @@ pub fn format_scratchpad_summary(
 // 让智能体编写 Python 或 Bash 脚本文件，存放在系统临时目录下，
 // 供 bash 工具执行。脚本文件不污染工作区目录。
 //
-// 存放路径：<temp_dir>/docagent/scripts/<filename>
+// 存放路径：<temp_dir>/workmolde/scripts/<filename>
 // 脚本语言：python（.py）或 bash（.sh）
 
 /// 脚本写入工具
@@ -5925,8 +5925,8 @@ impl Tool for WriteScriptTool {
         let (final_filename, detected_language) = infer_script_language(filename, language);
         let _ = detected_language; // 语言仅用于日志，不强制使用
 
-        // 构造脚本目录：<temp_dir>/docagent/scripts/
-        let script_dir = std::env::temp_dir().join("docagent").join("scripts");
+        // 构造脚本目录：<temp_dir>/workmolde/scripts/
+        let script_dir = std::env::temp_dir().join("workmolde").join("scripts");
         if let Err(e) = std::fs::create_dir_all(&script_dir) {
             return ToolResult {
                 success: false,
@@ -6123,7 +6123,7 @@ impl Tool for RunCommandTool {
             "properties": {
                 "command": {
                     "type": "string",
-                    "description": "Shell command to execute (will be executed via bash -c). For example: 'python /tmp/docagent/scripts/script.py' or 'ls -la'"
+                    "description": "Shell command to execute (will be executed via bash -c). For example: 'python /tmp/workmolde/scripts/script.py' or 'ls -la'"
                 },
                 "working_dir": {
                     "type": "string",

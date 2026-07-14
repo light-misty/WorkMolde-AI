@@ -1,4 +1,4 @@
-# DocAgent AI 文档处理桌面应用 - 开发任务分解文档
+# WorkMolde AI 文档处理桌面应用 - 开发任务分解文档
 
 > 技术栈：Tauri 2 + React + TypeScript + Rust + Python Sidecar
 > 文档版本：v2.0

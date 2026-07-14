@@ -1,8 +1,8 @@
 <div align="center">
 
-# DocAgent
+# WorkMolde AI
 
-[![Windows](https://img.shields.io/badge/platform-Windows-blue?logo=windows)](https://github.com/user-attachments/docagent)
+[![Windows](https://img.shields.io/badge/platform-Windows-blue?logo=windows)](https://github.com/user-attachments/workmolde)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2.x-orange?logo=tauri)](https://v2.tauri.app/)
 [![React 19](https://img.shields.io/badge/React-19-61dafb?logo=react)](https://react.dev/)
 [![Rust](https://img.shields.io/badge/Rust-1.80+-000000?logo=rust)](https://www.rust-lang.org/)
@@ -10,13 +10,13 @@
 
 [English](./README.md) | [简体中文](./README_zh.md)
 
-<img src="assets/screenshots/English.png" alt="DocAgent Screenshot" width="800" />
+<img src="assets/screenshots/English1.1.0.png" alt="WorkMolde AI Screenshot" width="800" />
 
 </div>
 
 ## Installation
 
-Download the latest Windows installer from [Releases](https://github.com/XuMingKe-06/DocAgent/releases) and run it to install.
+Download the latest Windows installer from [Releases](https://github.com/light-misty/WorkMolde-AI/releases) and run it to install.
 
 ## Features
 

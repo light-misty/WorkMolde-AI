@@ -140,7 +140,7 @@ export function GeneralTab() {
             <div className="setting-label">{t('settings.general.appDataDir')}</div>
             <div className="setting-desc">{t('settings.general.appDataDirDesc')}</div>
           </div>
-          <span className="setting-path">%APPDATA%/DocAgent</span>
+          <span className="setting-path">%APPDATA%/WorkMolde</span>
         </div>
       </div>
 
@@ -287,7 +287,7 @@ export function GeneralTab() {
         </div>
 
         <div className="about-card">
-          <div className="about-name">DocAgent</div>
+          <div className="about-name">WorkMolde AI</div>
           <div className="about-version">v{currentVersion || "0.1.0"}</div>
           <div className="about-desc">
             {t('settings.general.aboutDesc')}

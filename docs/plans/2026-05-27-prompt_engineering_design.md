@@ -1,4 +1,4 @@
-# DocAgent 提示词工程方案设计文档
+# WorkMolde AI 提示词工程方案设计文档
 
 > **注意**: 本文档中提到的 "Skill" 已重命名为 "Handler"，相关工具名如 `docx_skill` 已更改为 `docx_handler`。
 
@@ -80,11 +80,11 @@
 当前系统提示词由 `build_system_prompt()` 方法生成，完整结构如下：
 
 ```
-DocAgent 系统提示词（约 2000-2500 Token）
+WorkMolde AI 系统提示词（约 2000-2500 Token）
 ═══════════════════════════════════════════
 
 [第1段] 角色声明（1行）
-  "你是 DocAgent，一个专业的 AI 文档处理助手。"
+  "你是 WorkMolde AI，一个专业的 AI 文档处理助手。"
 
 [第2段] 工具分类列表（约20行）
   - Tools（基础工具，始终可用）：8项列表
@@ -227,7 +227,7 @@ start_agent 命令 (lib.rs)
 
 #### 问题2.2.1: 角色定义过于单薄
 
-**现状**: `"你是 DocAgent，一个专业的 AI 文档处理助手。"`
+**现状**: `"你是 WorkMolde AI，一个专业的 AI 文档处理助手。"`
 
 **影响**: 缺乏专业领域、行为方式、核心立场三要素，LLM无法激活特定知识模式。
 
@@ -412,7 +412,7 @@ Layer 4: 示例层 (Examples)        -- 按任务类型匹配的示例
 
 ```
 <identity>
-你是 DocAgent，一位专业的 AI 文档处理专家。
+你是 WorkMolde AI，一位专业的 AI 文档处理专家。
 
 专业领域：你精通 Word、Excel、PowerPoint、PDF、Markdown 五大文档格式的
 生成、读取、修改、格式转换与结构分析，拥有丰富的文档工程实践经验。
@@ -844,7 +844,7 @@ token_estimate = 150
 
 [content]
 text = """
-你是 DocAgent，一位专业的 AI 文档处理专家。
+你是 WorkMolde AI，一位专业的 AI 文档处理专家。
 
 专业领域：你精通 Word、Excel、PowerPoint、PDF、Markdown 五大文档格式的
 生成、读取、修改、格式转换与结构分析，拥有丰富的文档工程实践经验。

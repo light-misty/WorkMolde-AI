@@ -173,9 +173,9 @@ export function WorkflowTimeline({ onRetryError, typewriterVisible = false }: Wo
 
 /**
  * 空会话标题配置：根据当前 Agent 模式选择对应的图标和文案
- * - plan: 铅笔图标（plan-mode） + "Plan with DocAgent"
- * - build: 代码括号图标 </>（code-brackets） + "Code with DocAgent"
- * - document: 书本图标（book） + "Work with DocAgent"（原始样式）
+ * - plan: 铅笔图标（plan-mode） + "Plan with WorkMolde"
+ * - build: 代码括号图标 </>（code-brackets） + "Code with WorkMolde"
+ * - document: 书本图标（book） + "Work with WorkMolde"（原始样式）
  */
 const EMPTY_MODE_CONFIG: Record<AgentMode, { icon: IconName; textKey: string }> = {
   plan: { icon: 'plan-mode', textKey: 'workflow.startNewSessionPlan' },

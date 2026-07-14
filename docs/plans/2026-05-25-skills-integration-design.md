@@ -6,7 +6,7 @@
 
 ### 1.1 当前系统 Sidecar Handlers 实现
 
-当前 DocAgent 的文档处理通过 Python Sidecar 实现，包含四个 Handler：
+当前 WorkMolde AI 的文档处理通过 Python Sidecar 实现，包含四个 Handler：
 
 | Handler | 基础库 | 功能范围 | 专业程度 |
 |---------|--------|----------|----------|
@@ -66,7 +66,7 @@
 
 ### 2.1 方案概述
 
-由于 DocAgent 的 Sidecar 是 Python 进程，无法直接执行 JavaScript（docx-js、pptxgenjs），因此采用以下整合策略：
+由于 WorkMolde AI 的 Sidecar 是 Python 进程，无法直接执行 JavaScript（docx-js、pptxgenjs），因此采用以下整合策略：
 
 1. **系统提示词整合**：将新 Handlers 的设计指导、最佳实践、颜色标准等整合到 Agent 的 System Prompt 中
 2. **Python Handler 增强**：根据新 Handlers 的规范，增强现有 Python Handler 的功能
@@ -476,7 +476,7 @@ const PDF_DESIGN_GUIDE: &str = r#"
 
 ### 4.1 为什么不直接使用 JavaScript（docx-js、pptxgenjs）？
 
-DocAgent 的 Sidecar 是 Python 进程，通过 stdin/stdout JSON 协议与 Rust 后端通信。引入 JavaScript 会需要：
+WorkMolde AI 的 Sidecar 是 Python 进程，通过 stdin/stdout JSON 协议与 Rust 后端通信。引入 JavaScript 会需要：
 
 1. 新增 Node.js Sidecar 进程
 2. 新增进程间通信协议

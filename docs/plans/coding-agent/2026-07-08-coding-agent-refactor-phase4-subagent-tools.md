@@ -21,7 +21,7 @@ OpenCode 通过 Task 工具、WebFetch 工具、WebSearch 工具,构建了强大
 
 3. **WebSearch 工具**:执行网络搜索,返回相关结果列表(标题、URL、摘要)。让 Agent 能够主动发现信息,而非被动等待用户提供。
 
-### 1.2 DocAgent 现状
+### 1.2 WorkMolde AI 现状
 
 - **无子 Agent 能力**:所有任务在单一 Agent 上下文中执行,复杂任务容易耗尽 token
 - **无网络访问能力**:Agent 无法获取 URL 内容或执行搜索,信息获取完全依赖用户输入
@@ -166,7 +166,7 @@ pub enum SubAgentStatus {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 
 ---
 
@@ -524,7 +524,7 @@ use crate::services::tool::trait_def::Tool;
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 单元测试:创建 SubAgentConfig,执行简单子任务
 
 ---
@@ -721,7 +721,7 @@ use tokio::sync::RwLock;
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 集成测试:调用 task 工具执行简单子任务
 
 ---
@@ -803,7 +803,7 @@ async fn execute_inner(&self, config: SubAgentConfig) -> Result<ExecResult, crat
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 前端能收到子 Agent 事件
 
 ---
@@ -994,7 +994,7 @@ async fn execute_batch(
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 集成测试:批量执行 3 个子任务,验证并行完成
 
 ---
@@ -1016,7 +1016,7 @@ url = "2.5"
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 
 ---
 
@@ -1141,7 +1141,7 @@ impl UrlValidator {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 单元测试:验证合法/非法 URL
 
 ---
@@ -1198,7 +1198,7 @@ impl WebFetcher {
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
             .redirect(reqwest::redirect::Policy::limited(5))
-            .user_agent("Mozilla/5.0 (compatible; DocAgent/1.0)")
+            .user_agent("Mozilla/5.0 (compatible; WorkMolde AI/1.0)")
             .build()
             .expect("创建 HTTP 客户端失败");
 
@@ -1294,7 +1294,7 @@ impl WebFetcher {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 单元测试:获取示例网页,验证转换结果
 
 ---
@@ -1430,7 +1430,7 @@ impl Tool for WebFetchTool {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 集成测试:获取示例 URL,验证返回 Markdown
 
 ---
@@ -1478,7 +1478,7 @@ async fn execute_tool(&self, tool_name: &str, params: Value, ...) -> ... {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 权限检查:用户配置 `webfetch: "ask"` 时,首次访问 URL 弹窗确认
 
 ---
@@ -1521,7 +1521,7 @@ impl Default for WebSearchConfig {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 
 ---
 
@@ -1583,7 +1583,7 @@ impl WebSearcher {
     pub fn new(config: WebSearchConfig) -> Self {
         let client = Client::builder()
             .timeout(Duration::from_secs(config.timeout_seconds))
-            .user_agent("Mozilla/5.0 (compatible; DocAgent/1.0)")
+            .user_agent("Mozilla/5.0 (compatible; WorkMolde AI/1.0)")
             .build()
             .expect("创建 HTTP 客户端失败");
 
@@ -1748,7 +1748,7 @@ impl WebSearcher {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 单元测试:模拟搜索请求(使用 mock)
 
 ---
@@ -1862,7 +1862,7 @@ impl Tool for WebSearchTool {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 集成测试:执行搜索,验证返回结果
 
 ---
@@ -1893,7 +1893,7 @@ impl Tool for WebSearchTool {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 权限检查:用户配置 `websearch: "ask"` 时,首次搜索弹窗确认
 
 ---
@@ -1927,7 +1927,7 @@ impl Tool for WebSearchTool {
 **注意**:CSP 仅影响前端 fetch/XHR 请求。Rust 后端的 reqwest 不受 CSP 限制,因此 WebFetch/WebSearch 在 Rust 端执行时无需调整 CSP。但如果前端需要直接展示外部图片等内容,需要调整 `img-src`。
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - Tauri 应用启动正常,无 CSP 错误
 
 ---
@@ -2031,11 +2031,11 @@ case 'sub_agent':
 ```rust
 //! 阶段 4 集成测试:子 Agent、WebFetch、WebSearch
 
-use docagent_lib::services::agent::sub_executor::SubAgentExecutor;
-use docagent_lib::services::tool::builtin::{WebFetchTool, WebSearchTool};
-use docagent_lib::services::tool::trait_def::Tool;
-use docagent_lib::services::web::{UrlValidator, ValidationResult};
-use docagent_lib::models::sub_agent::{SubAgentConfig, SubAgentStatus};
+use workmolde_lib::services::agent::sub_executor::SubAgentExecutor;
+use workmolde_lib::services::tool::builtin::{WebFetchTool, WebSearchTool};
+use workmolde_lib::services::tool::trait_def::Tool;
+use workmolde_lib::services::web::{UrlValidator, ValidationResult};
+use workmolde_lib::models::sub_agent::{SubAgentConfig, SubAgentStatus};
 use serde_json::json;
 
 /// 测试:URL 验证器拒绝内网地址
@@ -2106,7 +2106,7 @@ async fn test_webfetch_tool_parameters() {
 /// 测试:WebSearch 工具参数定义
 #[tokio::test]
 async fn test_websearch_tool_parameters() {
-    let config = docagent_lib::config::app_settings::WebSearchConfig::default();
+    let config = workmolde_lib::config::app_settings::WebSearchConfig::default();
     let tool = WebSearchTool::new(config);
     let params = tool.parameters();
     
@@ -2238,7 +2238,7 @@ let scratchpad_states = register_builtin_tools(
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 应用启动后,工具列表包含 task/webfetch/websearch
 
 ---

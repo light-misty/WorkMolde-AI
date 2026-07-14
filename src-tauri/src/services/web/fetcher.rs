@@ -38,13 +38,13 @@ impl WebFetcher {
     /// 创建 WebFetcher 实例
     /// - 请求超时 30 秒
     /// - 最多 5 次重定向
-    /// - User-Agent: Mozilla/5.0 (compatible; DocAgent/1.0)
+    /// - User-Agent: Mozilla/5.0 (compatible; WorkMolde-AI/1.0)
     /// - max_content_length 默认 100000
     pub fn new() -> Self {
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
             .redirect(reqwest::redirect::Policy::limited(5))
-            .user_agent("Mozilla/5.0 (compatible; DocAgent/1.0)")
+            .user_agent("Mozilla/5.0 (compatible; WorkMolde-AI/1.0)")
             .build()
             .expect("构建 HTTP 客户端失败");
         Self {

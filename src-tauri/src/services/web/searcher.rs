@@ -49,11 +49,11 @@ pub struct WebSearcher {
 impl WebSearcher {
     /// 创建 Web 搜索器
     /// - HTTP 客户端超时为 config.timeout_seconds 秒
-    /// - User-Agent: "Mozilla/5.0 (compatible; DocAgent/1.0)"
+    /// - User-Agent: "Mozilla/5.0 (compatible; WorkMolde-AI/1.0)"
     pub fn new(config: WebSearchConfig) -> Self {
         let client = Client::builder()
             .timeout(Duration::from_secs(config.timeout_seconds))
-            .user_agent("Mozilla/5.0 (compatible; DocAgent/1.0)")
+            .user_agent("Mozilla/5.0 (compatible; WorkMolde-AI/1.0)")
             .build()
             .unwrap_or_else(|e| {
                 log::warn!("HTTP 客户端构建失败，使用默认配置: {}", e);

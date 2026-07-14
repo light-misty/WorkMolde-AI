@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn test_load_project_rules_from_temp() {
         // 创建临时目录结构测试递归加载
-        let tmp = std::env::temp_dir().join("docagent_test_agents_md");
+        let tmp = std::env::temp_dir().join("workmolde_test_agents_md");
         let subdir = tmp.join("subdir").join("deep");
         fs::create_dir_all(&subdir).unwrap();
 

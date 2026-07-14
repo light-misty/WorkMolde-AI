@@ -294,7 +294,7 @@ impl AttachmentService {
         })?;
 
         // 写入临时文件
-        let temp_dir = std::env::temp_dir().join("docagent_attachments");
+        let temp_dir = std::env::temp_dir().join("workmolde_attachments");
         std::fs::create_dir_all(&temp_dir)
             .map_err(|e| CommandError::fs(6006, format!("创建临时目录失败: {}", e)))?;
 

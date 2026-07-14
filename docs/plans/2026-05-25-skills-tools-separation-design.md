@@ -6,7 +6,7 @@
 
 ### 1.1 当前架构：Handlers 与 Tools 混为一体
 
-当前 DocAgent 项目中，**Handlers 即 Tools，Tools 即 Handlers**，二者没有概念上的区分：
+当前 WorkMolde AI 项目中，**Handlers 即 Tools，Tools 即 Handlers**，二者没有概念上的区分：
 
 - 所有能力统一实现为 `Handler` trait（[registry.rs](../src-tauri/src/services/handler/registry.rs)）
 - `HandlerRegistry.tool_definitions()` 将所有 Handler 转换为 OpenAI Function Calling 格式的工具定义
@@ -414,7 +414,7 @@ export interface HandlerInfo {
 当前系统提示词（[context.rs](../src-tauri/src/services/agent/context.rs)）需要更新，明确告知 LLM Tools 和 Handlers 的区别：
 
 ```
-你是 DocAgent，一个专业的 AI 文档处理助手。
+你是 WorkMolde AI，一个专业的 AI 文档处理助手。
 
 你可以使用以下两类能力：
 

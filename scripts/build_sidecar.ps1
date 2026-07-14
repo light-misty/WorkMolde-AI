@@ -1,4 +1,4 @@
-﻿# DocAgent Python Sidecar 构建脚本
+# WorkMolde AI Python Sidecar 构建脚本
 # 下载 Python Embeddable Distribution + 安装依赖 + 复制 sidecar 源码 + 编译 .pyc 隐藏源码
 # 最终产物 sidecar_dist/ 通过 tauri.conf.json 的 bundle.resources 打包到 NSIS 安装包
 #
@@ -459,8 +459,8 @@ if ($response -match '"success"\s*:\s*true') {
 
 # 清理验证通信时 sidecar 进程在 sidecar_dist/log/ 下生成的日志文件
 # 这些日志是构建验证产物，不应打包到安装包中
-# （生产环境运行时，sidecar 日志由 Rust 端通过 DOCAGENT_LOG_DIR 环境变量
-#   指向 %LOCALAPPDATA%\docagent\logs\，不会写到安装目录）
+# （生产环境运行时，sidecar 日志由 Rust 端通过 WORKMOLDE_LOG_DIR 环境变量
+#   指向 %LOCALAPPDATA%\workmolde\logs\，不会写到安装目录）
 $buildLogDir = Join-Path $DistDir "log"
 if (Test-Path $buildLogDir) {
     Write-Info "清理构建验证日志目录: $buildLogDir"

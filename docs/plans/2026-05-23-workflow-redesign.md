@@ -561,7 +561,7 @@ function generateToolBrief(toolName: string, input: Record<string, unknown>): st
 | 6.1 TypeScript 类型检查 | `npx tsc -b` 确保无类型错误 |
 | 6.2 构建验证 | `npm run build` 确保构建通过 |
 | 6.3 开发模式运行 | `npm run tauri:dev` 手动验证 UI |
-| 6.4 Rust 编译检查 | `cargo build -p docagent_lib` |
+| 6.4 Rust 编译检查 | `cargo build -p workmolde_lib` |
 | 6.5 Clippy 检查 | `cargo clippy` |
 
 ---

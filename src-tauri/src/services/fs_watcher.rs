@@ -442,7 +442,7 @@ mod tests {
     fn test_is_path_in_log_dir_path_inside_log_dir() {
         // 路径位于日志目录下时应被过滤
         let log_dir = Path::new("/workspace/log");
-        let log_file = Path::new("/workspace/log/docagent_20260629_213909.log");
+        let log_file = Path::new("/workspace/log/workmolde_20260629_213909.log");
         assert!(is_path_in_log_dir(log_file, Some(log_dir)));
     }
 

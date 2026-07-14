@@ -1,4 +1,4 @@
-# DocAgent AI 文档处理桌面应用 - 前端组件设计文档
+# WorkMolde AI 文档处理桌面应用 - 前端组件设计文档
 
 > 技术栈：React 19 + TypeScript 5 + Zustand 5 + Tailwind CSS 4 + Shadcn/ui
 > 文档版本：0.1.6

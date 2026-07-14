@@ -1,8 +1,8 @@
 <div align="center">
 
-# DocAgent
+# WorkMolde AI
 
-[![Windows](https://img.shields.io/badge/platform-Windows-blue?logo=windows)](https://github.com/user-attachments/docagent)
+[![Windows](https://img.shields.io/badge/platform-Windows-blue?logo=windows)](https://github.com/user-attachments/workmolde)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2.x-orange?logo=tauri)](https://v2.tauri.app/)
 [![React 19](https://img.shields.io/badge/React-19-61dafb?logo=react)](https://react.dev/)
 [![Rust](https://img.shields.io/badge/Rust-1.80+-000000?logo=rust)](https://www.rust-lang.org/)
@@ -10,13 +10,13 @@
 
 [简体中文](./README_zh.md) | [English](./README.md)
 
-<img src="assets/screenshots/Chinese.png" alt="DocAgent Screenshot" width="800" />
+<img src="assets/screenshots/Chinese1.1.0.png" alt="WorkMolde AI Screenshot" width="800" />
 
 </div>
 
 ## 安装
 
-从 [GitHub Releases](https://github.com/XuMingKe-06/DocAgent/releases) 下载最新版本 Windows 安装包，运行即可完成安装。
+从 [GitHub Releases](https://github.com/light-misty/WorkMolde-AI/releases) 下载最新版本 Windows 安装包，运行即可完成安装。
 
 ## 核心功能
 

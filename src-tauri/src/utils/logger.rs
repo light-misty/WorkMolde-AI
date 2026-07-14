@@ -1,7 +1,7 @@
 //! 日志系统模块
 //!
 //! 基于 log crate + tracing_appender 实现专业日志功能：
-//! - 每次启动生成带时间戳的独立日志文件（docagent_YYYYMMDD_HHMMSS.log）
+//! - 每次启动生成带时间戳的独立日志文件（workmolde_YYYYMMDD_HHMMSS.log）
 //! - 保留 7 天历史日志，启动时自动清理过期文件
 //! - 文件输出使用 tracing_appender::non_blocking 异步写入，避免 I/O 阻塞主线程
 //! - stderr 同步输出，保持双输出行为
@@ -37,7 +37,7 @@ pub fn current_log_file() -> Option<&'static Path> {
     CURRENT_LOG_FILE.get().map(|p| p.as_path())
 }
 
-/// 获取当前日志目录路径（供 SidecarManager 读取，传递给 Python sidecar 作为 DOCAGENT_LOG_DIR）
+/// 获取当前日志目录路径（供 SidecarManager 读取，传递给 Python sidecar 作为 WORKMOLDE_LOG_DIR）
 /// 返回 None 表示日志系统未初始化
 pub fn current_log_dir() -> Option<&'static Path> {
     CURRENT_LOG_DIR.get().map(|p| p.as_path())
@@ -65,7 +65,7 @@ pub fn resolve_log_dir(app_log_dir: Option<PathBuf>, app_data_dir: Option<PathBu
 /// 初始化日志系统
 ///
 /// - `log_dir`: 日志文件目录路径
-/// - 每次启动生成带时间戳的独立日志文件（docagent_YYYYMMDD_HHMMSS.log），不覆盖历史日志
+/// - 每次启动生成带时间戳的独立日志文件（workmolde_YYYYMMDD_HHMMSS.log），不覆盖历史日志
 /// - 开发模式默认 DEBUG，生产模式默认 INFO，均支持 RUST_LOG 环境变量覆盖
 /// - 文件输出使用 non_blocking 异步写入，stderr 同步输出
 /// - 如果日志文件创建失败，降级为仅 stderr 输出
@@ -82,7 +82,7 @@ pub fn init(log_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
 
     // 生成带启动时间戳的日志文件名
     let timestamp = Local::now().format("%Y%m%d_%H%M%S");
-    let file_name = format!("docagent_{}.log", timestamp);
+    let file_name = format!("workmolde_{}.log", timestamp);
     let log_path = log_dir.join(&file_name);
 
     // 解析日志级别：优先 RUST_LOG 环境变量，回退到编译模式默认值
@@ -95,7 +95,7 @@ pub fn init(log_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
             // 文件创建失败，降级为仅 stderr 输出
             eprintln!("[日志] 无法创建日志文件，降级为仅控制台输出: {}", e);
             init_stderr_only(level_filter)?;
-            log::info!("DocAgent 日志系统初始化完成（仅控制台输出模式）");
+            log::info!("WorkMolde AI 日志系统初始化完成（仅控制台输出模式）");
             return Ok(());
         }
     };
@@ -113,7 +113,7 @@ pub fn init(log_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     register_logger(Some(Mutex::new(non_blocking)), level_filter)?;
 
     log::info!(
-        "DocAgent 日志系统初始化完成，日志文件: {}",
+        "WorkMolde AI 日志系统初始化完成，日志文件: {}",
         log_path.display()
     );
 
@@ -155,7 +155,8 @@ fn resolve_log_level() -> log::LevelFilter {
 
 /// 清理过期日志文件
 ///
-/// 扫描日志目录，删除修改时间超过 max_days 天的 docagent_*.log 和 sidecar_*.log 文件
+/// 扫描日志目录，删除修改时间超过 max_days 天的日志文件
+/// 匹配前缀：workmolde_*.log（当前版本）、sidecar_*.log（Python Sidecar）
 /// 错误静默处理（清理失败不影响应用启动）
 fn cleanup_old_logs(log_dir: &Path, max_days: u64) {
     let now = SystemTime::now();
@@ -170,12 +171,12 @@ fn cleanup_old_logs(log_dir: &Path, max_days: u64) {
     for entry in entries.flatten() {
         let path = entry.path();
 
-        // 仅匹配日志文件（docagent_*.log 和 sidecar_*.log）
+        // 匹配日志文件（workmolde_*.log 和 sidecar_*.log）
         let is_log_file = path
             .file_name()
             .and_then(|n| n.to_str())
             .map(|name| {
-                (name.starts_with("docagent_") || name.starts_with("sidecar_"))
+                (name.starts_with("workmolde_") || name.starts_with("sidecar_"))
                     && name.ends_with(".log")
             })
             .unwrap_or(false);
@@ -281,7 +282,7 @@ mod tests {
     /// 创建临时测试目录（在系统临时目录下创建唯一子目录）
     fn make_test_dir(prefix: &str) -> PathBuf {
         let dir =
-            std::env::temp_dir().join(format!("docagent_test_{}_{}", prefix, std::process::id()));
+            std::env::temp_dir().join(format!("workmolde_test_{}_{}", prefix, std::process::id()));
         // 清理可能存在的旧目录
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).expect("创建测试目录失败");
@@ -299,22 +300,22 @@ mod tests {
 
     #[test]
     fn test_cleanup_removes_expired_log_files() {
-        // 测试清理过期的 docagent_*.log 和 sidecar_*.log 文件
+        // 测试清理过期的 workmolde_*.log 和 sidecar_*.log 文件
         let dir = make_test_dir("cleanup_expired");
         let now = SystemTime::now();
         let eight_days_ago = now - Duration::from_secs(8 * 86400);
 
         // 创建过期文件（8 天前修改）
-        let old_docagent = dir.join("docagent_old.log");
+        let old_workmolde = dir.join("workmolde_old.log");
         let old_sidecar = dir.join("sidecar_old.log");
-        create_file_with_mtime(&old_docagent, eight_days_ago);
+        create_file_with_mtime(&old_workmolde, eight_days_ago);
         create_file_with_mtime(&old_sidecar, eight_days_ago);
 
         // 执行清理（保留 7 天）
         cleanup_old_logs(&dir, 7);
 
         // 验证过期文件被删除
-        assert!(!old_docagent.exists(), "过期的 docagent 日志应被删除");
+        assert!(!old_workmolde.exists(), "过期的 workmolde 日志应被删除");
         assert!(!old_sidecar.exists(), "过期的 sidecar 日志应被删除");
 
         // 清理测试目录
@@ -329,16 +330,16 @@ mod tests {
         let three_days_ago = now - Duration::from_secs(3 * 86400);
 
         // 创建近期文件（3 天前修改）
-        let recent_docagent = dir.join("docagent_recent.log");
+        let recent_workmolde = dir.join("workmolde_recent.log");
         let recent_sidecar = dir.join("sidecar_recent.log");
-        create_file_with_mtime(&recent_docagent, three_days_ago);
+        create_file_with_mtime(&recent_workmolde, three_days_ago);
         create_file_with_mtime(&recent_sidecar, three_days_ago);
 
         // 执行清理（保留 7 天）
         cleanup_old_logs(&dir, 7);
 
         // 验证近期文件被保留
-        assert!(recent_docagent.exists(), "7 天内的 docagent 日志应保留");
+        assert!(recent_workmolde.exists(), "7 天内的 workmolde 日志应保留");
         assert!(recent_sidecar.exists(), "7 天内的 sidecar 日志应保留");
 
         // 清理测试目录
@@ -353,7 +354,7 @@ mod tests {
         // 6 天 23 小时前（小于 7 天，应保留）
         let just_under_seven = now - Duration::from_secs(6 * 86400 + 86399);
 
-        let boundary_file = dir.join("docagent_boundary.log");
+        let boundary_file = dir.join("workmolde_boundary.log");
         create_file_with_mtime(&boundary_file, just_under_seven);
 
         cleanup_old_logs(&dir, 7);
@@ -370,11 +371,11 @@ mod tests {
         let now = SystemTime::now();
         let ten_days_ago = now - Duration::from_secs(10 * 86400);
 
-        // 不匹配前缀的文件（旧命名 docagent.log 无时间戳）
-        // 注意：docagent.log 不匹配 docagent_*.log 模式（缺少下划线）
-        let old_style = dir.join("docagent.log");
+        // 不匹配前缀的文件（旧命名 workmolde.log 无时间戳）
+        // 注意：workmolde.log 不匹配 workmolde_*.log 模式（缺少下划线）
+        let old_style = dir.join("workmolde.log");
         let other_log = dir.join("other.log");
-        let txt_file = dir.join("docagent_old.txt");
+        let txt_file = dir.join("workmolde_old.txt");
         create_file_with_mtime(&old_style, ten_days_ago);
         create_file_with_mtime(&other_log, ten_days_ago);
         create_file_with_mtime(&txt_file, ten_days_ago);
@@ -382,7 +383,7 @@ mod tests {
         cleanup_old_logs(&dir, 7);
 
         // 旧命名格式（无下划线）不应被清理，保留向后兼容
-        assert!(old_style.exists(), "旧格式 docagent.log 不应被清理");
+        assert!(old_style.exists(), "旧格式 workmolde.log 不应被清理");
         assert!(other_log.exists(), "不匹配前缀的 other.log 不应被清理");
         assert!(txt_file.exists(), "不匹配后缀的 .txt 文件不应被清理");
 

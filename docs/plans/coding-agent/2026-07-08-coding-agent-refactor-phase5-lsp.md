@@ -30,9 +30,9 @@ OpenCode 是第一个将 LSP(Language Server Protocol)视为"一等公民"的 AI
    - `workspace_symbol`:搜索工作区符号
    - `implementation`:跳转到实现
    - `call_hierarchy`:获取调用层级(direction=incoming|outgoing)
-   - 注:OpenCode 原生支持 9 种操作,其中 `incomingCalls`/`outgoingCalls` 在 DocAgent 中合并为 `call_hierarchy` 操作(通过子参数 `direction` 区分方向)
+   - 注:OpenCode 原生支持 9 种操作,其中 `incomingCalls`/`outgoingCalls` 在 WorkMolde AI 中合并为 `call_hierarchy` 操作(通过子参数 `direction` 区分方向)
 
-### 1.2 DocAgent 现状
+### 1.2 WorkMolde AI 现状
 
 - **无 LSP 集成**:Agent 仅能通过 `read`/`source_code` 工具进行文本级或语法树级的代码理解
 - **无符号定位**:无法精确定位函数/变量的定义位置
@@ -100,7 +100,7 @@ tokio-util = "0.7"       # 异步工具(用于帧编码)
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 
 ---
 
@@ -309,7 +309,7 @@ pub fn symbol_kind_name(kind: u8) -> &'static str {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 
 ---
 
@@ -1161,7 +1161,7 @@ fn parse_call_hierarchy_calls(result: &Value, direction: &str) -> Vec<CallHierar
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 单元测试:创建 LspClient,验证消息序列化
 
 ---
@@ -1336,7 +1336,7 @@ impl LspServerManager {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 单元测试:注册配置、启动/停止服务器
 
 ---
@@ -1429,7 +1429,7 @@ impl LanguageRouter {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 单元测试:各种文件扩展名正确路由到语言
 
 ---
@@ -1625,7 +1625,7 @@ impl LspResultCache {
 **优化建议**:当前为每个 LSP 请求类型(definition/hover/references)分别建立独立的 RwLock<HashMap>,代码重复度高。未来可重构为泛型缓存 `HashMap<CacheKey, CacheEntry<T>>`,减少代码重复。当前阶段保持分类型实现以降低类型复杂性。
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 单元测试:缓存命中、过期、失效
 
 ---
@@ -2278,7 +2278,7 @@ impl LspTool {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 集成测试:对测试代码执行 lsp 工具的各种 operation(definition/references/hover/diagnostics/document_symbol/workspace_symbol/implementation/call_hierarchy)
 
 ---
@@ -2388,7 +2388,7 @@ fn default_true() -> bool {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 配置可正确序列化/反序列化
 
 ---
@@ -2432,7 +2432,7 @@ let permission_type = match tool_name {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 权限检查:LSP 工具默认允许,可配置为 ask
 
 ---
@@ -2574,7 +2574,7 @@ tokio::spawn(async move {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - LSP 服务器崩溃后自动检测并重启
 
 ---
@@ -2679,7 +2679,7 @@ async fn try_lsp_definition(
 **补充说明**:单一 `lsp` 工具的其他 operation(references/hover/diagnostics/document_symbol/workspace_symbol/implementation/call_hierarchy)的降级方法(try_lsp_references/try_lsp_hover/try_lsp_diagnostics 等)采用相同模式,此处不再重复实现,开发者参照 try_lsp_definition 实现。所有 operation 在 LSP 不可用时统一降级为 SourceCode 搜索。
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - LSP 服务器未安装时,自动降级为 SourceCode
 
 ---
@@ -2725,7 +2725,7 @@ impl LanguageRouter {
 **说明**:跨语言跳转是高级特性,本阶段仅实现基础框架,完整实现可作为后续扩展。
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 
 ---
 
@@ -2738,8 +2738,8 @@ impl LanguageRouter {
 ```rust
 //! 阶段 5 集成测试:LSP 集成
 
-use docagent_lib::services::lsp::{LanguageRouter, LspResultCache};
-use docagent_lib::models::lsp::*;
+use workmolde_lib::services::lsp::{LanguageRouter, LspResultCache};
+use workmolde_lib::models::lsp::*;
 use std::path::PathBuf;
 
 /// 测试:语言路由器正确识别文件语言
@@ -2977,7 +2977,7 @@ let scratchpad_states = register_builtin_tools(
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 应用启动后,工具列表包含 1 个 LSP 工具(实验性开关开启时)
 
 ---
@@ -3017,7 +3017,7 @@ if let Some(lsp_cache) = &lsp_cache {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 首次 LSP 请求响应时间 < 1 秒(预热后)
 
 ---
@@ -3032,9 +3032,9 @@ if let Some(lsp_cache) = &lsp_cache {
 //! 阶段 5 验收测试:端到端 LSP 功能验证
 //! 注意:这些测试需要对应的 LSP 服务器已安装
 
-use docagent_lib::services::lsp::*;
-use docagent_lib::services::tool::trait_def::Tool;
-use docagent_lib::services::tool::builtin::lsp_tools::*;
+use workmolde_lib::services::lsp::*;
+use workmolde_lib::services::tool::trait_def::Tool;
+use workmolde_lib::services::tool::builtin::lsp_tools::*;
 use serde_json::json;
 use std::path::PathBuf;
 
@@ -3257,7 +3257,7 @@ async fn acceptance_lsp_server_lifecycle() {
 
 ### 10.1 阶段总结
 
-本阶段实现了完整的 LSP 集成,让 DocAgent 获得了现代 IDE 级别的代码理解能力:
+本阶段实现了完整的 LSP 集成,让 WorkMolde AI 获得了现代 IDE 级别的代码理解能力:
 
 1. **LSP 客户端**:基于 JSON-RPC 2.0 协议,支持 stdio 传输
 2. **服务器管理**:按需启动、自动停止、健康检查、结果缓存
@@ -3277,7 +3277,7 @@ async fn acceptance_lsp_server_lifecycle() {
 
 ### 10.3 全部阶段完成
 
-至此,DocAgent 编程 Agent 改造的 5 个阶段全部完成:
+至此,WorkMolde AI 编程 Agent 改造的 5 个阶段全部完成:
 
 | 阶段 | 主题 | 任务数 | 状态 |
 |------|------|--------|------|
@@ -3288,7 +3288,7 @@ async fn acceptance_lsp_server_lifecycle() {
 | 阶段 5 | LSP 集成 | 17 | 完成 |
 | **总计** | | **93** | **全部完成** |
 
-DocAgent 已从文档处理 Agent 成功改造为编程 Agent,具备:
+WorkMolde AI 已从文档处理 Agent 成功改造为编程 Agent,具备:
 - 完整的代码生成与执行能力(阶段 1)
 - 精细的权限控制与 Plan/Build/Document 三态模式(阶段 2)
 - Skill 系统、TodoWrite、上下文压缩、代码语义搜索(阶段 3)

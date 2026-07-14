@@ -23,7 +23,7 @@ OpenCode 通过 Skill 系统、TodoWrite 工具、SessionCompaction(上下文压
 
 4. **SourceCode 工具**:基于 tree-sitter 的代码语义搜索,支持按符号类型(函数、类、方法)查询,精准定位代码。
 
-### 1.2 DocAgent 现状
+### 1.2 WorkMolde AI 现状
 
 - **Scratchpad 工具**:已有的草稿本工具,按 session_id 隔离,每轮迭代注入摘要,但缺乏结构化任务管理能力
 - **无 Skill 系统**:Agent 能力完全依赖 System Prompt,无法按需加载领域能力
@@ -100,7 +100,7 @@ yaml-front-matter = "0.1"
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 
 ---
 
@@ -201,7 +201,7 @@ impl Skill {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 
 ---
 
@@ -299,7 +299,7 @@ pub fn delete_override(conn: &Connection, id: &str) -> Result<(), CommandError> 
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 数据库初始化时 `skill_overrides` 表创建成功
 
 ---
@@ -575,7 +575,7 @@ impl SkillRegistry {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 单元测试:加载测试 Skill 后,`list_by_mode` 返回正确结果
 
 ---
@@ -712,7 +712,7 @@ impl Tool for SkillTool {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 单元测试:调用 `skill` 工具加载测试 Skill,验证返回内容
 
 ---
@@ -756,7 +756,7 @@ impl AgentContext {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 启动 Agent 时,系统提示词中包含 Skill 清单
 
 ---
@@ -986,7 +986,7 @@ fn current_timestamp_ms() -> u64 {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 单元测试:TodoList 的 build_summary 方法生成正确格式
 
 ---
@@ -1078,7 +1078,7 @@ fn current_timestamp_ms() -> u64 {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 单元测试:保存后读取 Todo 列表,数据一致
 
 ---
@@ -1358,7 +1358,7 @@ let scratchpad_states = register_builtin_tools(
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 单元测试:create -> update -> list -> clear 流程
 
 ---
@@ -1373,7 +1373,7 @@ let scratchpad_states = register_builtin_tools(
 
 > **架构变更说明**(参照 overview 4.4.4):
 > 本任务将 `build_system_prompt` 从关联函数(静态方法)改为实例方法,需要在 `AgentContext` 结构体中新增 `db` 字段。
-> 现有 `AgentContext`(见 [context.rs:186](file:///d:/DeskTop/DocAgent/src-tauri/src/services/agent/context.rs#L186))没有 `db` 字段,本任务需要添加。
+> 现有 `AgentContext`(见 [context.rs:186](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/agent/context.rs#L186))没有 `db` 字段,本任务需要添加。
 
 **步骤 1:在 AgentContext 结构体中新增 db 字段**
 
@@ -1448,7 +1448,7 @@ async fn execute_iteration(&self, session_id: &str, ...) -> ... {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - Agent 执行时,系统提示词中包含当前 TodoList
 
 ---
@@ -1487,7 +1487,7 @@ impl AgentContext {
 **保留 Scratchpad 工具**:Scratchpad 工具仍可用,但定位为"自由格式草稿本",Agent 可自行决定是否使用。
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - Agent 执行时,系统提示词中不再包含 Scratchpad 摘要
 - TodoList 摘要正常注入
 
@@ -1535,7 +1535,7 @@ impl Default for CompactionConfig {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 配置可正确序列化/反序列化
 
 ---
@@ -1727,7 +1727,7 @@ Requirements:\n\
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 单元测试:`should_compact` 在不同 token 数下返回正确结果
 
 ---
@@ -1821,7 +1821,7 @@ impl AgentExecutor {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 模拟长对话,验证压缩在阈值触发
 
 ---
@@ -1876,7 +1876,7 @@ case 'compaction':
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - `npx tsc -b` 成功
 - 前端正确展示压缩事件
 
@@ -1905,7 +1905,7 @@ tree-sitter-java = "0.21"
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 
 ---
 
@@ -2141,7 +2141,7 @@ impl LanguageParser {
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 单元测试:解析 Rust 文件,正确提取函数、结构体等符号
 
 ---
@@ -2565,7 +2565,7 @@ registry.register(Box::new(SourceCodeTool::new()));
 ```
 
 **验证**:
-- `cargo build -p docagent_lib` 成功
+- `cargo build -p workmolde_lib` 成功
 - 单元测试:搜索测试代码,正确返回符号
 
 ---
@@ -2579,11 +2579,11 @@ registry.register(Box::new(SourceCodeTool::new()));
 ```rust
 //! 阶段 3 集成测试:Skill 系统、TodoWrite、SessionCompaction、SourceCode
 
-use docagent_lib::services::skill::{SkillLoader, SkillRegistry, SkillTool};
-use docagent_lib::services::tool::trait_def::Tool;
-use docagent_lib::services::code::parser::{LanguageParser, ProgrammingLanguage};
-use docagent_lib::services::code::search::{SourceCodeSearcher, SearchQuery};
-use docagent_lib::models::todo::{TodoList, TodoItem, TodoStatus, TodoPriority};
+use workmolde_lib::services::skill::{SkillLoader, SkillRegistry, SkillTool};
+use workmolde_lib::services::tool::trait_def::Tool;
+use workmolde_lib::services::code::parser::{LanguageParser, ProgrammingLanguage};
+use workmolde_lib::services::code::search::{SourceCodeSearcher, SearchQuery};
+use workmolde_lib::models::todo::{TodoList, TodoItem, TodoStatus, TodoPriority};
 use serde_json::json;
 use std::path::PathBuf;
 use tempfile::TempDir;

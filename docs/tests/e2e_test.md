@@ -1,4 +1,4 @@
-# DocAgent 端到端测试文档
+# WorkMolde AI 端到端测试文档
 
 > 版本：v2.0
 > 最后更新：2026-06-14
@@ -26,7 +26,7 @@
 3. **LLM API Key**: 至少配置一个可用的 OpenAI 兼容 API（用于 Agent 交互测试）
 4. **启动命令**: `npm run tauri:dev`
 
-> **数据目录**: `%APPDATA%\docagent`，包含 `docagent.db` 和 `config/` 目录
+> **数据目录**: `%APPDATA%\workmolde`，包含 `workmolde.db` 和 `config/` 目录
 
 ---
 
@@ -48,9 +48,9 @@
 - 主区域显示"开始新会话"引导提示
 - 右侧栏显示文件树、Agent 信息、Token 统计三个分区
 - 底部输入框可正常聚焦
-- SQLite 数据库文件 `<app_data_dir>/docagent.db` 已创建
+- SQLite 数据库文件 `<app_data_dir>/workmolde.db` 已创建
 - 配置目录 `<app_data_dir>/config/` 已创建
-- 日志文件 `log/docagent.log` 存在
+- 日志文件 `log/workmolde.log` 存在
 
 ### E2E-02: LLM Provider 配置
 

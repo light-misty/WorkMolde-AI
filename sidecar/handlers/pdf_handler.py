@@ -1463,7 +1463,7 @@ class PdfHandler:
             "subject": metadata.get("subject", existing.get("subject", "")),
             "keywords": metadata.get("keywords", existing.get("keywords", "")),
             "creator": metadata.get("creator", existing.get("creator", "")),
-            "producer": metadata.get("producer", "DocAgent"),
+            "producer": metadata.get("producer", "WorkMolde AI"),
         }
         doc.set_metadata(new_meta)
         self._save_fitz_doc(doc, output_path)

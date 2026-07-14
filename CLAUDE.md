@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概览
 
-DocAgent 是一个基于 Tauri 2.x 的 AI 文档处理桌面应用。用户通过对话式 AI Agent 完成 Word/Excel/PPT/PDF/Markdown 文档的生成、读取、修改、格式转换等操作。
+WorkMolde AI 是一个基于 Tauri 2.x 的 AI 文档处理桌面应用。用户通过对话式 AI Agent 完成 Word/Excel/PPT/PDF/Markdown 文档的生成、读取、修改、格式转换等操作。
 
 ## 技术栈
 
@@ -51,13 +51,13 @@ npm run sidecar:build
 pip install -r sidecar/requirements.txt
 ```
 
-环境变量 `DOCAGENT_PYTHON` 可指定 Python 解释器路径。
+环境变量 `WORKMOLDE_PYTHON` 可指定 Python 解释器路径。
 
 ### Rust 后端命令
 
 ```bash
 # 编译（不运行）
-cargo build -p docagent_lib
+cargo build -p workmolde_lib
 
 # 运行所有 Rust 测试（现有 13 个 #[cfg(test)] 模块 + Python 测试）
 cargo test
@@ -156,10 +156,10 @@ shared/                  前后端共享TypeScript类型
 docs/                    详细开发文档
   tech_architecture.md, tauri_commands.md, database_design.md,
   handler_development.md, component_design.md, task_breakdown.md,
-  PRD_DocAgent.md,
+  PRD_WorkMolde-AI.md,
   plans/                  设计文档 (10+ 设计文档)
   tests/                  e2e_test.md, tools_handlers_validation.md
-  prototypes/             docagent-prototype.html
+  prototypes/             workmolde-prototype.html
 ```
 
 ## 核心架构要点
@@ -219,7 +219,7 @@ docs/                    详细开发文档
   - `glob`: glob 模式查找工具（阶段 1 编程 Agent 改造）
   - `grep`: 正则表达式搜索工具（阶段 1 编程 Agent 改造，基于 ripgrep）
   - `scratchpad`: 智能体草稿本（按 session_id 隔离的笔记工具，支持写入/读取/清空/刷新摘要，每轮迭代自动注入摘要）
-  - `write_script`: 将智能体生成的脚本写入系统临时目录 `<temp_dir>/docagent/scripts/`
+  - `write_script`: 将智能体生成的脚本写入系统临时目录 `<temp_dir>/workmolde/scripts/`
   - `run_command`: 通过 Git Bash 执行命令（运行脚本），支持工作目录和超时控制（LLM 通过 timeout 参数自主控制，最大 300 秒）；高风险命令（rm -rf、format、shutdown 等）需用户确认；Git Bash 路径优先使用用户配置，为空时从 PATH 自动检测（先查找 bash.exe，再从 git.exe 推断 `<git_root>/bin/bash.exe`）
   - `todo_write`: 结构化任务管理（按 session_id 隔离并持久化到数据库）
   - `source_code`: 基于 tree-sitter 的代码语义搜索（支持按符号类型和名称通配符查询）
@@ -379,11 +379,11 @@ AppState {
 ### 数据存储
 - SQLite: 会话、消息、版本快照、Prompt 模板、会话摘要、用户偏好
 - JSON 文件: LLM Provider 配置、应用设置、工作区配置
-- 文件系统: 工作区文档和 Sidecar 日志 (`log/docagent.log`)
-- 应用数据目录: `<app_data_dir>/docagent.db` + `config/` 目录
+- 文件系统: 工作区文档和 Sidecar 日志 (`log/workmolde.log`)
+- 应用数据目录: `<app_data_dir>/workmolde.db` + `config/` 目录
 
 ### 日志系统
-- 双输出: 控制台(stderr) + 日志文件(`log/docagent.log`)
+- 双输出: 控制台(stderr) + 日志文件(`log/workmolde.log`)
 - 开发模式(debug): DEBUG 级别；发布模式(release): INFO 级别
 - 每次启动覆盖日志文件 (Create + Truncate)
 - 日志文件创建失败时降级为仅控制台输出
@@ -425,7 +425,7 @@ AppState {
 - `database_design.md` — 数据库表结构与迁移策略
 - `component_design.md` — 前端组件层级与交互设计
 - `task_breakdown.md` — 阶段任务分解与进度
-- `PRD_DocAgent.md` — 产品需求文档
+- `PRD_WorkMolde-AI.md` — 产品需求文档
 - `plans/` — 设计文档 (上下文窗口设计、LLM 缓存优化等)
 - `tests/e2e_test.md` — E2E 测试计划
 - `tests/tools_handlers_validation.md` — Tools/Handlers 验证方案

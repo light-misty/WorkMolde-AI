@@ -82,11 +82,11 @@ impl EnvironmentInfo {
     }
 
     /// 检测系统 Python 解释器路径
-    /// 优先级：DOCAGENT_PYTHON 环境变量 > py > python > python3
+    /// 优先级：WORKMOLDE_PYTHON 环境变量 > py > python > python3
     /// 返回可直接在 bash 中调用的命令（如 "python" 或完整路径）
     fn detect_python_path() -> String {
         // 优先使用环境变量指定的 Python
-        if let Ok(p) = std::env::var("DOCAGENT_PYTHON") {
+        if let Ok(p) = std::env::var("WORKMOLDE_PYTHON") {
             if !p.is_empty() {
                 return p;
             }
@@ -942,7 +942,7 @@ impl AgentContext {
     /// 基础 prompt 段 - 身份与语气风格部分
     /// 参照 OpenCode default.txt 的身份定义与 Tone and style 段
     fn layer_identity() -> String {
-        r#"You are DocAgent, an interactive coding assistant running as a Tauri desktop application. Use the instructions below and the tools available to you to assist the user with software engineering tasks.
+        r#"You are WorkMolde AI, an interactive coding assistant running as a Tauri desktop application. Use the instructions below and the tools available to you to assist the user with software engineering tasks.
 
 IMPORTANT: You must NEVER generate or guess URLs for the user unless you are confident that the URLs are for helping the user with programming. You may use URLs provided by the user in their messages or local files.
 
@@ -1471,7 +1471,7 @@ mod tests {
         let prompt = AgentContext::build_system_prompt("/workspace");
 
         // 验证多段式架构各段都存在
-        assert!(prompt.contains("You are DocAgent")); // 身份段
+        assert!(prompt.contains("You are WorkMolde AI")); // 身份段
         assert!(prompt.contains("# Proactiveness")); // 规则段
         assert!(prompt.contains("<context>")); // 环境信息段
         assert!(prompt.contains("# Tool usage policy")); // 工具策略段

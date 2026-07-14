@@ -375,7 +375,7 @@ mod tests {
         // 相对路径不应误判为外部目录
         assert!(!PermissionEvaluator::is_external_directory(
             "output.md",
-            "d:/DeskTop/DocAgent"
+            "d:/DeskTop/WorkMolde-AI"
         ));
     }
 
@@ -384,7 +384,7 @@ mod tests {
         // 绝对路径的外部目录仍被识别
         assert!(PermissionEvaluator::is_external_directory(
             "c:/Windows/system32/test.txt",
-            "d:/DeskTop/DocAgent"
+            "d:/DeskTop/WorkMolde-AI"
         ));
     }
 
@@ -393,7 +393,7 @@ mod tests {
         // 工作区内子目录相对路径不误判
         assert!(!PermissionEvaluator::is_external_directory(
             "subdir/report.md",
-            "d:/DeskTop/DocAgent"
+            "d:/DeskTop/WorkMolde-AI"
         ));
     }
 
@@ -401,8 +401,8 @@ mod tests {
     fn test_is_external_directory_absolute_inside_workspace() {
         // 工作区内绝对路径不误判
         assert!(!PermissionEvaluator::is_external_directory(
-            "d:/DeskTop/DocAgent/src/main.rs",
-            "d:/DeskTop/DocAgent"
+            "d:/DeskTop/WorkMolde-AI/src/main.rs",
+            "d:/DeskTop/WorkMolde-AI"
         ));
     }
 }

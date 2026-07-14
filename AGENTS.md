@@ -1,4 +1,4 @@
-# AGENTS.md — DocAgent
+# AGENTS.md — WorkMolde AI
 
 ## 任务规范
 
@@ -30,12 +30,12 @@ Explicitly write out your entire deliberation process, documenting every interme
 | `npm run tauri:dev` | Full Tauri app (Vite + Rust backend) |
 | `npm run build` | `tsc -b && vite build` |
 | `npm run tauri:build` | Production build (NSIS installer) |
-| `cargo build -p docagent_lib` | Compile Rust only |
+| `cargo build -p workmolde_lib` | Compile Rust only |
 | `cargo test` | Runs Rust unit tests (these exist — see `#[cfg(test)]` modules across source) |
 | `cargo clippy` | Rust lint |
 | `pip install -r sidecar/requirements.txt` | Python deps |
 
-Env `DOCAGENT_PYTHON` overrides the Python interpreter path for the Sidecar.
+Env `WORKMOLDE_PYTHON` overrides the Python interpreter path for the Sidecar.
 
 ## Architecture in 10 lines
 

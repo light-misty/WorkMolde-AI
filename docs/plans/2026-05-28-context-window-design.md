@@ -500,7 +500,7 @@ pub fn build_system_prompt_with_task(
 6. 新增事件 `agent:context_update`，在 Agent 每次迭代后发射（发射时机见 3.5 节）
 7. 前端类型同步
 
-**验证**: `cargo test context_usage` + `cargo build -p docagent_lib`
+**验证**: `cargo test context_usage` + `cargo build -p workmolde_lib`
 
 ---
 

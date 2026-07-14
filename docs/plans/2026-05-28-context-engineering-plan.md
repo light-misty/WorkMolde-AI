@@ -1,11 +1,11 @@
-# DocAgent 上下文工程开发计划
+# WorkMolde AI 上下文工程开发计划
 
 > **注意**: 本文档中提到的 "Skill" 已重命名为 "Handler"，相关工具名如 `docx_skill` 已更改为 `docx_handler`。
 
 **文档版本**: v1.1
 **创建日期**: 2026-05-28
 **理论基础**: 菜鸟教程《Agent 上下文工程》(https://www.runoob.com/ai-agent/agent-context-engineering.html)
-**项目仓库**: d:\DeskTop\DocAgent
+**项目仓库**: d:\DeskTop\WorkMolde-AI
 
 ---
 
@@ -13,15 +13,15 @@
 
 ### 1.1 已具备的上下文工程能力
 
-经过对项目代码的全面研读，DocAgent 在上下文工程方面已具备以下基础能力：
+经过对项目代码的全面研读，WorkMolde AI 在上下文工程方面已具备以下基础能力：
 
 #### 1.1.1 分层系统提示词架构（已实现）
 
-项目在 [context.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/agent/context.rs) 中实现了7层系统提示词分层架构：
+项目在 [context.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/agent/context.rs) 中实现了7层系统提示词分层架构：
 
 | 层级 | 名称 | 文件位置 | 功能说明 |
 |------|------|----------|----------|
-| Layer 0 | 身份层 | `context.rs:341-361` | 定义 DocAgent 角色、专业领域、行为方式和核心立场 |
+| Layer 0 | 身份层 | `context.rs:341-361` | 定义 WorkMolde AI 角色、专业领域、行为方式和核心立场 |
 | Layer 1 | 规则层 | `context.rs:364-387` | 正面约束（7条必须遵守）+ 负面约束（8条禁止行为） |
 | Layer 2 | 上下文层 | `context.rs:390-395` | 工作区路径、工具/处理器数量等运行时信息 |
 | Layer 3 | 策略层 | `context.rs:398-428` | 工具选择策略指导（读取/写入/搜索/转换/分析） |
@@ -34,7 +34,7 @@
 
 #### 1.1.2 任务类型识别与动态提示词构建（已实现）
 
-在 [task_type.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/agent/prompts/task_type.rs) 中实现了：
+在 [task_type.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/agent/prompts/task_type.rs) 中实现了：
 - 基于关键词的用户消息任务类型识别（12种任务类型枚举）
 - 基于已调用工具的任务类型修正
 - 基于 `generate_document` 的 `format` 参数的精确类型推断
@@ -44,7 +44,7 @@
 
 #### 1.1.3 Token 预算管理器（已实现）
 
-在 [token_budget.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/agent/prompts/token_budget.rs) 中实现了：
+在 [token_budget.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/agent/prompts/token_budget.rs) 中实现了：
 - 基于上下文窗口大小的预算分配（默认128K）
 - 预算分配比例：系统提示词15%、工具定义10%、对话历史50%、LLM响应25%
 - 对话历史超预算检测
@@ -58,7 +58,7 @@
 
 #### 1.1.4 对话历史压缩（已实现）
 
-在 [context.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/agent/context.rs) 的 `compress_history_if_needed` 方法中实现了：
+在 [context.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/agent/context.rs) 的 `compress_history_if_needed` 方法中实现了：
 - 滑动窗口策略：保留最近N轮完整消息（默认2轮）
 - 保护第一条用户消息（原始意图）
 - 被跳过消息的摘要占位符 `[系统摘要: 已省略 X 条早期对话消息]`
@@ -71,7 +71,7 @@
 
 #### 1.1.5 迭代上下文注入（已实现）
 
-在 [context.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/agent/context.rs) 的 `build_iteration_context` 方法中实现了：
+在 [context.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/agent/context.rs) 的 `build_iteration_context` 方法中实现了：
 - 迭代轮次进度展示（当前轮/最大轮）
 - 已完成步骤列表
 - 当前正在执行的步骤
@@ -81,7 +81,7 @@
 
 #### 1.1.6 提示词外部化加载（已实现）
 
-在 [prompt_loader.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/agent/prompts/prompt_loader.rs) 中实现了：
+在 [prompt_loader.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/agent/prompts/prompt_loader.rs) 中实现了：
 - 从 TOML 文件加载提示词各层内容
 - 文件不存在时回退到硬编码默认值
 - 版本信息管理
@@ -173,9 +173,9 @@ src-tauri/src/models/
 
 **问题根因链路**:
 1. 前端 `handleSwitchSession` 正确调用了 `getSession` 并通过 `loadFromMessages` 展示历史消息
-2. 但后端 [agent.rs:274](file:///d:/DeskTop/DocAgent/src-tauri/src/commands/agent.rs#L274) 中 `AgentContext::new(session_id, system_prompt)` 创建的 `messages` 为空 `Vec`
-3. [agent.rs:295](file:///d:/DeskTop/DocAgent/src-tauri/src/commands/agent.rs#L295) 仅添加当前用户消息 `ctx.add_user_message(prompt)`
-4. 数据库 [message_repo.rs:41-154](file:///d:/DeskTop/DocAgent/src-tauri/src/db/message_repo.rs#L41-L154) 的 `list_messages` 已实现但从未被 `run_agent` 调用
+2. 但后端 [agent.rs:274](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/commands/agent.rs#L274) 中 `AgentContext::new(session_id, system_prompt)` 创建的 `messages` 为空 `Vec`
+3. [agent.rs:295](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/commands/agent.rs#L295) 仅添加当前用户消息 `ctx.add_user_message(prompt)`
+4. 数据库 [message_repo.rs:41-154](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/db/message_repo.rs#L41-L154) 的 `list_messages` 已实现但从未被 `run_agent` 调用
 
 **修改文件**:
 - `src-tauri/src/commands/agent.rs`: 在 `run_agent` 中添加历史消息加载逻辑
@@ -1276,7 +1276,7 @@ pub struct StrategyVariant {
 
 ## 七、总结
 
-本开发计划基于菜鸟教程《Agent 上下文工程》的理论框架，结合 DocAgent 项目的实际代码现状，制定了8个阶段、16个任务的上下文工程优化方案。
+本开发计划基于菜鸟教程《Agent 上下文工程》的理论框架，结合 WorkMolde AI 项目的实际代码现状，制定了8个阶段、16个任务的上下文工程优化方案。
 
 **核心发现**:
 - 项目已具备良好的分层系统提示词架构和基础 Token 预算管理

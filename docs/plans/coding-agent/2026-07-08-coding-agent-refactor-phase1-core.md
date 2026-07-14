@@ -1,4 +1,4 @@
-# DocAgent 编程 Agent 改造 - 阶段 1:核心架构与工具链基础
+# WorkMolde AI 编程 Agent 改造 - 阶段 1:核心架构与工具链基础
 
 > 文档版本:v1.1(2026-07-08 修订:保留文档 Handler,为 Document 模式预留)
 > 创建日期:2026-07-08
@@ -12,7 +12,7 @@
 
 ### 1.1 阶段目标
 
-将 DocAgent 从"文档处理 Agent"改造为"编程 Agent"的基础形态,使其能够:
+将 WorkMolde AI 从"文档处理 Agent"改造为"编程 Agent"的基础形态,使其能够:
 
 1. 通过 `read`(带行号)、`edit`(精确字符串替换)、`write` 完成代码文件的读写和编辑
 2. 通过 `glob`(模式匹配)、`grep`(基于 ignore crate 的正则搜索)快速定位代码
@@ -47,7 +47,7 @@
 
 ### 1.3 验收标准
 
-- [ ] `cargo build -p docagent_lib` 编译通过,无警告
+- [ ] `cargo build -p workmolde_lib` 编译通过,无警告
 - [ ] `cargo test` 全部测试通过
 - [ ] `cargo clippy` 无警告
 - [ ] `cargo fmt --check` 通过
@@ -111,20 +111,20 @@ ls scripts/sync_sidecar_dev.ps1 scripts/build_sidecar.ps1
 
 **步骤 2:确认 package.json 保留 sidecar 脚本**
 
-确认 [package.json](file:///d:/DeskTop/DocAgent/package.json) 的 `scripts` 部分仍包含:
+确认 [package.json](file:///d:/DeskTop/WorkMolde-AI/package.json) 的 `scripts` 部分仍包含:
 - `pretauri:dev`(sidecar 同步)
 - `sidecar:build`(sidecar 构建)
 - `pretauri:build`(sidecar 构建前置钩子)
 
 **步骤 3:确认 tauri.conf.json 保留 sidecar 配置**
 
-确认 [src-tauri/tauri.conf.json](file:///d:/DeskTop/DocAgent/src-tauri/tauri.conf.json) 仍包含:
+确认 [src-tauri/tauri.conf.json](file:///d:/DeskTop/WorkMolde-AI/src-tauri/tauri.conf.json) 仍包含:
 - `bundle.resources` 中的 `sidecar_dist/**` 条目
 - sidecar 相关的外部进程配置
 
 **步骤 4:确认 lib.rs 保留 sidecar 初始化逻辑**
 
-确认 [src-tauri/src/lib.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/lib.rs) 仍包含:
+确认 [src-tauri/src/lib.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/lib.rs) 仍包含:
 1. `find_system_python()` 函数
 2. setup 中的 Python 路径解析逻辑
 3. Sidecar 脚本路径解析逻辑
@@ -135,7 +135,7 @@ ls scripts/sync_sidecar_dev.ps1 scripts/build_sidecar.ps1
 8. `doc_service` 和 `handler_registry` 字段在 AppState 结构体中
 
 **验证步骤**:
-- 运行 `cargo build -p docagent_lib`,预期编译通过(Sidecar 和 Handler 保留不变)
+- 运行 `cargo build -p workmolde_lib`,预期编译通过(Sidecar 和 Handler 保留不变)
 - 运行 `npm run tauri:dev`,应用启动后 Sidecar 健康检查应正常
 
 ---
@@ -170,7 +170,7 @@ ls src-tauri/src/commands/handler.rs src-tauri/src/commands/document.rs
 
 **步骤 2:确认 services/mod.rs 保留模块声明**
 
-确认 [src-tauri/src/services/mod.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/mod.rs) 仍包含:
+确认 [src-tauri/src/services/mod.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/mod.rs) 仍包含:
 ```rust
 pub mod handler;
 pub mod document;
@@ -178,7 +178,7 @@ pub mod document;
 
 **步骤 3:确认 commands/mod.rs 保留模块声明**
 
-确认 [src-tauri/src/commands/mod.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/commands/mod.rs) 仍包含:
+确认 [src-tauri/src/commands/mod.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/commands/mod.rs) 仍包含:
 ```rust
 pub mod handler;
 pub mod document;
@@ -186,7 +186,7 @@ pub mod document;
 
 **步骤 4:确认 commands/agent.rs 保留 handler_registry 和 doc_service**
 
-确认 [src-tauri/src/commands/agent.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/commands/agent.rs) 中:
+确认 [src-tauri/src/commands/agent.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/commands/agent.rs) 中:
 1. `handler_registry` 的 Arc::clone 保留
 2. `doc_service` 的 Arc::clone 保留
 3. `run_agent` 函数签名中 `handler_registry` 和 `doc_service` 参数保留
@@ -195,7 +195,7 @@ pub mod document;
 
 **步骤 5:确认 executor.rs 保留 HandlerRegistry**
 
-确认 [src-tauri/src/services/agent/executor.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/agent/executor.rs) 中:
+确认 [src-tauri/src/services/agent/executor.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/agent/executor.rs) 中:
 1. `use crate::services::handler::registry::HandlerRegistry;` 保留
 2. `AgentExecutor` 结构体中 `registry: Arc<tokio::sync::Mutex<HandlerRegistry>>` 字段保留
 3. `new()` 方法中 `registry` 参数和字段赋值保留
@@ -206,24 +206,24 @@ pub mod document;
 
 **步骤 6:确认 attachment.rs 保留 doc_service 依赖**
 
-确认 [src-tauri/src/services/attachment.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/attachment.rs) 中:
+确认 [src-tauri/src/services/attachment.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/attachment.rs) 中:
 1. `resolve_attachments` 方法保留 `doc_service` 参数
 2. docx/xlsx/pptx/pdf 附件的解析逻辑保留(通过 Sidecar 处理)
 
 **步骤 7:确认 context.rs 保留 document_design 引用**
 
-确认 [src-tauri/src/services/agent/context.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/agent/context.rs) 中:
+确认 [src-tauri/src/services/agent/context.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/agent/context.rs) 中:
 1. `use super::prompts::document_design::get_design_guide_by_type;` 保留
 2. `build_system_prompt_with_task` 方法中 `handler_count` 参数保留并正常传递
 3. `layer_tool_strategy` 中文档 Handler 相关的工具选择策略保留
 
 **步骤 8:确认 errors.rs 保留文档处理错误码**
 
-确认 [src-tauri/src/errors.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/errors.rs) 中文档处理错误码(3000-3999)保留不变。
+确认 [src-tauri/src/errors.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/errors.rs) 中文档处理错误码(3000-3999)保留不变。
 
 **步骤 9:确认 lib.rs 的命令注册保留**
 
-确认 [src-tauri/src/lib.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/lib.rs) 的 `invoke_handler` 宏中以下命令注册保留:
+确认 [src-tauri/src/lib.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/lib.rs) 的 `invoke_handler` 宏中以下命令注册保留:
 - `commands::document::preview_document`
 - `commands::document::get_document_versions`
 - `commands::document::rollback_version`
@@ -238,7 +238,7 @@ pub mod document;
 - `commands::handler::list_tools`
 
 **验证步骤**:
-- 运行 `cargo build -p docagent_lib`,预期编译通过(所有模块保留不变)
+- 运行 `cargo build -p workmolde_lib`,预期编译通过(所有模块保留不变)
 - 运行 `cargo test`,预期现有测试通过
 - 运行应用,确认文档预览和 Handler 相关功能正常工作
 
@@ -262,7 +262,7 @@ pub mod document;
 
 **步骤 1:确认 pdfjs-dist 依赖保留**
 
-确认 [package.json](file:///d:/DeskTop/DocAgent/package.json) 仍包含:
+确认 [package.json](file:///d:/DeskTop/WorkMolde-AI/package.json) 仍包含:
 ```json
 "pdfjs-dist": "^4.10.38"
 ```
@@ -276,11 +276,11 @@ pub mod document;
 
 **步骤 3:确认 HandlersTab 保留**
 
-确认 [src/components/settings/HandlersTab.tsx](file:///d:/DeskTop/DocAgent/src/components/settings/HandlersTab.tsx) 存在且功能完整,SettingsDialog 中仍引用 HandlersTab。
+确认 [src/components/settings/HandlersTab.tsx](file:///d:/DeskTop/WorkMolde-AI/src/components/settings/HandlersTab.tsx) 存在且功能完整,SettingsDialog 中仍引用 HandlersTab。
 
 **步骤 4:确认 tauri.ts 中的 sidecar 命令封装保留**
 
-确认 [src/services/tauri.ts](file:///d:/DeskTop/DocAgent/src/services/tauri.ts) 仍包含以下函数:
+确认 [src/services/tauri.ts](file:///d:/DeskTop/WorkMolde-AI/src/services/tauri.ts) 仍包含以下函数:
 - `previewDocument`
 - `getDocumentVersions`
 - `rollbackVersion`
@@ -298,7 +298,7 @@ pub mod document;
 
 **步骤 6:确认国际化键保留**
 
-确认 [src/i18n/locales/zh-CN.json](file:///d:/DeskTop/DocAgent/src/i18n/locales/zh-CN.json) 和 [src/i18n/locales/en-US.json](file:///d:/DeskTop/DocAgent/src/i18n/locales/en-US.json) 中与 handler、sidecar、pdf 预览相关的翻译键保留不变。
+确认 [src/i18n/locales/zh-CN.json](file:///d:/DeskTop/WorkMolde-AI/src/i18n/locales/zh-CN.json) 和 [src/i18n/locales/en-US.json](file:///d:/DeskTop/WorkMolde-AI/src/i18n/locales/en-US.json) 中与 handler、sidecar、pdf 预览相关的翻译键保留不变。
 
 **验证步骤**:
 - 运行 `npm run build`,预期 TypeScript 编译通过
@@ -315,7 +315,7 @@ pub mod document;
 
 **步骤 1:新增 edit 工具依赖**
 
-在 [src-tauri/Cargo.toml](file:///d:/DeskTop/DocAgent/src-tauri/Cargo.toml) 的 `[dependencies]` 部分新增:
+在 [src-tauri/Cargo.toml](file:///d:/DeskTop/WorkMolde-AI/src-tauri/Cargo.toml) 的 `[dependencies]` 部分新增:
 ```toml
 # edit 工具:差异计算
 similar = "2.5"
@@ -336,7 +336,7 @@ globset = "0.4"  # 仍用于 glob 模式编译
 - 所有现有依赖不变
 
 **验证步骤**:
-- 运行 `cargo build -p docagent_lib`,预期编译通过
+- 运行 `cargo build -p workmolde_lib`,预期编译通过
 - 运行 `cargo tree | grep -E "similar|globset|grep"`,确认新依赖已添加
 
 ---
@@ -345,7 +345,7 @@ globset = "0.4"  # 仍用于 glob 模式编译
 
 **目标**:确认 Sidecar 相关依赖保留,Cargo.toml 构建正常
 
-**修改文件**:[src-tauri/Cargo.toml](file:///d:/DeskTop/DocAgent/src-tauri/Cargo.toml)
+**修改文件**:[src-tauri/Cargo.toml](file:///d:/DeskTop/WorkMolde-AI/src-tauri/Cargo.toml)
 
 **新增依赖**:
 
@@ -367,7 +367,7 @@ similar = "2"
 ```
 
 **验证步骤**:
-- 运行 `cargo build -p docagent_lib`,确认新依赖能被正确下载和编译
+- 运行 `cargo build -p workmolde_lib`,确认新依赖能被正确下载和编译
 - 运行 `cargo tree | grep -E "globset|ignore|regex|similar"`,确认依赖树正确
 
 ---
@@ -385,7 +385,7 @@ System Prompt
 └── Agent 特定 prompt (build / plan / explore / general)
 ```
 
-**DocAgent 改造后的架构**(参照 OpenCode 多段式架构):
+**WorkMolde AI 改造后的架构**(参照 OpenCode 多段式架构):
 
 ```
 System Prompt (参照 OpenCode 多段式架构)
@@ -408,7 +408,7 @@ System Prompt (参照 OpenCode 多段式架构)
 - "Agent 特定 prompt"段保留为模式特定指令(build/plan/document),本阶段(build 模式)基础 prompt 已涵盖所有必要内容,Agent 特定 prompt 暂为空,阶段 2 实现 plan/document 模式时追加模式特定指令
 - 删除 Provider 特定提示加载机制(不再按 Provider 区分 default.txt / anthropic / gpt / gemini 等,统一使用同一份基础 prompt)
 
-**修改文件**:[src-tauri/src/services/agent/context.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/agent/context.rs)
+**修改文件**:[src-tauri/src/services/agent/context.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/agent/context.rs)
 
 **步骤 1:实现基础 prompt 段 - 身份与语气风格部分**
 
@@ -418,7 +418,7 @@ System Prompt (参照 OpenCode 多段式架构)
 /// 基础 prompt 段 - 身份与语气风格部分
 /// 参照 OpenCode default.txt 的身份定义与 Tone and style 段
 fn layer_identity() -> String {
-    r#"You are DocAgent, an interactive coding assistant running as a Tauri desktop application. Use the instructions below and the tools available to you to assist the user with software engineering tasks.
+    r#"You are WorkMolde AI, an interactive coding assistant running as a Tauri desktop application. Use the instructions below and the tools available to you to assist the user with software engineering tasks.
 
 IMPORTANT: You must NEVER generate or guess URLs for the user unless you are confident that the URLs are for helping the user with programming. You may use URLs provided by the user in their messages or local files.
 
@@ -814,7 +814,7 @@ pub fn build_system_prompt(workspace_path: &str) -> String {
 
 **步骤 10:移除 document_design 模块引用(同时移除 provider_prompts 模块)**
 
-修改 [src-tauri/src/services/agent/prompts/mod.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/agent/prompts/mod.rs):
+修改 [src-tauri/src/services/agent/prompts/mod.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/agent/prompts/mod.rs):
 
 ```rust
 // 移除 document_design 模块
@@ -829,7 +829,7 @@ pub mod agents_md_loader;
 可保留 `document_design.rs` 文件但不引用(供历史参考),或直接删除。
 
 **验证步骤**:
-- `cargo build -p docagent_lib` 编译通过
+- `cargo build -p workmolde_lib` 编译通过
 - `cargo test` 测试通过(注意:测试中若有调用 build_system_prompt 的,需更新参数)
 
 ---
@@ -840,7 +840,7 @@ pub mod agents_md_loader;
 
 **OpenCode 规则文件加载顺序**:
 1. 项目级:`<workspace>/AGENTS.md`、`<workspace>/CLAUDE.md`、`<workspace>/CONTEXT.md`
-2. 全局级:`~/.agent/AGENTS.md`(DocAgent 自定义路径)
+2. 全局级:`~/.agent/AGENTS.md`(WorkMolde AI 自定义路径)
 3. 配置指令:用户在设置中配置的自定义指令
 4. 递归向上:从当前工作目录向上查找 AGENTS.md(直至根目录)
 
@@ -849,7 +849,7 @@ pub mod agents_md_loader;
 
 **步骤 1:创建 agents_md_loader.rs 模块**
 
-新建 [src-tauri/src/services/agent/prompts/agents_md_loader.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/agent/prompts/agents_md_loader.rs):
+新建 [src-tauri/src/services/agent/prompts/agents_md_loader.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/agent/prompts/agents_md_loader.rs):
 
 ```rust
 //! AGENTS.md 自定义规则加载模块
@@ -1013,7 +1013,7 @@ mod tests {
     #[test]
     fn test_load_project_rules_from_temp() {
         // 创建临时目录结构测试递归加载
-        let tmp = std::env::temp_dir().join("docagent_test_agents_md");
+        let tmp = std::env::temp_dir().join("workmolde_test_agents_md");
         let subdir = tmp.join("subdir").join("deep");
         fs::create_dir_all(&subdir).unwrap();
 
@@ -1051,7 +1051,7 @@ mod tests {
 
 **步骤 2:在 prompts/mod.rs 中注册模块**
 
-修改 [src-tauri/src/services/agent/prompts/mod.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/agent/prompts/mod.rs):
+修改 [src-tauri/src/services/agent/prompts/mod.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/agent/prompts/mod.rs):
 
 ```rust
 pub mod task_type;
@@ -1062,7 +1062,7 @@ pub mod agents_md_loader;  // 新增
 
 **步骤 3:在 commands/agent.rs 中集成 AGENTS.md 加载**
 
-修改 [src-tauri/src/commands/agent.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/commands/agent.rs) 的 `run_agent` 函数:
+修改 [src-tauri/src/commands/agent.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/commands/agent.rs) 的 `run_agent` 函数:
 
 ```rust
 // 加载 AGENTS.md 自定义规则
@@ -1099,7 +1099,7 @@ let dynamic_prompt = AgentContext::build_system_prompt_with_task(
 ```
 
 **验证步骤**:
-- `cargo build -p docagent_lib` 编译通过
+- `cargo build -p workmolde_lib` 编译通过
 - `cargo test agents_md_loader` 测试通过
 - 手动验证:在工作区创建 AGENTS.md,发起对话,检查日志和系统提示词是否包含规则内容
 
@@ -1109,7 +1109,7 @@ let dynamic_prompt = AgentContext::build_system_prompt_with_task(
 
 **目标**:参照 OpenCode 的 read 工具,为 read 增加行号显示和二进制文件保护
 
-**修改文件**:[src-tauri/src/services/tool/builtin.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/tool/builtin.rs)(ReadFileTool,第 572-730 行)
+**修改文件**:[src-tauri/src/services/tool/builtin.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/tool/builtin.rs)(ReadFileTool,第 572-730 行)
 
 **改造点**:
 1. 输出内容增加行号前缀(格式:`  1→内容`)
@@ -1330,7 +1330,7 @@ fn add_line_numbers(content: &str, start_line: usize, end_line: Option<usize>) -
 #[tokio::test]
 async fn test_read_with_line_numbers() {
     use std::io::Write;
-    let tmp = std::env::temp_dir().join("docagent_test_read_ln.txt");
+    let tmp = std::env::temp_dir().join("workmolde_test_read_ln.txt");
     {
         let mut f = std::fs::File::create(&tmp).unwrap();
         writeln!(f, "第一行").unwrap();
@@ -1356,7 +1356,7 @@ async fn test_read_with_line_numbers() {
 #[tokio::test]
 async fn test_read_line_range() {
     use std::io::Write;
-    let tmp = std::env::temp_dir().join("docagent_test_read_range.txt");
+    let tmp = std::env::temp_dir().join("workmolde_test_read_range.txt");
     {
         let mut f = std::fs::File::create(&tmp).unwrap();
         for i in 1..=10 {
@@ -1396,7 +1396,7 @@ async fn test_read_line_range() {
 
 **新增文件**:无(在 builtin.rs 中新增 EditTool 结构体)
 
-**修改文件**:[src-tauri/src/services/tool/builtin.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/tool/builtin.rs)
+**修改文件**:[src-tauri/src/services/tool/builtin.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/tool/builtin.rs)
 
 **OpenCode edit 工具设计要点**:
 - 参数:`filePath`、`oldString`、`newString`
@@ -1669,7 +1669,7 @@ fn format_diff_summary(old: &str, new: &str) -> String {
 
 **步骤 3:在 executor.rs 中注册 edit 工具的快照路径**
 
-修改 [src-tauri/src/services/agent/executor.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/agent/executor.rs) 的 `extract_snapshot_paths` 方法,为 edit 工具添加快照创建:
+修改 [src-tauri/src/services/agent/executor.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/agent/executor.rs) 的 `extract_snapshot_paths` 方法,为 edit 工具添加快照创建:
 
 ```rust
 fn extract_snapshot_paths(&self, handler_name: &str, params: &serde_json::Value) -> Vec<String> {
@@ -1745,7 +1745,7 @@ ConfirmationLevel::EditOnly => {
 ```rust
 #[tokio::test]
 async fn test_edit_tool_create_new_file() {
-    let tmp = std::env::temp_dir().join("docagent_test_edit_new.txt");
+    let tmp = std::env::temp_dir().join("workmolde_test_edit_new.txt");
     let _ = std::fs::remove_file(&tmp);
 
     let tool = EditTool;
@@ -1767,7 +1767,7 @@ async fn test_edit_tool_create_new_file() {
 
 #[tokio::test]
 async fn test_edit_tool_replace_unique() {
-    let tmp = std::env::temp_dir().join("docagent_test_edit_replace.txt");
+    let tmp = std::env::temp_dir().join("workmolde_test_edit_replace.txt");
     std::fs::write(&tmp, "fn main() {\n    println!(\"hello\");\n}\n").unwrap();
 
     let tool = EditTool;
@@ -1789,7 +1789,7 @@ async fn test_edit_tool_replace_unique() {
 
 #[tokio::test]
 async fn test_edit_tool_multiple_matches_error() {
-    let tmp = std::env::temp_dir().join("docagent_test_edit_multi.txt");
+    let tmp = std::env::temp_dir().join("workmolde_test_edit_multi.txt");
     std::fs::write(&tmp, "foo\nbar\nfoo\n").unwrap();
 
     let tool = EditTool;
@@ -1808,7 +1808,7 @@ async fn test_edit_tool_multiple_matches_error() {
 
 #[tokio::test]
 async fn test_edit_tool_no_match_error() {
-    let tmp = std::env::temp_dir().join("docagent_test_edit_nomatch.txt");
+    let tmp = std::env::temp_dir().join("workmolde_test_edit_nomatch.txt");
     std::fs::write(&tmp, "hello world\n").unwrap();
 
     let tool = EditTool;
@@ -1836,7 +1836,7 @@ async fn test_edit_tool_no_match_error() {
 
 **目标**:实现高性能文件模式匹配工具,支持 `**/*.rs`、`{a,b}/*.ts` 等模式
 
-**修改文件**:[src-tauri/src/services/tool/builtin.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/tool/builtin.rs)
+**修改文件**:[src-tauri/src/services/tool/builtin.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/tool/builtin.rs)
 
 **步骤 1:实现 GlobTool 结构体**
 
@@ -2035,7 +2035,7 @@ impl Tool for GlobTool {
 ```rust
 #[tokio::test]
 async fn test_glob_find_rust_files() {
-    let tmp = std::env::temp_dir().join("docagent_test_glob");
+    let tmp = std::env::temp_dir().join("workmolde_test_glob");
     std::fs::create_dir_all(tmp.join("src")).unwrap();
     std::fs::write(tmp.join("main.rs"), "fn main() {}").unwrap();
     std::fs::write(tmp.join("src/lib.rs"), "pub fn lib() {}").unwrap();
@@ -2058,7 +2058,7 @@ async fn test_glob_find_rust_files() {
 
 #[tokio::test]
 async fn test_glob_with_excludes() {
-    let tmp = std::env::temp_dir().join("docagent_test_glob_excl");
+    let tmp = std::env::temp_dir().join("workmolde_test_glob_excl");
     std::fs::create_dir_all(tmp.join("node_modules")).unwrap();
     std::fs::write(tmp.join("index.ts"), "console.log(1)").unwrap();
     std::fs::write(tmp.join("node_modules/lib.ts"), "export {}").unwrap();
@@ -2089,7 +2089,7 @@ async fn test_glob_with_excludes() {
 
 **目标**:实现高性能内容搜索工具,支持正则表达式、多文件搜索、上下文行显示
 
-**修改文件**:[src-tauri/src/services/tool/builtin.rs](file:///d:/DeskTop/DocAgent/src/services/tool/builtin.rs)
+**修改文件**:[src-tauri/src/services/tool/builtin.rs](file:///d:/DeskTop/WorkMolde-AI/src/services/tool/builtin.rs)
 
 **步骤 1:实现 GrepTool 结构体**
 
@@ -2336,7 +2336,7 @@ impl Tool for GrepTool {
 ```rust
 #[tokio::test]
 async fn test_grep_basic_search() {
-    let tmp = std::env::temp_dir().join("docagent_test_grep");
+    let tmp = std::env::temp_dir().join("workmolde_test_grep");
     std::fs::create_dir_all(&tmp).unwrap();
     std::fs::write(tmp.join("a.rs"), "fn foo() {}\nfn bar() {}\n").unwrap();
     std::fs::write(tmp.join("b.rs"), "fn baz() {}\nfn foo() {}\n").unwrap();
@@ -2358,7 +2358,7 @@ async fn test_grep_basic_search() {
 
 #[tokio::test]
 async fn test_grep_with_include() {
-    let tmp = std::env::temp_dir().join("docagent_test_grep_include");
+    let tmp = std::env::temp_dir().join("workmolde_test_grep_include");
     std::fs::create_dir_all(&tmp).unwrap();
     std::fs::write(tmp.join("a.rs"), "function test() {}\n").unwrap();
     std::fs::write(tmp.join("b.ts"), "function test() {}\n").unwrap();
@@ -2381,7 +2381,7 @@ async fn test_grep_with_include() {
 
 #[tokio::test]
 async fn test_grep_case_insensitive() {
-    let tmp = std::env::temp_dir().join("docagent_test_grep_ci");
+    let tmp = std::env::temp_dir().join("workmolde_test_grep_ci");
     std::fs::create_dir_all(&tmp).unwrap();
     std::fs::write(tmp.join("a.txt"), "Hello World\nHELLO AGAIN\n").unwrap();
 
@@ -2402,7 +2402,7 @@ async fn test_grep_case_insensitive() {
 
 #[tokio::test]
 async fn test_grep_with_context() {
-    let tmp = std::env::temp_dir().join("docagent_test_grep_ctx");
+    let tmp = std::env::temp_dir().join("workmolde_test_grep_ctx");
     std::fs::create_dir_all(&tmp).unwrap();
     std::fs::write(tmp.join("a.txt"), "line1\nline2\nmatch\nline4\nline5\n").unwrap();
 
@@ -2436,7 +2436,7 @@ async fn test_grep_with_context() {
 
 **参照**:OpenCode apply_patch 工具实现(使用 `output.args.patchText` 而非 `output.args.filePath`)
 
-**修改文件**:[src-tauri/src/services/tool/builtin.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/tool/builtin.rs)
+**修改文件**:[src-tauri/src/services/tool/builtin.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/tool/builtin.rs)
 
 **工具定义**:
 - 工具名:`apply_patch`
@@ -2516,7 +2516,7 @@ registry.register(Box::new(ApplyPatchTool));
 
 **参照**:OpenCode question 工具实现(允许用户在多个问题间导航后统一提交)
 
-**修改文件**:[src-tauri/src/services/tool/builtin.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/tool/builtin.rs)
+**修改文件**:[src-tauri/src/services/tool/builtin.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/tool/builtin.rs)
 
 **工具定义**:
 - 工具名:`question`
@@ -2605,7 +2605,7 @@ registry.register(Box::new(QuestionTool));
 
 **目标**:为 bash 工具增加命令 AST 解析(检测高风险命令)、外部目录访问检测
 
-**修改文件**:[src-tauri/src/services/tool/builtin.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/tool/builtin.rs)(RunCommandTool,第 3660 行起)
+**修改文件**:[src-tauri/src/services/tool/builtin.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/tool/builtin.rs)(RunCommandTool,第 3660 行起)
 
 **改造点**:
 1. 增强 `is_high_risk_command` 函数,增加更多危险命令模式
@@ -2730,7 +2730,7 @@ fn test_is_high_risk_command() {
 
 **验证步骤**:
 - `cargo test test_is_high_risk_command` 通过
-- `cargo build -p docagent_lib` 编译通过
+- `cargo build -p workmolde_lib` 编译通过
 
 ---
 
@@ -2739,13 +2739,13 @@ fn test_is_high_risk_command() {
 **目标**:保留 AppState 中的 `doc_service` 和 `handler_registry` 字段,在 executor 中预留"按 Agent 模式动态过滤工具列表"的钩子(实际过滤逻辑在阶段 2 实现)
 
 **修改文件**:
-- [src-tauri/src/lib.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/lib.rs)
-- [src-tauri/src/services/agent/executor.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/agent/executor.rs)
-- [src-tauri/src/commands/agent.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/commands/agent.rs)
+- [src-tauri/src/lib.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/lib.rs)
+- [src-tauri/src/services/agent/executor.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/agent/executor.rs)
+- [src-tauri/src/commands/agent.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/commands/agent.rs)
 
 **步骤 1:修改 AppState 结构体**
 
-修改 [src-tauri/src/lib.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/lib.rs) 的 AppState 结构体(第 26-40 行),**保留 handler_registry 和 doc_service 字段**:
+修改 [src-tauri/src/lib.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/lib.rs) 的 AppState 结构体(第 26-40 行),**保留 handler_registry 和 doc_service 字段**:
 
 ```rust
 pub struct AppState {
@@ -2799,7 +2799,7 @@ let state = AppState {
 
 **步骤 3:修改 AgentExecutor 的构造**
 
-修改 [src-tauri/src/services/agent/executor.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/services/agent/executor.rs):
+修改 [src-tauri/src/services/agent/executor.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/services/agent/executor.rs):
 
 1. 保留 `registry` 字段(v1.1: Document 模式下使用)
 2. 修改 `new()` 方法签名(第 134-154 行):
@@ -2895,7 +2895,7 @@ let result = if let Some(tool) = tool_arc {
 
 **步骤 4:修改 commands/agent.rs 的 AgentExecutor 调用**
 
-修改 [src-tauri/src/commands/agent.rs](file:///d:/DeskTop/DocAgent/src-tauri/src/commands/agent.rs)(第 1020-1032 行):
+修改 [src-tauri/src/commands/agent.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/src/commands/agent.rs)(第 1020-1032 行):
 
 ```rust
 let executor = AgentExecutor::new(
@@ -2918,7 +2918,7 @@ let executor = AgentExecutor::new(
 保留 `handler_registry` 和 `doc_service` 参数(第 716、726 行),不做任何调整。
 
 **验证步骤**:
-- `cargo build -p docagent_lib` 编译通过
+- `cargo build -p workmolde_lib` 编译通过
 - `cargo test` 所有现有测试通过
 - `cargo clippy` 无警告
 
@@ -2933,18 +2933,18 @@ let executor = AgentExecutor::new(
 
 **步骤 1:创建集成测试文件**
 
-新建 [src-tauri/tests/phase1_integration_test.rs](file:///d:/DeskTop/DocAgent/src-tauri/tests/phase1_integration_test.rs):
+新建 [src-tauri/tests/phase1_integration_test.rs](file:///d:/DeskTop/WorkMolde-AI/src-tauri/tests/phase1_integration_test.rs):
 
 ```rust
 //! 阶段 1 集成测试:验证编程 Agent 核心能力
 //! 测试场景:读取文件 -> 编辑代码 -> 搜索代码 -> 查找文件
 //! 同时验证文档 Handler 仍保留在 handler_registry 中(供阶段 2 Document 模式使用)
 
-use docagent_lib::services::tool::registry::ToolRegistry;
-use docagent_lib::services::tool::builtin::register_builtin_tools;
-use docagent_lib::services::handler::registry::HandlerRegistry;
-use docagent_lib::services::handler::builtin::register_builtin_handlers;
-use docagent_lib::services::document::{SidecarManager, DocumentService};
+use workmolde_lib::services::tool::registry::ToolRegistry;
+use workmolde_lib::services::tool::builtin::register_builtin_tools;
+use workmolde_lib::services::handler::registry::HandlerRegistry;
+use workmolde_lib::services::handler::builtin::register_builtin_handlers;
+use workmolde_lib::services::document::{SidecarManager, DocumentService};
 use serde_json::json;
 use std::sync::Arc;
 
@@ -3013,7 +3013,7 @@ async fn test_programming_workflow() {
     use std::path::PathBuf;
 
     let registry = create_test_registry();
-    let tmp_dir = std::env::temp_dir().join("docagent_phase1_integration_test");
+    let tmp_dir = std::env::temp_dir().join("workmolde_phase1_integration_test");
     std::fs::create_dir_all(&tmp_dir).unwrap();
 
     // 步骤 1:创建一个代码文件
@@ -3078,7 +3078,7 @@ async fn test_programming_workflow() {
 #[tokio::test]
 async fn test_system_prompt_programming_focus() {
     // 验证系统提示词以编程 Agent 为主,同时保留文档处理能力的引用(供 Document 模式使用)
-    let prompt = docagent_lib::services::agent::context::AgentContext::build_system_prompt("/tmp");
+    let prompt = workmolde_lib::services::agent::context::AgentContext::build_system_prompt("/tmp");
 
     // 不应包含旧的"文档处理专家"身份定位
     assert!(!prompt.contains("文档处理专家"), "系统提示词仍包含旧的'文档处理专家'身份");
@@ -3095,9 +3095,9 @@ async fn test_system_prompt_programming_focus() {
 
 #[test]
 fn test_agents_md_loading() {
-    use docagent_lib::services::agent::prompts::agents_md_loader::load_agents_md;
+    use workmolde_lib::services::agent::prompts::agents_md_loader::load_agents_md;
 
-    let tmp = std::env::temp_dir().join("docagent_test_agents_md_integration");
+    let tmp = std::env::temp_dir().join("workmolde_test_agents_md_integration");
     std::fs::create_dir_all(&tmp).unwrap();
     std::fs::write(tmp.join("AGENTS.md"), "# 项目规则\n- 使用 4 空格缩进\n- 添加中文注释").unwrap();
 
@@ -3131,11 +3131,11 @@ cargo test --test phase1_integration_test
 
 ```bash
 # Rust 后端编译
-cargo build -p docagent_lib
+cargo build -p workmolde_lib
 # 预期:无错误,无警告
 
 # Clippy 静态检查
-cargo clippy -p docagent_lib -- -D warnings
+cargo clippy -p workmolde_lib -- -D warnings
 # 预期:无警告
 
 # 格式检查
@@ -3183,7 +3183,7 @@ cargo test test_read_with_line_numbers
 
 ### 4.4 日志验证
 
-启动应用后,检查 `log/docagent.log`:
+启动应用后,检查 `log/workmolde.log`:
 - 无 "Sidecar" 相关错误日志
 - 无 "Handler" 相关错误日志
 - 系统提示词构建日志显示"编程 Agent"身份
@@ -3256,7 +3256,7 @@ cargo test test_read_with_line_numbers
 - [regex crate](https://docs.rs/regex):正则表达式
 - [similar crate](https://docs.rs/similar):差异计算
 
-### 7.3 DocAgent 内部文档
+### 7.3 WorkMolde AI 内部文档
 
 - [总体改造计划](./2026-07-08-coding-agent-refactor-overview.md)
 - [技术架构](../tech_architecture.md)

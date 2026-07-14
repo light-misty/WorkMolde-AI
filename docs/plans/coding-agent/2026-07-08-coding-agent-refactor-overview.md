@@ -1,9 +1,9 @@
-# DocAgent 编程 Agent 改造总体计划
+# WorkMolde AI 编程 Agent 改造总体计划
 
 > 文档版本:v1.2(2026-07-09 修订:LSP 单工具架构,新增 apply_patch/question 工具,工具清单对齐 OpenCode 13 个,grep/glob 基于 ignore crate,websearch 改为 MCP 协议,read_lines 合并到 read)
 > v1.1(2026-07-08 修订:保留文档 Handler,新增 Document 模式)
 > 创建日期:2026-07-08
-> 改造目标:将 DocAgent 从文档处理智能体改造为通用编程 Agent,参照 OpenCode 的功能实现,同时保留文档处理能力(按 Document 模式启用)
+> 改造目标:将 WorkMolde AI 从文档处理智能体改造为通用编程 Agent,参照 OpenCode 的功能实现,同时保留文档处理能力(按 Document 模式启用)
 > 改造原则:全面改造,分阶段进行,保证质量,不改变现有 UI 设计
 
 ---
@@ -12,15 +12,15 @@
 
 ### 1.1 背景
 
-DocAgent 起初定位为 AI 文档处理桌面应用,基于 Tauri 2.x (Rust + React/TypeScript) 构建,通过 4 个文档 Handler (docx/xlsx/pptx/pdf,经 Python Sidecar 执行)完成文档的生成、读取、修改、格式转换。
+WorkMolde AI 起初定位为 AI 文档处理桌面应用,基于 Tauri 2.x (Rust + React/TypeScript) 构建,通过 4 个文档 Handler (docx/xlsx/pptx/pdf,经 Python Sidecar 执行)完成文档的生成、读取、修改、格式转换。
 
 随着产品定位调整,需将其改造为通用编程 Agent 应用(类似 Claude Code、OpenCode、Codex),让智能体通过编写代码处理任何事情。**但文档处理能力并不废弃**:通过新增 `Document` Agent 模式(与 Plan/Build 同级),用户切换到 Document 模式后,4 个文档 Handler 才被动态启用(出现在 LLM 可见的工具列表中);在 Plan/Build 模式下,这些 Handler 不会出现在工具列表中,LLM 完全感知不到它们的存在。
 
-> **重要说明**:`Document` 模式为 DocAgent 原创设计,OpenCode 实际只有 `build`/`plan` 两个 primary 模式(外加 `general`/`explore` 等 subagent)。DocAgent 新增 Document 模式的目的是保留原有的文档处理能力,使应用在获得编程 Agent 能力的同时不丢失文档处理特色。
+> **重要说明**:`Document` 模式为 WorkMolde AI 原创设计,OpenCode 实际只有 `build`/`plan` 两个 primary 模式(外加 `general`/`explore` 等 subagent)。WorkMolde AI 新增 Document 模式的目的是保留原有的文档处理能力,使应用在获得编程 Agent 能力的同时不丢失文档处理特色。
 
 ### 1.2 改造目标
 
-参照开源编程 Agent [OpenCode](https://github.com/sst/opencode) (sst/opencode, branch 2.0) 的功能实现,对 DocAgent 进行大型改造:
+参照开源编程 Agent [OpenCode](https://github.com/sst/opencode) (sst/opencode, branch 2.0) 的功能实现,对 WorkMolde AI 进行大型改造:
 
 1. **系统提示词架构**:从"文档处理专家"重构为"编程 Agent",引入 AGENTS.md 机制、Agent 类型特定 prompt
 2. **内置工具链**:保留文档 Handler(按模式动态启用),新增编程核心工具(edit/glob/grep/todowrite/task/webfetch/lsp 等)
@@ -34,22 +34,22 @@ DocAgent 起初定位为 AI 文档处理桌面应用,基于 Tauri 2.x (Rust + Re
 ### 1.3 改造原则
 
 - **不改变 UI 设计**:前端组件基本不动,仅在必要时增加模式切换、权限对话框等交互元素
-- **保留良好基础**:复用 DocAgent 现有的 LlmRouter、流式事件机制、确认通道、增量持久化、Scratchpad 等已验证的设计
+- **保留良好基础**:复用 WorkMolde AI 现有的 LlmRouter、流式事件机制、确认通道、增量持久化、Scratchpad 等已验证的设计
 - **分阶段交付**:按依赖关系分 5 个阶段,每阶段独立可交付、可测试
 - **质量优先**:每阶段配套测试用例,遵循 TDD(测试驱动开发)
 
 ---
 
-## 二、OpenCode vs DocAgent 架构对比
+## 二、OpenCode vs WorkMolde AI 架构对比
 
 ### 2.1 整体架构对比
 
-| 维度 | OpenCode | DocAgent 现状 | 改造方向 |
+| 维度 | OpenCode | WorkMolde AI 现状 | 改造方向 |
 |------|----------|---------------|----------|
 | **定位** | 终端编程 Agent | 文档处理 Agent | 桌面编程 Agent |
 | **语言栈** | TypeScript (Bun) | Rust + React/TypeScript | 保持 Rust + React |
 | **Agent 类型** | build/plan/general/explore/scout/compaction/title/summary (8个, scout 为外部文档/依赖研究的只读子代理) | 单一 Agent | 引入 build/plan/explore/general |
-| **工具数量** | 13 个核心工具(官方对齐) | 16 个 Tool + 4 个 Handler | 保留 Handler(按模式启用),对齐 OpenCode 13 个核心工具 + DocAgent 扩展 |
+| **工具数量** | 13 个核心工具(官方对齐) | 16 个 Tool + 4 个 Handler | 保留 Handler(按模式启用),对齐 OpenCode 13 个核心工具 + WorkMolde AI 扩展 |
 | **权限系统** | 三态(allow/deny/ask) + 持久化规则 | ConfirmationLevel(Always/EditOnly/Never) | 升级为三态权限 |
 | **Skill 系统** | .opencode/skill/*/SKILL.md | 无 | 实现 Skill 加载 |
 | **LSP 集成** | 有(单一 lsp 工具,operation 参数路由) | 无 | 实现 LSP 客户端(实验性) |
@@ -66,7 +66,7 @@ OpenCode 系统提示词架构(多段式):
 
 ```
 System Prompt
-├── 基础 prompt (系统内置核心提示词,OpenCode 原实现按 Provider 分类为 default.txt / anthropic / gpt / gemini 等,DocAgent 改造为统一基础 prompt,不按 Provider 区分)
+├── 基础 prompt (系统内置核心提示词,OpenCode 原实现按 Provider 分类为 default.txt / anthropic / gpt / gemini 等,WorkMolde AI 改造为统一基础 prompt,不按 Provider 区分)
 ├── 环境信息 (工作目录、workspace root、Git 状态、平台、日期、模型 ID)
 ├── 自定义规则 (AGENTS.md: 全局 ~/.config/opencode/AGENTS.md + 项目级向上查找)
 ├── Agent 特定 prompt (build/plan/compaction/title/summary 等)
@@ -74,11 +74,11 @@ System Prompt
 └── MCP 指令 (XML 格式 <mcp_instructions>)
 ```
 
-**DocAgent 现有系统提示词(分层架构)**:
+**WorkMolde AI 现有系统提示词(分层架构)**:
 
 ```
 System Prompt
-├── Layer 0: 身份层 (DocAgent 文档处理专家)
+├── Layer 0: 身份层 (WorkMolde AI 文档处理专家)
 ├── Layer 1: 规则层
 ├── Layer 2: 上下文层 (workspace_path, env_info, author_info)
 ├── Layer 3: 策略层 (tool_strategy)
@@ -94,7 +94,7 @@ System Prompt
 
 ### 2.3 工具链对比
 
-| 工具类别 | OpenCode | DocAgent 现状 | 改造方向 |
+| 工具类别 | OpenCode | WorkMolde AI 现状 | 改造方向 |
 |---------|----------|---------------|----------|
 | **文件读取** | read(行号、行范围、二进制保护) | read, read_file_lines | 改造 read 增加行号,合并 read_lines(通过 start_line/end_line 参数实现) |
 | **文件编辑** | edit(oldString/newString 精确替换,FileTime 锁) | write_text_file(整体覆盖) | **新增 edit 工具** |
@@ -110,7 +110,7 @@ System Prompt
 | **用户提问** | question | 无 | **新增 question 工具**(独立权限类别) |
 | **LSP** | lsp(单一工具,operation 路由 8 种操作) | 无 | **新增 lsp 工具**(阶段5,实验性) |
 | **代码搜索** | sourcecode, codesearch | 无 | **新增 sourcecode 工具** |
-| **脚本执行** | 无(用 bash) | write_script, run_command | 保留(DocAgent 特色) |
+| **脚本执行** | 无(用 bash) | write_script, run_command | 保留(WorkMolde AI 特色) |
 | **文档处理** | 无 | 4 个 Handler | **保留,按 Document 模式动态启用** |
 
 ---
@@ -190,7 +190,7 @@ System Prompt
 
 **主要任务**:
 1. 实现三态权限系统(allow/deny/ask):
-   - 权限类型:edit, read(DocAgent 扩展,OpenCode 原生不管控 read 权限), bash, webfetch, task, external_directory, doom_loop, document 等
+   - 权限类型:edit, read(WorkMolde AI 扩展,OpenCode 原生不管控 read 权限), bash, webfetch, task, external_directory, doom_loop, document 等
     - 用户回复:once / reject
    - 权限规则持久化(数据库 permission 表)
 2. 实现 Plan/Build/Document 三态模式切换(仅前端按钮,不提供 LLM 工具):
@@ -326,9 +326,9 @@ System Prompt
 
 ## 四、关键技术决策
 
-### 4.1 保留的 DocAgent 设计
+### 4.1 保留的 WorkMolde AI 设计
 
-以下 DocAgent 现有设计经过验证,将在改造中保留:
+以下 WorkMolde AI 现有设计经过验证,将在改造中保留:
 
 1. **LlmRouter 多 Provider 适配**:OpenAI/Anthropic/Gemini/Ollama 适配器 + Fallback + 健康检查
 2. **流式事件机制**:agent:thinking/content/tool_call/tool_result/done/error 事件流
@@ -553,7 +553,7 @@ fn layer_context(
 - **中文文档**:https://opencode.doczh.com/docs
 - **源码解析**:packages/opencode/src/{agent,tool,skill,session,permission}/
 
-### 8.2 DocAgent 现有文档
+### 8.2 WorkMolde AI 现有文档
 
 - [技术架构](../tech_architecture.md)
 - [Tauri 命令规范](../tauri_commands.md)
@@ -580,11 +580,11 @@ fn layer_context(
 | M3: Skill 与压缩 | 阶段 3 完成 | Skill 加载正常,长对话不爆上下文 |
 | M4: 子 Agent | 阶段 4 完成 | task 工具委托正常,网页抓取可用 |
 | M5: LSP 集成 | 阶段 5 完成 | 跳转定义、查找引用、诊断反馈可用 |
-| **最终验收** | 全部完成 | DocAgent 可作为通用编程 Agent 使用,通过 E2E 测试 |
+| **最终验收** | 全部完成 | WorkMolde AI 可作为通用编程 Agent 使用,通过 E2E 测试 |
 
 ---
 
-## 十、附录:DocAgent 现有架构关键信息
+## 十、附录:WorkMolde AI 现有架构关键信息
 
 ### 10.1 AppState 定义
 
@@ -625,21 +625,21 @@ pub struct AppState {
 | websearch | websearch | 网络搜索(MCP 协议,Exa AI,JSON-RPC 2.0) |
 | question | question | 向用户提问(收集偏好或澄清需求) |
 
-> **DocAgent 扩展工具**(不在 OpenCode 13 个核心工具内,DocAgent 特色保留):
-> - `write_script`:将智能体生成的脚本写入系统临时目录(DocAgent 特色)
+> **WorkMolde AI 扩展工具**(不在 OpenCode 13 个核心工具内,WorkMolde AI 特色保留):
+> - `write_script`:将智能体生成的脚本写入系统临时目录(WorkMolde AI 特色)
 > - `task`:子 Agent 委托工具(阶段4 实现)
 > - `sourcecode`:代码语义搜索(阶段3 实现,基于 tree-sitter)
 > - 文档 Handler(`docx`/`xlsx`/`pptx`/`pdf`):仅 Document 模式下动态启用
 
 > **命名规则说明**：
-> - DocAgent 原有工具：复合词保留下划线（如 `file_info`/`read_lines`/`remove_dir`/`write_script`），单词无下划线（如 `list`/`read`/`bash`）
+> - WorkMolde AI 原有工具：复合词保留下划线（如 `file_info`/`read_lines`/`remove_dir`/`write_script`），单词无下划线（如 `list`/`read`/`bash`）
 > - 从 OpenCode 引入的工具：沿用 OpenCode 原名，不适用下划线规则（如 `todowrite`/`webfetch`/`websearch`/`apply_patch`/`question`），因为这些工具名在 OpenCode 生态中已约定俗成。原 docx_handler 改名为 docx ，其他 handler 同理。
 
 ### 工具重命名映射表
 
 以下工具在改造过程中进行重命名、合并或新增（当前代码使用旧名，改造后使用新名）：
 
-**A. DocAgent 原有工具重命名**
+**A. WorkMolde AI 原有工具重命名**
 
 | 当前代码名(旧) | 目标新名 | 类型 | 说明 |
 |---------------|---------|------|------|
