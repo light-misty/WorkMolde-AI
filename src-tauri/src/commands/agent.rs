@@ -272,7 +272,9 @@ pub async fn start_agent(
             // 检查当前会话标题是否为默认标题，仅对默认标题的会话生成新标题
             let should_generate = match title_db.conn() {
                 Ok(conn) => match session_repo::get_session(&conn, &title_sid) {
-                    Ok(session) => session.title.starts_with("新会话"),
+                    Ok(session) => {
+                        session.title.starts_with("新会话") || session.title.starts_with("New Session")
+                    },
                     Err(_) => false,
                 },
                 Err(_) => false,

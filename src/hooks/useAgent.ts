@@ -28,6 +28,7 @@ import {
   type DonePayload,
   type NetworkRetryPayload,
 } from "../services/event";
+import i18n from "../i18n";
 import { useWorkflowStore, setCurrentSessionId, type BackgroundAgentEvent } from "../stores/useWorkflowStore";
 import { useAttachmentStore } from "../stores/useAttachmentStore";
 import { useAgentModeStore } from "../stores/useAgentModeStore";
@@ -514,7 +515,10 @@ export function useAgent(): UseAgentReturn {
         if (!sid) {
           // 创建会话时携带当前工作区 ID，使会话可以按工作区分组
           const workspaceId = options?.workspaceId as string | undefined;
-          const session = await tauriCmd.createSession({ workspaceId });
+          const session = await tauriCmd.createSession({
+            title: `${i18n.t('session.newSession')} ${new Date().toLocaleTimeString()}`,
+            workspaceId,
+          });
           sid = session.id;
           setSessionId(sid);
           sessionIdRef.current = sid;
