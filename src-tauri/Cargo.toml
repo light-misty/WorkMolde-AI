@@ -1,6 +1,6 @@
 [package]
 name = "workmolde"
-version = "1.0.7"
+version = "1.1.0"
 description = "AI工作助手桌面应用"
 authors = ["WorkMolde AI Team"]
 license = "MIT"
