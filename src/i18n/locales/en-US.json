@@ -1,9 +1,7 @@
 {
   "app": {
     "name": "Samoyed Work",
-    "desc": "AI Agent-powered intelligent work assistant desktop app",
-    "techStack": "Tauri 2 + React + Rust + Python",
-    "engineVersion": "Python 3.12+ Sidecar"
+    "desc": "AI Agent-powered intelligent work assistant desktop app"
   },
   "topBar": {
     "connected": "Connected",
@@ -295,10 +293,7 @@
       "currentVersion": "Current version: v{{version}}",
       "checking": "Checking...",
       "checkUpdate": "Check for Updates",
-      "about": "About",
-      "aboutDesc": "AI Agent-powered intelligent document processing desktop app",
-      "techStack": "Tech Stack",
-      "engineVersion": "Engine Version"
+      "about": "About"
     },
     "appearance": {
       "sectionTitle": "Theme",

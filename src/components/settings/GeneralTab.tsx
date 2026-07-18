@@ -289,19 +289,7 @@ export function GeneralTab() {
         <div className="about-card">
           <div className="about-name">Samoyed Work</div>
           <div className="about-version">v{currentVersion || "0.1.0"}</div>
-          <div className="about-desc">
-            {t('settings.general.aboutDesc')}
-          </div>
-          <div className="about-meta">
-            <div className="about-meta-row">
-              <span className="about-meta-label">{t('settings.general.techStack')}</span>
-              <span className="about-meta-value">{t('app.techStack')}</span>
-            </div>
-            <div className="about-meta-row">
-              <span className="about-meta-label">{t('settings.general.engineVersion')}</span>
-              <span className="about-meta-value">{t('app.engineVersion')}</span>
-            </div>
-          </div>
+
         </div>
       </div>
 
@@ -390,31 +378,6 @@ export function GeneralTab() {
           font-family: var(--font-mono);
           color: var(--color-text-tertiary);
           margin-top: 4px;
-        }
-        .about-desc {
-          font-size: 13px;
-          color: var(--color-text-secondary);
-          margin-top: 8px;
-        }
-        .about-meta {
-          margin-top: 16px;
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-        .about-meta-row {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        .about-meta-label {
-          font-size: 12px;
-          color: var(--color-text-quaternary);
-          min-width: 60px;
-        }
-        .about-meta-value {
-          font-size: 12px;
-          color: var(--color-text-secondary);
         }
         .setting-toggle {
           position: relative;

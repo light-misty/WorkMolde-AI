@@ -1,9 +1,7 @@
 {
   "app": {
     "name": "Samoyed Work",
-    "desc": "基于 AI Agent 的智能工作助手桌面应用",
-    "techStack": "Tauri 2 + React + Rust + Python",
-    "engineVersion": "Python 3.12+ Sidecar"
+    "desc": "基于 AI Agent 的智能工作助手桌面应用"
   },
   "topBar": {
     "connected": "已连接",
@@ -295,10 +293,7 @@
       "currentVersion": "当前版本: v{{version}}",
       "checking": "检查中...",
       "checkUpdate": "检查更新",
-      "about": "关于",
-      "aboutDesc": "基于 AI Agent 的智能文档处理桌面应用",
-      "techStack": "技术栈",
-      "engineVersion": "引擎版本"
+      "about": "关于"
     },
     "appearance": {
       "sectionTitle": "主题",
