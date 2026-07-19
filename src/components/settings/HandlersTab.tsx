@@ -23,14 +23,11 @@ export function HandlersTab() {
               </div>
               <div className="handler-desc">{t(`settings.tools.descriptions.${tool.id}`, { defaultValue: tool.description })}</div>
             </div>
-            <div className="handler-always-on">
-              {t('settings.handlers.alwaysEnabled')}
-            </div>
           </div>
         ))}
       </div>
 
-      {/* 内置 Handlers（始终启用） */}
+      {/* 内置 Handlers */}
       <div className="section-header" style={{ marginTop: 24 }}>
         <span className="section-title">{t('settings.handlers.builtinHandlers')}</span>
         <span className="section-badge">{handlers.length}</span>
@@ -45,9 +42,6 @@ export function HandlersTab() {
                 <span className="handler-handler-badge">{t('settings.handlers.handlerBadge')}</span>
               </div>
               <div className="handler-desc">{t(`settings.handlers.descriptions.${s.id}`, { defaultValue: s.description })}</div>
-            </div>
-            <div className="handler-always-on">
-              {t('settings.handlers.alwaysEnabled')}
             </div>
           </div>
         ))}
@@ -102,11 +96,6 @@ export function HandlersTab() {
           border-radius: 4px;
           background: var(--color-purple-light);
           color: var(--color-purple);
-        }
-        .handler-always-on {
-          font-size: 11px;
-          color: var(--color-text-quaternary);
-          flex-shrink: 0;
         }
         .handler-desc {
           font-size: 11px;

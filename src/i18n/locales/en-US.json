@@ -404,7 +404,6 @@
       "noHandlers": "No Handlers",
       "toolBadge": "Tool",
       "handlerBadge": "Handler",
-      "alwaysEnabled": "Always Enabled",
       "descriptions": {
         "docx": "Word document (.docx) handler, supports three operations: read, format conversion, and analysis. Conversion supports md/txt/pdf formats (consistent with sidecar word_handler.convert actual support).",
         "xlsx": "Excel document (.xlsx) handler, supports three operations: read, format conversion, and analysis. Conversion supports csv/pdf/html/txt formats (consistent with sidecar excel_handler.convert actual support).",
@@ -416,7 +415,6 @@
     "tools": {
       "sectionTitle": "Tools Management",
       "builtinTools": "Built-in Tools",
-      "alwaysEnabled": "Always Enabled",
       "noTools": "No Tools",
       "descriptions": {
         "list": "List files and subdirectories in a specified directory. Use cases: browse workspace contents, locate files, understand directory hierarchy. Supports depth control and extension filtering.",

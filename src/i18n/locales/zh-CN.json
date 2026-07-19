@@ -403,13 +403,11 @@
       "builtinHandlers": "内置 Handlers",
       "noHandlers": "暂无 Handler",
       "toolBadge": "Tool",
-      "handlerBadge": "Handler",
-      "alwaysEnabled": "始终启用"
+      "handlerBadge": "Handler"
     },
     "tools": {
       "sectionTitle": "Tools 管理",
       "builtinTools": "内置 Tools",
-      "alwaysEnabled": "始终启用",
       "noTools": "暂无 Tool"
     },
     "templates": {
