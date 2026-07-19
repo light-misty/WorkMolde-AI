@@ -1,11 +1,9 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../common/Icon";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeHighlight from "rehype-highlight";
 import * as Diff from "diff";
 import { PdfCanvasViewer } from "./PdfCanvasViewer";
+import { MarkdownPreview } from "./MarkdownPreview";
 
 interface DiffData {
   oldContent: string;
@@ -108,7 +106,11 @@ function ContentRenderer({ content, fileType, pdfBase64Data }: { content: string
 
   // Markdown 渲染
   if (normalizedType === "md" || normalizedType === "markdown") {
-    return <MarkdownPreview content={content} />;
+    return (
+      <div className="px-10 py-8">
+        <MarkdownPreview content={content} />
+      </div>
+    );
   }
 
   // Excel 表格渲染
@@ -129,29 +131,6 @@ function ContentRenderer({ content, fileType, pdfBase64Data }: { content: string
           {t("preview.noContent")}
         </div>
       )}
-    </div>
-  );
-}
-
-/**
- * Markdown 预览组件
- * 使用 react-markdown + remark-gfm + rehype-highlight 渲染
- */
-function MarkdownPreview({ content }: { content: string }) {
-  const { t } = useTranslation();
-  if (!content) {
-    return (
-      <div className="flex items-center justify-center h-full text-text-tertiary px-10 py-8">
-        {t("preview.noContent")}
-      </div>
-    );
-  }
-
-  return (
-    <div className="markdown-preview px-10 py-8 leading-[1.8] text-text-secondary text-[14px]">
-      <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
-        {content}
-      </Markdown>
     </div>
   );
 }
