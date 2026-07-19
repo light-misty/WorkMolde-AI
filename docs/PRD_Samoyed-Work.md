@@ -186,7 +186,7 @@ Samoyed Work 是一款专注于文档处理的 AI Agent 桌面应用，面向软
 | run_command | 通过 Git Bash 执行命令（运行脚本） |
 
 #### 操作确认机制
-- 确认级别：Always / EditOnly / Never（在 General Settings 中配置）
+- 确认级别：Always / DeleteOnly / Never（在 General Settings 中配置）
 - run_command 执行高风险命令需要确认
 - 确认弹窗显示代码功能描述和代码摘要
 - 5 分钟超时自动取消

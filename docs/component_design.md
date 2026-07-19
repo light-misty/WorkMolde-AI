@@ -267,7 +267,7 @@ type NodeStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 type ExecutionStatus = 'idle' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 // 确认级别
-type ConfirmationLevel = 'Always' | 'EditOnly' | 'Never';
+type ConfirmationLevel = 'Always' | 'DeleteOnly' | 'Never';
 
 // 主题模式
 type ThemeMode = 'light' | 'dark' | 'system';

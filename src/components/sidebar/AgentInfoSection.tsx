@@ -64,7 +64,7 @@ export function AgentInfoSection() {
   // 确认级别选项（移入组件内部以使用 t() 翻译）
   const confirmationLevelOptions: { value: string; label: string }[] = [
     { value: "always", label: t('agentInfo.confirmAlways') },
-    { value: "editOnly", label: t('agentInfo.confirmEditOnly') },
+    { value: "deleteOnly", label: t('agentInfo.confirmEditOnly') },
     { value: "never", label: t('agentInfo.confirmNever') },
   ];
   // 优先显示用户选择的首选 Provider，回退到默认 Provider，与 InputArea/TopBar 显示逻辑一致
@@ -227,7 +227,7 @@ export function AgentInfoSection() {
               className="ai-field-select"
               aria-label={t('agentInfo.confirmLevel')}
               value={settings.general.confirmationLevel}
-              onChange={(e) => updateSettings({ general: { confirmationLevel: e.target.value as "always" | "editOnly" | "never" } })}
+              onChange={(e) => updateSettings({ general: { confirmationLevel: e.target.value as "always" | "deleteOnly" | "never" } })}
             >
               {confirmationLevelOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>

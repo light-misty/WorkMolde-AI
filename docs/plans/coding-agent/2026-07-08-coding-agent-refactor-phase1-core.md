@@ -1711,10 +1711,10 @@ let needs_workspace_root = matches!(
 );
 ```
 
-在 `ConfirmationLevel::EditOnly` 分支中,增加 edit 工具的确认逻辑:
+在 `ConfirmationLevel::DeleteOnly` 分支中,保留 remove 和 bash 高风险命令的确认逻辑:
 
 ```rust
-ConfirmationLevel::EditOnly => {
+ConfirmationLevel::DeleteOnly => {
     if HIGH_RISK_HANDLERS.contains(&name) {
         return true;
     }
@@ -2484,7 +2484,7 @@ impl Tool for ApplyPatchTool {
     async fn execute(&self, params: Value) -> ToolResult {
         // TODO: 解析 patchText,逐段应用 Add/Update/Move/Delete 操作
         // 路径校验:所有路径必须在 workspace_root 内(由 executor 注入)
-        // 权限:归入 edit 类别,在 ConfirmationLevel::EditOnly 下需用户确认
+        // 权限:归入 edit 类别,在 ConfirmationLevel::DeleteOnly 下需用户确认
         // 参照 OpenCode 实现:使用 output.args.patchText
         unimplemented!()
     }
@@ -2500,7 +2500,7 @@ registry.register(Box::new(ApplyPatchTool));
 **步骤 3:在 executor.rs 中将 apply_patch 归入 edit 权限类别**
 
 - apply_patch 不加入 `needs_workspace_root`(路径在 patchText 内解析,由工具内部校验 workspace_root)
-- apply_patch 归入 EditOnly 确认逻辑(与 edit 工具一致,涉及文件修改)
+- apply_patch 归入 DeleteOnly 确认逻辑(与 edit 工具一致,涉及文件修改)
 
 **验证步骤**:
 - `cargo test test_apply_patch` 全部通过

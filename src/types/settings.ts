@@ -4,7 +4,7 @@ export type SettingsTab = "llm" | "workspace" | "handler" | "template" | "permis
 
 // ----- 应用设置 -----
 
-export type ConfirmationLevel = "always" | "editOnly" | "never";
+export type ConfirmationLevel = "always" | "deleteOnly" | "never";
 export type RetentionPolicy = "byCount" | "byDays" | "both";
 export type ThemeMode = "light" | "dark" | "system";
 

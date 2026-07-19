@@ -220,7 +220,7 @@
     "editAuthorInfo": "Edit author info",
     "confirmLevel": "Confirmation Level",
     "confirmAlways": "Always confirm",
-    "confirmEditOnly": "Confirm edits only",
+      "confirmEditOnly": "Confirm delete only",
     "confirmNever": "Auto-confirm all"
   },
   "contextWindow": {
@@ -259,7 +259,7 @@
       "confirmLevel": "Confirmation Level",
       "confirmLevelDesc": "Confirmation policy for Agent file operations",
       "confirmAlways": "Always confirm",
-      "confirmEditOnly": "Confirm edits only",
+    "confirmEditOnly": "Confirm delete only",
       "confirmNever": "Auto-confirm all",
       "codeExecutionTitle": "Code Execution Environment",
       "gitBashPath": "Git Bash Path",
@@ -598,7 +598,7 @@
       "faqQ2": "How to create a custom Handler?",
       "faqA2": "In Settings > Handlers Management, click the \"Add Custom Handler\" button. Custom Handlers are essentially Prompt templates that support {{param_name}} placeholders, which are automatically replaced when Agent calls them.",
       "faqQ3": "How does Agent confirm high-risk operations?",
-      "faqA3": "When Agent performs high-risk operations such as deletion or overwriting, a confirmation dialog will pop up, and you can choose to approve or reject. The confirmation level can be adjusted in Settings > General (Always confirm / Confirm edits only / Auto-confirm all).",
+      "faqA3": "When Agent performs high-risk operations such as deletion or overwriting, a confirmation dialog will pop up, and you can choose to approve or reject. The confirmation level can be adjusted in Settings > General (Always confirm / Confirm delete only / Auto-confirm all).",
       "faqQ4": "How to view document version history?",
       "faqA4": "Right-click a file in the file tree and select \"Version History\", or click the version history button in the document preview panel. A version snapshot is automatically created before each document modification, and you can roll back to any historical version.",
       "faqQ5": "How to switch workspaces?",

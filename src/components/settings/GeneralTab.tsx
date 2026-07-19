@@ -89,7 +89,7 @@ export function GeneralTab() {
             onChange={(e) => updateSettings({ general: { confirmationLevel: e.target.value as typeof settings.general.confirmationLevel } })}
           >
             <option value="always">{t('settings.general.confirmAlways')}</option>
-            <option value="editOnly">{t('settings.general.confirmEditOnly')}</option>
+            <option value="deleteOnly">{t('settings.general.confirmEditOnly')}</option>
             <option value="never">{t('settings.general.confirmNever')}</option>
           </select>
         </div>

@@ -358,27 +358,14 @@ impl<R: Runtime> AgentExecutor<R> {
     /// 检查是否为高风险操作（需要用户确认）
     /// 根据确认级别决定哪些操作需要用户确认：
     /// - Never: 任何操作都不需要确认
-    /// - EditOnly: 仅高风险操作需要确认
+    /// - DeleteOnly: 仅删除操作需要确认
     /// - Always: 所有 Handler/Tool 调用都需要确认
     fn needs_confirmation(&self, name: &str, params: &serde_json::Value) -> bool {
         match self.confirmation_level {
             ConfirmationLevel::Never => false,
-            ConfirmationLevel::EditOnly => {
-                // 仅编辑/删除操作需要确认
+            ConfirmationLevel::DeleteOnly => {
+                // 仅删除操作需要确认
                 if HIGH_RISK_HANDLERS.contains(&name) {
-                    return true;
-                }
-                // write 在覆盖模式（非追加）下属于修改操作
-                if name == "write"
-                    && !params
-                        .get("append")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false)
-                {
-                    return true;
-                }
-                // edit 工具修改文件内容，属于编辑操作，需要确认
-                if name == "edit" {
                     return true;
                 }
                 // bash 中的高风险命令需确认

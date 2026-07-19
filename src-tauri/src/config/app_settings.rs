@@ -9,8 +9,8 @@ use crate::errors::CommandError;
 #[serde(rename_all = "camelCase")]
 pub enum ConfirmationLevel {
     Always,
+    DeleteOnly,
     #[default]
-    EditOnly,
     Never,
 }
 

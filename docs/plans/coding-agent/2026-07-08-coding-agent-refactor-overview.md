@@ -50,7 +50,7 @@ Samoyed Work 起初定位为 AI 文档处理桌面应用,基于 Tauri 2.x (Rust 
 | **语言栈** | TypeScript (Bun) | Rust + React/TypeScript | 保持 Rust + React |
 | **Agent 类型** | build/plan/general/explore/scout/compaction/title/summary (8个, scout 为外部文档/依赖研究的只读子代理) | 单一 Agent | 引入 build/plan/explore/general |
 | **工具数量** | 13 个核心工具(官方对齐) | 16 个 Tool + 4 个 Handler | 保留 Handler(按模式启用),对齐 OpenCode 13 个核心工具 + Samoyed Work 扩展 |
-| **权限系统** | 三态(allow/deny/ask) + 持久化规则 | ConfirmationLevel(Always/EditOnly/Never) | 升级为三态权限 |
+| **权限系统** | 三态(allow/deny/ask) + 持久化规则 | ConfirmationLevel(Always/DeleteOnly/Never) | 升级为三态权限 |
 | **Skill 系统** | .opencode/skill/*/SKILL.md | 无 | 实现 Skill 加载 |
 | **LSP 集成** | 有(单一 lsp 工具,operation 参数路由) | 无 | 实现 LSP 客户端(实验性) |
 | **子 Agent** | 有(task 工具) | 无 | 实现 Agent 嵌套 |

@@ -50,7 +50,7 @@ const defaultSettings: AppSettings = {
     authorName: "",
     authorEmail: "",
     authorCompany: "",
-    confirmationLevel: "editOnly",
+    confirmationLevel: "deleteOnly",
   },
   appearance: {
     themeMode: "system",

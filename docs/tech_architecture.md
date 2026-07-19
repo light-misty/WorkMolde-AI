@@ -407,10 +407,10 @@ Handler/Tool 调用 → 根据类型分发
 ```
 高风险操作（run_command 执行危险命令）
   │
-  ├─→ 检查确认级别 (Always/EditOnly/Never)
+  ├─→ 检查确认级别 (Always/DeleteOnly/Never)
   │    ├─ Never → 直接执行
   │    ├─ Always → 必须确认
-  │    └─ EditOnly (默认) → 生成/修改操作需确认
+   │    └─ DeleteOnly (默认) → 仅删除操作需确认
   │
   ├─→ agent:confirm → 前端显示确认弹窗
   │    ├─ 代码功能描述 + 代码摘要(前200字符)
