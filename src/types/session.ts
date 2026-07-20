@@ -64,7 +64,6 @@ export interface BranchGroupInfo {
 export interface CreateBranchResult {
   branchId: string;
   branchGroupId: string;
-  newMessageId: string;
 }
 
 export interface SessionSummary {

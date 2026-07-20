@@ -146,6 +146,15 @@ pub async fn start_agent(
         .unwrap_or("build")
         .to_string();
 
+    // 从 options 提取 branch_group_id（仅创建分支后调用 startAgent 时传入）
+    // 用于在持久化新 user 消息时设置 branch_group_id，使前端分支切换器能定位到该分叉点
+    let branch_group_id = options
+        .as_ref()
+        .and_then(|o| o.get("branchGroupId"))
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+
     let agent_mode = match agent_mode_str.as_str() {
         "plan" => AgentMode::Plan,
         "build" => AgentMode::Build,
@@ -240,6 +249,7 @@ pub async fn start_agent(
             &doom_loop_detector,
             &agent_mode_manager,
             &skill_registry,
+            branch_group_id.as_deref(),
         )
         .await;
 
@@ -994,11 +1004,13 @@ pub async fn list_sub_agent_messages(
 /// 支持多 tool_calls：将所有 tool_calls 序列化为 JSON 数组存储
 /// assistant 消息的 tool_call_id 字段存储所有 tool_call 的 id 列表（JSON 数组）
 /// tool 消息的 tool_call_id 字段存储对应的单个 tool_call_id
+/// branch_group_id 仅在创建分支后的首条 user 消息上设置（用于前端分支切换器定位分叉点）
 fn persist_messages_to_db(
     db: &Arc<crate::db::Database>,
     session_id: &str,
     messages: &[ChatMessage],
     branch_id: &str,
+    branch_group_id: Option<&str>,
 ) -> Result<(), CommandError> {
     let conn = db.conn()?;
     for msg in messages {
@@ -1054,6 +1066,9 @@ fn persist_messages_to_db(
             .as_ref()
             .map(|m| serde_json::to_string(m).unwrap_or_default());
 
+        // branch_group_id 仅设置在 user 消息上（分叉点标识），其他角色消息保持 None
+        let msg_branch_group_id = if msg.role == "user" { branch_group_id } else { None };
+
         crate::db::message_repo::create_message(
             &conn,
             &msg_id,
@@ -1069,7 +1084,7 @@ fn persist_messages_to_db(
             msg.attachments.as_deref(),
             metadata_str.as_deref(),
             branch_id,
-            None,
+            msg_branch_group_id,
         )?;
     }
     Ok(())
@@ -1113,6 +1128,7 @@ async fn run_agent(
     doom_loop_detector: &Arc<crate::services::permission::doom_loop::DoomLoopDetector>,
     agent_mode_manager: &Arc<crate::services::agent::AgentModeManager>,
     skill_registry: &Arc<crate::services::skill::registry::SkillRegistry>,
+    branch_group_id: Option<&str>,
 ) -> Result<(), CommandError> {
     log::info!(
         "run_agent 开始: session_id={}, workspace={}",
@@ -1474,6 +1490,7 @@ async fn run_agent(
     // 创建增量持久化回调，每轮迭代后自动持久化新增消息
     let db_for_persist = Arc::clone(db);
     let active_branch_id_for_persist = active_branch_id.clone();
+    let branch_group_id_for_persist = branch_group_id.map(|s| s.to_string());
     #[allow(clippy::type_complexity)]
     let persist_fn: Arc<
         dyn Fn(&str, &[ChatMessage]) -> Result<(), CommandError> + Send + Sync,
@@ -1483,6 +1500,7 @@ async fn run_agent(
             sid,
             messages,
             &active_branch_id_for_persist,
+            branch_group_id_for_persist.as_deref(),
         )
     });
 
@@ -1561,9 +1579,13 @@ async fn run_agent(
                     session_id,
                     unpersisted.len()
                 );
-                if let Err(e) =
-                    persist_messages_to_db(db, session_id, unpersisted, &active_branch_id)
-                {
+                if let Err(e) = persist_messages_to_db(
+                    db,
+                    session_id,
+                    unpersisted,
+                    &active_branch_id,
+                    branch_group_id,
+                ) {
                     log::warn!(
                         "残留消息持久化失败: session_id={}, 错误: {}",
                         session_id,
@@ -1608,9 +1630,13 @@ async fn run_agent(
                     session_id,
                     unpersisted.len()
                 );
-                if let Err(persist_err) =
-                    persist_messages_to_db(db, session_id, unpersisted, &active_branch_id)
-                {
+                if let Err(persist_err) = persist_messages_to_db(
+                    db,
+                    session_id,
+                    unpersisted,
+                    &active_branch_id,
+                    branch_group_id,
+                ) {
                     log::warn!(
                         "失败后消息持久化失败: session_id={}, 错误: {}",
                         session_id,

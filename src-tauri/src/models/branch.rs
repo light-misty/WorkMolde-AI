@@ -38,5 +38,4 @@ pub struct BranchInfo {
 pub struct CreateBranchResult {
     pub branch_id: String,
     pub branch_group_id: String,
-    pub new_message_id: String,
 }

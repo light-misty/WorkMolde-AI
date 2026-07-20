@@ -611,12 +611,19 @@
   background: #eeeeee;
 }
 
+/* 用户消息底部行：水平排列分支切换器与操作按钮，分支切换器在创建分支按钮左边 */
+.wf-user-bottom-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 /* 消息操作按钮容器：水平排列，hover 时显示 */
 .wf-msg-actions-row {
   display: flex;
   align-items: center;
   gap: 2px;
-  margin-top: 8px;
   opacity: 0;
   transition: opacity 0.15s;
 }
@@ -776,7 +783,6 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-top: 4px;
   font-size: 11px;
   color: var(--color-text-tertiary);
 }

@@ -103,24 +103,49 @@ pub fn list_branch_groups(
     conn: &Connection,
     session_id: &str,
 ) -> Result<Vec<BranchGroupInfo>, rusqlite::Error> {
-    // 查询会话内所有非空的 branch_group_id 及其 fork_message_id
+    // 查询会话内所有非空的 branch_group_id 及其 fork_message_id 和 parent_branch_id
+    // parent_branch_id 用于把原分支（如 main）加入分支组，确保切换器能显示所有相关分支
     let mut stmt = conn.prepare(
-        "SELECT DISTINCT branch_group_id, fork_message_id
+        "SELECT DISTINCT branch_group_id, fork_message_id, parent_branch_id
          FROM message_branches
          WHERE session_id = ?1 AND branch_group_id IS NOT NULL
          ORDER BY created_at ASC",
     )?;
-    let groups: Vec<(String, Option<String>)> = stmt
+    let groups: Vec<(String, Option<String>, Option<String>)> = stmt
         .query_map(params![session_id], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, Option<String>>(2)?,
+            ))
         })?
         .filter_map(|r| r.ok())
         .collect();
     drop(stmt);
 
     let mut result = Vec::new();
-    for (group_id, fork_message_id) in groups {
-        let branches = list_branches_by_group(conn, &group_id)?;
+    for (group_id, fork_message_id, parent_branch_id) in groups {
+        let mut branches = list_branches_by_group(conn, &group_id)?;
+
+        // 将原分支（parent_branch_id）加入组，确保切换器能显示所有相关分支
+        // 原分支的 branch_group_id 为 NULL，但它是该分支组的"父分支"
+        if let Some(parent_id) = parent_branch_id {
+            let already_in_group = branches.iter().any(|b| b.id == parent_id);
+            if !already_in_group {
+                if let Some(parent_branch) = get_branch(conn, &parent_id)? {
+                    branches.push(parent_branch);
+                } else {
+                    log::warn!(
+                        "[list_branch_groups] parent_branch 不存在: parent_id={}, group_id={}",
+                        parent_id, group_id
+                    );
+                }
+            }
+        }
+
+        // 按 sort_order 排序，确保切换器显示顺序一致（main 分支 sort_order=0 排首位）
+        branches.sort_by_key(|b| b.sort_order);
+
         let branch_infos: Vec<BranchInfo> = branches
             .iter()
             .map(|b| BranchInfo {

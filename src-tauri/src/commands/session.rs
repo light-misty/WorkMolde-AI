@@ -306,15 +306,14 @@ pub async fn update_session_workspace(
 /// 创建分支命令
 /// 在指定用户消息节点处分叉出新分支：
 /// 1. 复制原分支截至该消息之前（不含）的所有消息到新分支
-/// 2. 创建新的 user 消息（用户修改后的内容）写入新分支
-/// 3. 为原分叉点消息设置 branch_group_id（用于 UI 切换器定位）
-/// 4. 设置会话活跃分支为新分支
-/// 不在此处触发 Agent，由前端调用 start_agent 触发
+/// 2. 为原分叉点消息设置 branch_group_id（用于 UI 切换器定位）
+/// 3. 设置会话活跃分支为新分支
+/// 不在此处创建 user 消息也不触发 Agent，由前端调用 start_agent 时创建 user 消息
+/// 并通过 branchGroupId 参数让 run_agent 在持久化时为新 user 消息设置 branch_group_id
 #[tauri::command]
 pub async fn create_branch(
     session_id: String,
     fork_message_id: String,
-    new_content: String,
     state: State<'_, AppState>,
 ) -> Result<crate::models::CreateBranchResult, CommandError> {
     // 1. 检查 Agent 未运行
@@ -336,7 +335,6 @@ pub async fn create_branch(
     // 3. 生成新分支 ID 和分支组 ID
     let new_branch_id = format!("branch_{}", uuid::Uuid::new_v4());
     let branch_group_id = format!("bg_{}", uuid::Uuid::new_v4());
-    let new_message_id = format!("msg_{}", uuid::Uuid::new_v4());
     let now = chrono::Utc::now().to_rfc3339();
 
     // 4. 查询同分支组内的最大 sort_order（如果是首次分叉则为 1）
@@ -411,42 +409,24 @@ pub async fn create_branch(
         )?;
     }
 
-    // 5.4 创建新的 user 消息（用户修改后的内容）写入新分支
-    crate::db::message_repo::create_message(
-        &tx,
-        &new_message_id,
-        &session_id,
-        "user",       // role
-        &new_content, // content
-        None,
-        None,
-        None,
-        None,                         // tool_name, tool_args, tool_result, tool_call_id
-        None,                         // thinking_content
-        None,                         // reasoning_content
-        None,                         // attachments
-        None,                         // metadata
-        &new_branch_id,               // branch_id
-        Some(&final_branch_group_id), // branch_group_id
-    )?;
-
-    // 5.5 设置会话活跃分支为新分支
+    // 5.4 设置会话活跃分支为新分支
+    // 注意：不在此处创建 user 消息，由前端调用 startAgent 时创建
+    // 这样避免 user 消息被重复创建（create_branch + startAgent 各创建一次）
+    // 新 user 消息的 branch_group_id 由 run_agent 从活跃分支记录中获取并设置
     crate::db::branch_repo::set_session_active_branch(&tx, &session_id, &new_branch_id)?;
 
     tx.commit()?;
 
     log::info!(
-        "创建分支成功: session_id={}, new_branch_id={}, branch_group_id={}, new_message_id={}",
+        "创建分支成功: session_id={}, new_branch_id={}, branch_group_id={}",
         session_id,
         new_branch_id,
-        final_branch_group_id,
-        new_message_id
+        final_branch_group_id
     );
 
     Ok(crate::models::CreateBranchResult {
         branch_id: new_branch_id,
         branch_group_id: final_branch_group_id,
-        new_message_id,
     })
 }
 

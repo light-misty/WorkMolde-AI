@@ -46,8 +46,6 @@ export interface SessionCacheEntry {
   bgCompactionNodeId: string | null;
   /** 最后访问时间，用于 LRU 淘汰 */
   lastAccessedAt: number;
-  /** 当前活跃分支 ID，用于切换分支时检测缓存失效 */
-  activeBranchId: string;
   /** 分支组列表快照，restore 时恢复 */
   branchGroups: BranchGroupInfo[];
 }
@@ -88,6 +86,10 @@ interface WorkflowState {
   subAgentNodes: WorkflowNode[];
   /** 当前会话的所有分支组信息，用于分支切换器渲染 */
   branchGroups: BranchGroupInfo[];
+  /** 当前会话的活跃分支 ID（loadFromMessages 时保存，供组件查询） */
+  activeBranchId: string;
+  /** 创建分支后待发送的消息（由 UserNode 设置，App.tsx 监听消费） */
+  pendingBranchSend: { content: string; branchGroupId: string } | null;
 
   addNode: <T extends WorkflowNodeType>(type: T, data: NodeDataMap[T], status?: NodeStatus, iteration?: number) => string;
   updateNode: (id: string, updates: Partial<WorkflowNode>) => void;
@@ -121,7 +123,7 @@ interface WorkflowState {
   /** 清除上下文窗口使用信息（新会话/切换会话时调用） */
   clearContextUsage: () => void;
   /** 将当前状态保存到指定会话的缓存 */
-  saveSessionToCache: (sessionId: string, streamingRef: StreamingRefSnapshot, activeBranchId: string) => void;
+  saveSessionToCache: (sessionId: string, streamingRef: StreamingRefSnapshot) => void;
   /** 从指定会话的缓存恢复状态，返回是否命中缓存 */
   restoreSessionFromCache: (sessionId: string) => boolean;
   /** 删除指定会话的缓存 */
@@ -132,6 +134,8 @@ interface WorkflowState {
   applyBackgroundEvent: (sessionId: string, event: BackgroundAgentEvent) => void;
   /** 获取指定会话缓存的 contextUsage */
   getCachedContextUsage: (sessionId: string) => ContextUsageInfo | null;
+  /** 设置/清除待发送的分支消息（UserNode 创建分支后设置，App.tsx 消费后清空） */
+  setPendingBranchSend: (data: { content: string; branchGroupId: string } | null) => void;
 }
 
 /** 流式状态引用快照，切换会话时保存/恢复 */
@@ -394,6 +398,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   currentSubAgentId: null,
   subAgentNodes: [],
   branchGroups: [],
+  activeBranchId: "",
+  pendingBranchSend: null,
 
   addNode: (type, data, status = "completed", iteration) => {
     const id = `node_${++nodeCounter}`;
@@ -458,7 +464,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   loadFromMessages: (messages, branchGroups, activeBranchId) => {
     const nodes = convertMessagesToNodes(messages, branchGroups, activeBranchId);
-    set({ nodes, error: null, executionStatus: "idle", confirmHandler: null, permissionHandler: null, branchGroups });
+    set({ nodes, error: null, executionStatus: "idle", confirmHandler: null, permissionHandler: null, branchGroups, activeBranchId });
   },
 
   setCurrentSubAgentId: (agentId) => {
@@ -713,7 +719,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   // 将当前状态保存到指定会话的缓存
-  saveSessionToCache: (sessionId: string, streamingRef: StreamingRefSnapshot, activeBranchId: string) => {
+  saveSessionToCache: (sessionId: string, streamingRef: StreamingRefSnapshot) => {
     const state = get();
     const cache = new Map(state.sessionCache);
 
@@ -737,7 +743,6 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       bgLastClosedStreamingNodeId: cache.get(sessionId)?.bgLastClosedStreamingNodeId ?? null,
       bgCompactionNodeId: cache.get(sessionId)?.bgCompactionNodeId ?? null,
       lastAccessedAt: Date.now(),
-      activeBranchId,
       branchGroups: state.branchGroups,
     });
 
@@ -1283,6 +1288,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const entry = get().sessionCache.get(sessionId);
     return entry?.contextUsage ?? null;
   },
+
+  // 设置/清除待发送的分支消息
+  setPendingBranchSend: (data) => set({ pendingBranchSend: data }),
 }));
 
 /** 当前会话 ID 的外部追踪，供 initContextUsageListener 区分当前/后台会话 */

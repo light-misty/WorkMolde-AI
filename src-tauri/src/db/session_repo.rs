@@ -13,10 +13,17 @@ pub fn create_session(
     model: &str,
 ) -> Result<(), CommandError> {
     let now = Utc::now().to_rfc3339();
+    // 同时创建 main 分支记录并设为活跃分支，确保后续创建分支时 parent_branch_id 能找到 main 分支
+    let main_branch_id = format!("branch_{}_main", id);
     conn.execute(
-        "INSERT INTO sessions (id, workspace_id, title, created_at, updated_at, llm_provider, llm_model)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        rusqlite::params![id, workspace_id, title, now, now, provider, model],
+        "INSERT INTO sessions (id, workspace_id, title, created_at, updated_at, llm_provider, llm_model, active_branch_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        rusqlite::params![id, workspace_id, title, now, now, provider, model, main_branch_id],
+    )?;
+    conn.execute(
+        "INSERT INTO message_branches (id, session_id, name, sort_order, created_at)
+         VALUES (?1, ?2, 'main', 0, ?3)",
+        rusqlite::params![main_branch_id, id, now],
     )?;
     Ok(())
 }

@@ -687,19 +687,18 @@ export async function lspInitialize(): Promise<LspServerInfo[]> {
 
 /**
  * 创建分支
- * 在指定用户消息节点处分叉出新分支
+ * 在指定用户消息节点处分叉出新分支，复制前缀消息并切换活跃分支。
+ * 注意：不再在此处创建 user 消息，由调用方后续调用 startAgent 时通过 branchGroupId 参数创建。
  * @param sessionId 会话 ID
  * @param forkMessageId 分叉点的用户消息 ID
- * @param newContent 用户修改后的新消息内容
  * @returns 创建结果（包含新分支 ID、分支组 ID、新消息 ID）
  */
 export async function createBranch(
   sessionId: string,
   forkMessageId: string,
-  newContent: string,
 ): Promise<CreateBranchResult> {
   const result = await safeInvoke(() =>
-    invoke<CreateBranchResult>("create_branch", { sessionId, forkMessageId, newContent }),
+    invoke<CreateBranchResult>("create_branch", { sessionId, forkMessageId }),
     { context: "createBranch" },
   );
   if (!result.ok) throw result.error.raw;

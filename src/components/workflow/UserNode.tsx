@@ -6,7 +6,6 @@ import { Icon } from "../common/Icon";
 import { formatSize } from "../../utils/format";
 import { useWorkflowStore } from "../../stores/useWorkflowStore";
 import { useSessionStore } from "../../stores/useSessionStore";
-import { useAgentModeStore } from "../../stores/useAgentModeStore";
 import * as tauriCmd from "../../services/tauri";
 
 interface UserNodeProps {
@@ -133,11 +132,11 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
     setEditContent("");
   };
 
-  // 确认创建分支：调用后端 create_branch 复制前缀消息+创建新 user 消息+切换活跃分支，
-  // 然后刷新 workflow 节点显示新分支，最后触发 Agent 在新分支上继续对话
+  // 确认创建分支：调用后端 create_branch 复制前缀消息+切换活跃分支，
+  // 然后刷新 workflow 节点显示新分支，最后通过 pendingBranchSend 触发 App.tsx 发送新分支消息
   const handleConfirmCreateBranch = async () => {
     const sessionId = useSessionStore.getState().currentSessionId;
-    if (!sessionId || !data.messageId) return;
+    if (!sessionId) return;
 
     const trimmedContent = editContent.trim();
     if (!trimmedContent) {
@@ -145,9 +144,32 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
       return;
     }
 
+    // 获取要分叉的 user 消息 ID
+    // 实时对话中通过 addNode 创建的 user 节点没有 messageId，需要从后端按位置匹配查找
+    let forkMessageId = data.messageId;
+    if (!forkMessageId) {
+      try {
+        const { nodes } = useWorkflowStore.getState();
+        // 统计当前节点之前（含自身）的 user 节点数量，得到 1-based 索引
+        const userMsgIndex = nodes.slice(0, nodes.findIndex((n) => n.id === node.id) + 1)
+          .filter((n) => n.type === "user").length;
+        if (userMsgIndex === 0) return;
+
+        // 从后端获取消息列表，找到对应位置的 user 消息 id
+        const detail = await tauriCmd.getSession(sessionId);
+        const userMessages = detail.messages.filter((m) => m.role === "user");
+        forkMessageId = userMessages[userMsgIndex - 1]?.id;
+        if (!forkMessageId) return;
+      } catch (err) {
+        console.error("[UserNode] 获取会话消息失败:", err);
+        return;
+      }
+    }
+
     try {
-      // 1. 调用后端创建分支（复制前缀消息+创建新 user 消息+设置活跃分支）
-      await tauriCmd.createBranch(sessionId, data.messageId, trimmedContent);
+      // 1. 调用后端创建分支（复制前缀消息+设置活跃分支）
+      //    新 user 消息由后续 startAgent 创建，并通过 branchGroupId 设置 branch_group_id
+      const branchResult = await tauriCmd.createBranch(sessionId, forkMessageId);
 
       // 2. 退出编辑模式
       setIsEditing(false);
@@ -167,10 +189,16 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
       // 4. 清空 workflow 缓存（分支已切换，旧缓存失效）
       useWorkflowStore.getState().clearSessionCache(sessionId);
 
-      // 5. 触发 Agent：使用新分支的 user 消息内容（即用户编辑后的内容）
-      //    startAgent 会使用当前活跃分支（已通过 create_branch 切换）
-      const agentMode = useAgentModeStore.getState().mode;
-      await tauriCmd.startAgent(sessionId, trimmedContent, { agentMode });
+      // 5. 通过 pendingBranchSend 触发 App.tsx 的 handleSend 流程
+      //    不能直接调用 tauriCmd.startAgent，否则会绕过 useAgent.sendMessage，
+      //    导致 deepThinkingContentRef 等 ref 未重置（思考过程追加问题），
+      //    且不会创建 user 节点（用户消息不显示问题）。
+      //    App.tsx 监听 pendingBranchSend 后会复用 handleSend 完整流程：
+      //    resetRefs + addNode("user") + setExecutionStatus + sendMessage(branchGroupId)
+      useWorkflowStore.getState().setPendingBranchSend({
+        content: trimmedContent,
+        branchGroupId: branchResult.branchGroupId,
+      });
     } catch (err) {
       console.error("[UserNode] 创建分支失败:", err);
     }
@@ -265,67 +293,68 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
               </button>
             </div>
           ) : (
-            <div className={`wf-msg-actions-row${copied ? " wf-copy-visible" : ""}`}>
-              {!isAgentRunning && (
-                <button
-                  className="wf-branch-button"
-                  onClick={handleStartEdit}
-                  title={t('workflow.createBranch')}
-                >
-                  <Icon name="git-compare" size={12} />
-                </button>
+            <div className="wf-user-bottom-row">
+              {/* 分支切换器：仅当存在分支组且分支数 > 1 时显示，位于创建分支按钮左边 */}
+              {data.branchGroupId && data.branchTotal && data.branchTotal > 1 && (
+                <div className="wf-branch-switcher">
+                  <button
+                    className="wf-branch-arrow"
+                    onClick={() => handleSwitchBranch(-1)}
+                    disabled={isAgentRunning}
+                    title={t('workflow.previousBranch')}
+                  >
+                    <Icon name="chevron-left" size={12} />
+                  </button>
+                  <span className="wf-branch-counter">
+                    {data.branchIndex}/{data.branchTotal}
+                  </span>
+                  <button
+                    className="wf-branch-arrow"
+                    onClick={() => handleSwitchBranch(1)}
+                    disabled={isAgentRunning}
+                    title={t('workflow.nextBranch')}
+                  >
+                    <Icon name="chevron-right" size={12} />
+                  </button>
+                </div>
               )}
-              {!isAgentRunning && (
-                <button
-                  className="wf-delete-button"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  title={t('workflow.deleteMessage')}
-                >
-                  <Icon name="trash" size={12} />
-                </button>
-              )}
-              <div className="wf-msg-copy-btn">
-                <button
-                  className="wf-copy-button"
-                  onClick={handleCopy}
-                  title={copied ? t('common.copied') : t('common.copy')}
-                >
-                  {copied ? (
-                    <Icon name="check" size={12} />
-                  ) : (
-                    <Icon name="copy" size={12} />
-                  )}
-                </button>
+              <div className={`wf-msg-actions-row${copied ? " wf-copy-visible" : ""}`}>
+                {!isAgentRunning && (
+                  <button
+                    className="wf-branch-button"
+                    onClick={handleStartEdit}
+                    title={t('workflow.createBranch')}
+                  >
+                    <Icon name="git-compare" size={12} />
+                  </button>
+                )}
+                {!isAgentRunning && (
+                  <button
+                    className="wf-delete-button"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    title={t('workflow.deleteMessage')}
+                  >
+                    <Icon name="trash" size={12} />
+                  </button>
+                )}
+                <div className="wf-msg-copy-btn">
+                  <button
+                    className="wf-copy-button"
+                    onClick={handleCopy}
+                    title={copied ? t('common.copied') : t('common.copy')}
+                  >
+                    {copied ? (
+                      <Icon name="check" size={12} />
+                    ) : (
+                      <Icon name="copy" size={12} />
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           )
         )}
       </div>
-
-      {/* 分支切换器：仅当存在分支组且分支数 > 1 时显示，编辑模式下隐藏 */}
-      {!isEditing && data.branchGroupId && data.branchTotal && data.branchTotal > 1 && (
-        <div className="wf-branch-switcher">
-          <button
-            className="wf-branch-arrow"
-            onClick={() => handleSwitchBranch(-1)}
-            disabled={isAgentRunning}
-            title={t('workflow.previousBranch')}
-          >
-            <Icon name="chevron-left" size={12} />
-          </button>
-          <span className="wf-branch-counter">
-            {data.branchIndex}/{data.branchTotal}
-          </span>
-          <button
-            className="wf-branch-arrow"
-            onClick={() => handleSwitchBranch(1)}
-            disabled={isAgentRunning}
-            title={t('workflow.nextBranch')}
-          >
-            <Icon name="chevron-right" size={12} />
-          </button>
-        </div>
-      )}
 
       {showDeleteConfirm && createPortal(
         <div className="wf-del-overlay" onClick={() => setShowDeleteConfirm(false)}>
