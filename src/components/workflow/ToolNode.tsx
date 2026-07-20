@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { WorkflowNode, ToolNodeData } from "../../types";
 import { useTranslation } from 'react-i18next';
+import * as Diff from "diff";
 
 interface ToolNodeProps {
   node: WorkflowNode<"tool">;
@@ -183,6 +184,84 @@ export function ToolNode({ node }: ToolNodeProps) {
             )}
           </div>
         )}
+
+        {/* edit 工具：内联差异对比卡片 */}
+        {data.toolName === "edit" && data.input?.old_string !== undefined && data.input?.new_string !== undefined && data.success !== false && (
+          <EditDiffCard
+            oldContent={String(data.input.old_string)}
+            newContent={String(data.input.new_string)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EditDiffCard({ oldContent, newContent }: { oldContent: string; newContent: string }) {
+  const diffLines = useMemo(() => {
+    const changes = Diff.diffLines(oldContent, newContent);
+    const result: Array<{ type: "added" | "removed" | "unchanged"; content: string }> = [];
+    for (const change of changes) {
+      if (!change.value) continue;
+      const lines = change.value.replace(/\n$/, "").split("\n");
+      if (!change.added && !change.removed) {
+        for (const line of lines) {
+          result.push({ type: "unchanged", content: line });
+        }
+      } else if (change.removed) {
+        for (const line of lines) {
+          result.push({ type: "removed", content: line });
+        }
+      } else if (change.added) {
+        for (const line of lines) {
+          result.push({ type: "added", content: line });
+        }
+      }
+    }
+    return result;
+  }, [oldContent, newContent]);
+
+  const stats = useMemo(() => {
+    let added = 0;
+    let removed = 0;
+    for (const line of diffLines) {
+      if (line.type === "added") added++;
+      if (line.type === "removed") removed++;
+    }
+    return { added, removed };
+  }, [diffLines]);
+
+  if (diffLines.length === 0) return null;
+
+  return (
+    <div className="wf-edit-diff-card">
+      <div className="wf-edit-diff-header">
+        <span className="wf-edit-diff-label">diff</span>
+        <span className="wf-edit-diff-stats">
+          {stats.added > 0 && <span className="wf-edit-diff-stat-added">+{stats.added}</span>}
+          {stats.removed > 0 && <span className="wf-edit-diff-stat-removed">-{stats.removed}</span>}
+        </span>
+      </div>
+      <div className="wf-edit-diff-content">
+        {diffLines.map((line, i) => {
+          const isAdded = line.type === "added";
+          const isRemoved = line.type === "removed";
+          return (
+            <div
+              key={i}
+              className={
+                isAdded ? "wf-edit-diff-line-added" :
+                isRemoved ? "wf-edit-diff-line-removed" :
+                "wf-edit-diff-line-unchanged"
+              }
+            >
+              <span className="wf-edit-diff-marker">
+                {isAdded ? "+" : isRemoved ? "-" : " "}
+              </span>
+              <span className="wf-edit-diff-text">{line.content}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
