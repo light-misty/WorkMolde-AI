@@ -39,3 +39,19 @@ pub struct CreateBranchResult {
     pub branch_id: String,
     pub branch_group_id: String,
 }
+
+/// 分支内的用户消息简要信息（用于跨分支搜索）
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchUserMessage {
+    /// 消息 ID
+    pub message_id: String,
+    /// 会话 ID
+    pub session_id: String,
+    /// 所属分支 ID
+    pub branch_id: String,
+    /// 消息内容
+    pub content: String,
+    /// 创建时间（ISO 字符串）
+    pub created_at: String,
+}

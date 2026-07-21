@@ -74,7 +74,16 @@
     "confirmCreateBranch": "确认创建分支",
     "cancelCreateBranch": "取消",
     "previousBranch": "上一个分支",
-    "nextBranch": "下一个分支"
+    "nextBranch": "下一个分支",
+    "branchGraph": "分支导航",
+    "hideBranchGraph": "隐藏分支导航",
+    "showBranchGraph": "显示分支导航",
+    "branchesCount": "{{count}} 个分支",
+    "currentBranch": "当前分支",
+    "emptyWorkflow": "暂无工作流节点",
+    "attachmentMessage": "[附件消息]",
+    "searchUserMessages": "搜索用户消息",
+    "noSearchResults": "未找到匹配的消息"
   },
   "provider": {
     "selectModel": "选择模型",

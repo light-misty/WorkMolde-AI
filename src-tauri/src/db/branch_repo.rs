@@ -1,6 +1,6 @@
 use rusqlite::{params, Connection};
 
-use crate::models::{Branch, BranchGroupInfo, BranchInfo};
+use crate::models::{Branch, BranchGroupInfo, BranchInfo, BranchUserMessage};
 
 /// 创建分支记录
 pub fn create_branch(conn: &Connection, branch: &Branch) -> Result<(), rusqlite::Error> {
@@ -148,10 +148,34 @@ pub fn list_branch_groups(
 
         let branch_infos: Vec<BranchInfo> = branches
             .iter()
-            .map(|b| BranchInfo {
-                branch_id: b.id.clone(),
-                name: b.name.clone(),
-                sort_order: b.sort_order,
+            .map(|b| {
+                // 查询该分支首条 user 消息内容作为分支显示名称
+                // 若无 user 消息（如刚创建尚未发送消息的分支），回退到数据库存储的 name
+                // 传入 group_id 过滤：仅返回该分支组内的原生消息，排除被复制过来的 inherited 消息
+                // 例如：B4 从 M2 分叉，B4 内的 M1 是 inherited（branch_group_id=NULL），M4 是原生（branch_group_id=bg_M2）
+                // 传入 bg_M2 后只返回 M4，避免错误显示为 M1 的内容
+                let display_name = match get_first_user_message_content(
+                    conn,
+                    &b.session_id,
+                    &b.id,
+                    Some(&group_id),
+                ) {
+                    Some(content) => {
+                        // 截取前 30 字符作为显示名称，过长时省略
+                        let chars: Vec<char> = content.chars().collect();
+                        if chars.len() > 30 {
+                            format!("{}...", chars.iter().take(30).collect::<String>())
+                        } else {
+                            content
+                        }
+                    }
+                    None => b.name.clone(),
+                };
+                BranchInfo {
+                    branch_id: b.id.clone(),
+                    name: display_name,
+                    sort_order: b.sort_order,
+                }
             })
             .collect();
         result.push(BranchGroupInfo {
@@ -218,4 +242,65 @@ pub fn get_session_active_branch(
     ).ok().flatten();
 
     Ok(first_branch_id.unwrap_or_else(|| format!("branch_{}_main", session_id)))
+}
+
+/// 查询指定分支的首条 user 消息内容（用于分支显示名称）
+/// 返回 None 表示该分支尚无 user 消息
+///
+/// branch_group_id 过滤说明：
+/// - 传入 Some(bg_id)：只查询 branch_group_id = bg_id 的消息（用于分支组内显示名称）
+///   这样可排除被复制过来的 inherited 消息（branch_group_id = NULL），仅返回分支自身的新消息
+/// - 传入 None：无 branch_group_id 过滤，返回分支内首条 user 消息（不区分是否为 inherited）
+pub fn get_first_user_message_content(
+    conn: &Connection,
+    session_id: &str,
+    branch_id: &str,
+    branch_group_id: Option<&str>,
+) -> Option<String> {
+    match branch_group_id {
+        Some(bg_id) => conn.query_row(
+            "SELECT content FROM session_messages
+             WHERE session_id = ?1 AND branch_id = ?2 AND role = 'user' AND branch_group_id = ?3
+             ORDER BY created_at ASC LIMIT 1",
+            params![session_id, branch_id, bg_id],
+            |row| row.get::<_, Option<String>>(0),
+        ),
+        None => conn.query_row(
+            "SELECT content FROM session_messages
+             WHERE session_id = ?1 AND branch_id = ?2 AND role = 'user'
+             ORDER BY created_at ASC LIMIT 1",
+            params![session_id, branch_id],
+            |row| row.get::<_, Option<String>>(0),
+        ),
+    }
+    .ok()
+    .flatten()
+    .filter(|s| !s.trim().is_empty())
+}
+
+/// 查询会话内所有分支的所有 user 消息（用于跨分支搜索）
+/// 按 created_at 升序排列
+pub fn list_all_branch_user_messages(
+    conn: &Connection,
+    session_id: &str,
+) -> Result<Vec<BranchUserMessage>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT id, session_id, branch_id, content, created_at
+         FROM session_messages
+         WHERE session_id = ?1 AND role = 'user'
+         ORDER BY created_at ASC",
+    )?;
+    let messages = stmt
+        .query_map(params![session_id], |row| {
+            Ok(BranchUserMessage {
+                message_id: row.get(0)?,
+                session_id: row.get(1)?,
+                branch_id: row.get(2)?,
+                content: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
+                created_at: row.get(4)?,
+            })
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(messages)
 }

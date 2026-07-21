@@ -66,6 +66,15 @@ export interface CreateBranchResult {
   branchGroupId: string;
 }
 
+/** 分支内的用户消息简要信息（用于跨分支搜索） */
+export interface BranchUserMessage {
+  messageId: string;
+  sessionId: string;
+  branchId: string;
+  content: string;
+  createdAt: string;
+}
+
 export interface SessionSummary {
   id: string;
   title: string;

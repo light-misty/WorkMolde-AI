@@ -74,7 +74,16 @@
     "confirmCreateBranch": "Confirm Create Branch",
     "cancelCreateBranch": "Cancel",
     "previousBranch": "Previous Branch",
-    "nextBranch": "Next Branch"
+    "nextBranch": "Next Branch",
+    "branchGraph": "Branch Navigation",
+    "hideBranchGraph": "Hide Branch Navigation",
+    "showBranchGraph": "Show Branch Navigation",
+    "branchesCount": "{{count}} branches",
+    "currentBranch": "Current Branch",
+    "emptyWorkflow": "No workflow nodes yet",
+    "attachmentMessage": "[Attachment Message]",
+    "searchUserMessages": "Search user messages",
+    "noSearchResults": "No matching messages found"
   },
   "provider": {
     "selectModel": "Select Model",

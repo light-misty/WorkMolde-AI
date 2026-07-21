@@ -19,6 +19,7 @@ import type {
   Message,
   CreateBranchResult,
   BranchGroupInfo,
+  BranchUserMessage,
   WorkspaceInfo,
   GitStatus,
   FileNode,
@@ -727,6 +728,20 @@ export async function listBranchGroups(sessionId: string): Promise<BranchGroupIn
   const result = await safeInvoke(() =>
     invoke<BranchGroupInfo[]>("list_branch_groups", { sessionId }),
     { context: "listBranchGroups" },
+  );
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
+/**
+ * 列出会话内所有分支的所有 user 消息（用于跨分支搜索）
+ * @param sessionId 会话 ID
+ * @returns 所有分支的 user 消息列表
+ */
+export async function listAllBranchUserMessages(sessionId: string): Promise<BranchUserMessage[]> {
+  const result = await safeInvoke(() =>
+    invoke<BranchUserMessage[]>("list_all_branch_user_messages", { sessionId }),
+    { context: "listAllBranchUserMessages" },
   );
   if (!result.ok) throw result.error.raw;
   return result.data;

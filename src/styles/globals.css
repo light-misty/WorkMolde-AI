@@ -504,10 +504,257 @@
   height: 100%;
   overflow-y: auto;
   padding: 24px 32px;
+  /* flex 横向布局中占据剩余空间，允许收缩 */
+  flex: 1;
+  min-width: 0;
+}
+
+/* 右侧分支导航边栏（外层：控制 width 动画，收起时宽度收缩为 0） */
+.workflow-right-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--color-border);
+  background: var(--color-bg);
+  overflow: hidden;
+  /* width 过渡动画：显示时宽度从 0 扩展到 240px，隐藏时从 240px 收缩到 0 */
+  transition: width 0.3s ease, border-left-color 0.3s ease;
+}
+
+/* 收起状态：宽度为 0，去除左边框避免残留线条 */
+.workflow-right-sidebar.collapsed {
+  width: 0;
+  border-left-color: transparent;
+}
+
+/* 内层容器：固定宽度 240px，外层 overflow: hidden 配合 width 动画自然裁剪显示 */
+.workflow-right-sidebar-inner {
+  width: 240px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .workflow-timeline {
   position: relative;
+}
+
+/* ===== 分支导航右侧边栏骨架样式（详细样式 Task 12 完善） ===== */
+.branch-graph-header {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* 标题栏右侧操作按钮组（搜索 + 收起） */
+.branch-graph-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* 搜索模式行：搜索图标 + 输入框 + 关闭按钮 */
+.branch-graph-search-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.branch-graph-search-icon {
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+.branch-graph-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 12px;
+  color: var(--color-text-primary);
+  padding: 2px 0;
+}
+
+.branch-graph-search-input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.branch-graph-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.branch-graph-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.branch-graph-close-btn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-sub);
+}
+
+.branch-graph-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+}
+
+.branch-graph-empty {
+  text-align: center;
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+  padding: 24px 0;
+}
+
+.branch-graph-node {
+  position: relative;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* 允许分支组列表换行到新行 */
+  flex-wrap: wrap;
+}
+
+.branch-graph-node:hover {
+  background: var(--color-bg-sub);
+}
+
+.branch-graph-node.active {
+  background: var(--color-bg-sub);
+}
+
+.branch-graph-node.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background: var(--color-accent);
+  border-radius: 1px;
+}
+
+.branch-graph-node-index {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  min-width: 16px;
+}
+
+.branch-graph-node-content {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.branch-graph-connector {
+  position: absolute;
+  left: 14px;
+  top: -8px;
+  height: 8px;
+  width: 1px;
+  background: var(--color-border);
+}
+
+/* 其他分支的匹配项：左侧添加分支色条 */
+.branch-graph-node.other-branch {
+  border-left: 2px solid var(--color-accent);
+  padding-left: 6px;
+}
+
+/* 搜索结果分隔线（当前分支与其他分支之间） */
+.branch-graph-separator {
+  height: 1px;
+  background: var(--color-border);
+  margin: 8px 0;
+}
+
+/* 其他分支匹配项的分支标签 */
+.branch-graph-node-branch-tag {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-sub);
+  padding: 1px 4px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 分支组指示按钮：显示分支数量，点击展开/折叠 */
+.branch-group-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.branch-group-indicator:hover {
+  background: var(--color-bg-sub);
+  color: var(--color-text-primary);
+}
+
+/* 分支列表：展开时显示在节点下方（占满整行） */
+.branch-group-list {
+  width: 100%;
+  flex-basis: 100%;
+  margin: 4px 0 4px 20px;
+  padding: 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* 分支列表项 */
+.branch-group-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  transition: background 0.15s, color 0.15s;
+}
+
+.branch-group-item:hover {
+  background: var(--color-bg-sub);
+}
+
+/* 当前活跃分支高亮 */
+.branch-group-item.active {
+  background: var(--color-bg-sub);
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+/* 非活跃分支灰显（仍可点击切换） */
+.branch-group-item.disabled {
+  color: var(--color-text-tertiary);
 }
 
 .wf-node {
@@ -1041,6 +1288,60 @@
 @keyframes wf-tool-row-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.85; }
+}
+
+/* 节点高亮：跳转后平滑呼吸光效 + 左侧指示条（1.5 秒自动消失） */
+.wf-node-highlight {
+  position: relative;
+  border-radius: var(--radius-sm);
+  animation: wf-highlight-glow 1.5s ease-in-out;
+}
+
+/* 左侧指示条 */
+.wf-node-highlight::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  background: var(--color-accent);
+  border-radius: 0 2px 2px 0;
+  opacity: 0;
+  animation: wf-indicator-pulse 1.5s ease-in-out forwards;
+}
+
+@keyframes wf-highlight-glow {
+  0% {
+    background-color: transparent;
+  }
+  10% {
+    background-color: var(--color-accent-bg);
+  }
+  50% {
+    background-color: var(--color-accent-bg);
+  }
+  75% {
+    background-color: var(--color-accent-bg);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes wf-indicator-pulse {
+  0% {
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 /* ===== 代码预览卡片样式 ===== */

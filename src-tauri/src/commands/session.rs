@@ -485,3 +485,14 @@ pub async fn list_branch_groups(
     let groups = crate::db::branch_repo::list_branch_groups(&conn, &session_id)?;
     Ok(groups)
 }
+
+/// 列出会话内所有分支的所有 user 消息（用于跨分支搜索）
+#[tauri::command]
+pub async fn list_all_branch_user_messages(
+    session_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::models::BranchUserMessage>, CommandError> {
+    let conn = state.db.conn()?;
+    let messages = crate::db::branch_repo::list_all_branch_user_messages(&conn, &session_id)?;
+    Ok(messages)
+}
