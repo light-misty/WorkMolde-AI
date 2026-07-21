@@ -146,6 +146,15 @@ pub async fn start_agent(
         .unwrap_or("build")
         .to_string();
 
+    // 从 options 提取 branch_group_id（仅创建分支后调用 startAgent 时传入）
+    // 用于在持久化新 user 消息时设置 branch_group_id，使前端分支切换器能定位到该分叉点
+    let branch_group_id = options
+        .as_ref()
+        .and_then(|o| o.get("branchGroupId"))
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+
     let agent_mode = match agent_mode_str.as_str() {
         "plan" => AgentMode::Plan,
         "build" => AgentMode::Build,
@@ -187,10 +196,14 @@ pub async fn start_agent(
     let doc_service = Arc::clone(&state.doc_service);
 
     // 同步前端传入的 Agent 模式，确保待机状态切换后新会话使用正确模式
-    state.agent_mode_manager.set_mode(&session_id, agent_mode).await;
+    state
+        .agent_mode_manager
+        .set_mode(&session_id, agent_mode)
+        .await;
     log::info!(
         "start_agent: 会话 '{}' Agent 模式已设置为 {:?}",
-        session_id, agent_mode
+        session_id,
+        agent_mode
     );
 
     tokio::spawn(async move {
@@ -236,6 +249,7 @@ pub async fn start_agent(
             &doom_loop_detector,
             &agent_mode_manager,
             &skill_registry,
+            branch_group_id.as_deref(),
         )
         .await;
 
@@ -273,8 +287,9 @@ pub async fn start_agent(
             let should_generate = match title_db.conn() {
                 Ok(conn) => match session_repo::get_session(&conn, &title_sid) {
                     Ok(session) => {
-                        session.title.starts_with("新会话") || session.title.starts_with("New Session")
-                    },
+                        session.title.starts_with("新会话")
+                            || session.title.starts_with("New Session")
+                    }
                     Err(_) => false,
                 },
                 Err(_) => false,
@@ -441,7 +456,15 @@ pub async fn get_context_usage(
     let (conversation_tokens, total_message_count) = {
         match state.db.conn() {
             Ok(conn) => {
-                let messages = crate::db::message_repo::list_messages(&conn, &session_id);
+                // 读取会话当前活跃分支 ID，失败时使用 "main" 兜底
+                let active_branch_id =
+                    crate::db::branch_repo::get_session_active_branch(&conn, &session_id)
+                        .unwrap_or_else(|e| {
+                            log::warn!("获取活跃分支失败: {}, 使用 'main' 兜底", e);
+                            "main".to_string()
+                        });
+                let messages =
+                    crate::db::message_repo::list_messages(&conn, &session_id, &active_branch_id);
                 let count = messages.len();
                 let conv_tokens = TokenBudgetManager::estimate_tokens(
                     &messages
@@ -981,10 +1004,13 @@ pub async fn list_sub_agent_messages(
 /// 支持多 tool_calls：将所有 tool_calls 序列化为 JSON 数组存储
 /// assistant 消息的 tool_call_id 字段存储所有 tool_call 的 id 列表（JSON 数组）
 /// tool 消息的 tool_call_id 字段存储对应的单个 tool_call_id
+/// branch_group_id 仅在创建分支后的首条 user 消息上设置（用于前端分支切换器定位分叉点）
 fn persist_messages_to_db(
     db: &Arc<crate::db::Database>,
     session_id: &str,
     messages: &[ChatMessage],
+    branch_id: &str,
+    branch_group_id: Option<&str>,
 ) -> Result<(), CommandError> {
     let conn = db.conn()?;
     for msg in messages {
@@ -1040,6 +1066,9 @@ fn persist_messages_to_db(
             .as_ref()
             .map(|m| serde_json::to_string(m).unwrap_or_default());
 
+        // branch_group_id 仅设置在 user 消息上（分叉点标识），其他角色消息保持 None
+        let msg_branch_group_id = if msg.role == "user" { branch_group_id } else { None };
+
         crate::db::message_repo::create_message(
             &conn,
             &msg_id,
@@ -1054,6 +1083,8 @@ fn persist_messages_to_db(
             msg.reasoning_content.as_deref(),
             msg.attachments.as_deref(),
             metadata_str.as_deref(),
+            branch_id,
+            msg_branch_group_id,
         )?;
     }
     Ok(())
@@ -1097,6 +1128,7 @@ async fn run_agent(
     doom_loop_detector: &Arc<crate::services::permission::doom_loop::DoomLoopDetector>,
     agent_mode_manager: &Arc<crate::services::agent::AgentModeManager>,
     skill_registry: &Arc<crate::services::skill::registry::SkillRegistry>,
+    branch_group_id: Option<&str>,
 ) -> Result<(), CommandError> {
     log::info!(
         "run_agent 开始: session_id={}, workspace={}",
@@ -1191,8 +1223,25 @@ async fn run_agent(
         }
     };
 
+    // 获取当前会话的活跃分支 ID
+    let active_branch_id = {
+        match db.conn() {
+            Ok(conn) => crate::db::branch_repo::get_session_active_branch(&conn, session_id)
+                .unwrap_or_else(|e| {
+                    log::warn!("获取活跃分支失败: {}, 使用 'main' 兜底", e);
+                    "main".to_string()
+                }),
+            Err(e) => {
+                log::warn!("获取数据库连接失败, 无法获取活跃分支: {}", e.message);
+                "main".to_string()
+            }
+        }
+    };
+    log::info!("会话 {} 当前活跃分支: {}", session_id, active_branch_id);
+
     let mut ctx = AgentContext::new(
         session_id.to_string(),
+        active_branch_id.clone(),
         crate::services::agent::context::AgentContext::build_system_prompt(workspace_path),
         context_window,
     );
@@ -1273,7 +1322,8 @@ async fn run_agent(
     let history_messages = {
         match db.conn() {
             Ok(conn) => {
-                let db_messages = crate::db::message_repo::list_messages(&conn, session_id);
+                let db_messages =
+                    crate::db::message_repo::list_messages(&conn, session_id, &active_branch_id);
                 db_messages
                     .into_iter()
                     .filter_map(|m| m.to_chat_message())
@@ -1439,11 +1489,19 @@ async fn run_agent(
 
     // 创建增量持久化回调，每轮迭代后自动持久化新增消息
     let db_for_persist = Arc::clone(db);
+    let active_branch_id_for_persist = active_branch_id.clone();
+    let branch_group_id_for_persist = branch_group_id.map(|s| s.to_string());
     #[allow(clippy::type_complexity)]
     let persist_fn: Arc<
         dyn Fn(&str, &[ChatMessage]) -> Result<(), CommandError> + Send + Sync,
     > = Arc::new(move |sid: &str, messages: &[ChatMessage]| {
-        persist_messages_to_db(&db_for_persist, sid, messages)
+        persist_messages_to_db(
+            &db_for_persist,
+            sid,
+            messages,
+            &active_branch_id_for_persist,
+            branch_group_id_for_persist.as_deref(),
+        )
     });
 
     // 创建版本快照回调，在文件修改/删除前自动创建快照
@@ -1521,7 +1579,13 @@ async fn run_agent(
                     session_id,
                     unpersisted.len()
                 );
-                if let Err(e) = persist_messages_to_db(db, session_id, unpersisted) {
+                if let Err(e) = persist_messages_to_db(
+                    db,
+                    session_id,
+                    unpersisted,
+                    &active_branch_id,
+                    branch_group_id,
+                ) {
                     log::warn!(
                         "残留消息持久化失败: session_id={}, 错误: {}",
                         session_id,
@@ -1566,7 +1630,13 @@ async fn run_agent(
                     session_id,
                     unpersisted.len()
                 );
-                if let Err(persist_err) = persist_messages_to_db(db, session_id, unpersisted) {
+                if let Err(persist_err) = persist_messages_to_db(
+                    db,
+                    session_id,
+                    unpersisted,
+                    &active_branch_id,
+                    branch_group_id,
+                ) {
                     log::warn!(
                         "失败后消息持久化失败: session_id={}, 错误: {}",
                         session_id,

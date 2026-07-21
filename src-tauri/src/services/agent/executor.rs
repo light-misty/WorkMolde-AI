@@ -18,8 +18,8 @@ use crate::services::handler::registry::HandlerRegistry;
 use crate::services::llm::router::LlmRouter;
 use crate::services::permission::{
     doom_loop::DoomLoopDetector, evaluator::PermissionEvaluator, evaluator::PermissionRequest,
-    registry::PermissionRegistry, types::PermissionAction,
-    types::PermissionResponse, types::PermissionType,
+    registry::PermissionRegistry, types::PermissionAction, types::PermissionResponse,
+    types::PermissionType,
 };
 use crate::services::tool::registry::ToolRegistry;
 use crate::ConfirmDecision;
@@ -44,7 +44,7 @@ fn is_high_risk_command(command: &str) -> bool {
         "rm -rf",
         "rm -r",
         "rm -f",
-        "rm ",   // 匹配不带 flag 的 rm 命令(如 rm test.txt)
+        "rm ", // 匹配不带 flag 的 rm 命令(如 rm test.txt)
         "rmdir",
         "del /f",
         "del /q",
@@ -572,7 +572,10 @@ impl<R: Runtime> AgentExecutor<R> {
                 category
             );
             return Ok(PermissionResult::Deny {
-                reason: format!("Plan mode prohibits using {} tools: {}", category, tool_name),
+                reason: format!(
+                    "Plan mode prohibits using {} tools: {}",
+                    category, tool_name
+                ),
             });
         }
 
@@ -1937,12 +1940,17 @@ impl<R: Runtime> AgentExecutor<R> {
                             "approved": false,
                         });
                         // 添加失败结果到上下文，让 LLM 感知被拒绝
-                        ctx.add_tool_result_with_metadata(&tool_call.id, &reject_msg, Some(deny_metadata));
+                        ctx.add_tool_result_with_metadata(
+                            &tool_call.id,
+                            &reject_msg,
+                            Some(deny_metadata),
+                        );
                         continue;
                     }
 
                     // 判断是否已通过权限弹窗批准(避免双重弹窗)
-                    let already_confirmed = matches!(permitted, PermissionResult::AllowWithPermissionAsked);
+                    let already_confirmed =
+                        matches!(permitted, PermissionResult::AllowWithPermissionAsked);
                     if already_confirmed {
                         // 已通过权限弹窗批准，记录 confirm 节点信息
                         confirm_metadata = Some(serde_json::json!({
@@ -1994,7 +2002,11 @@ impl<R: Runtime> AgentExecutor<R> {
                                 "operationType": tool_call.name.clone(),
                                 "approved": false,
                             });
-                            ctx.add_tool_result_with_metadata(&tool_call.id, &skip_msg, Some(user_deny_metadata));
+                            ctx.add_tool_result_with_metadata(
+                                &tool_call.id,
+                                &skip_msg,
+                                Some(user_deny_metadata),
+                            );
                             continue;
                         }
 
@@ -2043,7 +2055,11 @@ impl<R: Runtime> AgentExecutor<R> {
                                 duration_ms: 0,
                             })
                             .ok();
-                        ctx.add_tool_result_with_metadata(&tool_call.id, &reject_msg, confirm_metadata.take());
+                        ctx.add_tool_result_with_metadata(
+                            &tool_call.id,
+                            &reject_msg,
+                            confirm_metadata.take(),
+                        );
                         continue;
                     }
 
@@ -2175,7 +2191,10 @@ impl<R: Runtime> AgentExecutor<R> {
                     // 提前捕获 task 工具的 description 参数（safe_params 在 execute 时会被 move）
                     // 用于在 tool_result metadata 中持久化子 Agent 任务描述
                     let task_description = if tool_call.name == "task" {
-                        safe_params.get("description").and_then(|v| v.as_str()).map(|s| s.to_string())
+                        safe_params
+                            .get("description")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
                     } else {
                         None
                     };
@@ -2229,7 +2248,10 @@ impl<R: Runtime> AgentExecutor<R> {
                         crate::models::handler::HandlerResult {
                             success: false,
                             output: None,
-                            error: Some(format!("Tool or handler does not exist: {}", tool_call.name)),
+                            error: Some(format!(
+                                "Tool or handler does not exist: {}",
+                                tool_call.name
+                            )),
                             duration_ms: 0,
                             error_code: Some(crate::errors::AGENT_HANDLER_NOT_FOUND),
                         }
@@ -2364,7 +2386,11 @@ impl<R: Runtime> AgentExecutor<R> {
                     } else {
                         confirm_metadata.take()
                     };
-                    ctx.add_tool_result_with_metadata(&tool_call.id, &result_content, tool_metadata);
+                    ctx.add_tool_result_with_metadata(
+                        &tool_call.id,
+                        &result_content,
+                        tool_metadata,
+                    );
                 }
 
                 // 每轮迭代后增量持久化，防止崩溃丢失消息

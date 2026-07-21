@@ -69,7 +69,21 @@
     "timeline": "Workflow Timeline",
     "thinking": "Thinking",
     "deleteMessage": "Delete message",
-    "deleteMessageConfirm": "Are you sure you want to delete this message and its reply? This action cannot be undone."
+    "deleteMessageConfirm": "Are you sure you want to delete this message and its reply? This action cannot be undone.",
+    "modifyAndCreateBranch": "Edit and Create Branch",
+    "confirmCreateBranch": "Confirm Create Branch",
+    "cancelCreateBranch": "Cancel",
+    "previousBranch": "Previous Branch",
+    "nextBranch": "Next Branch",
+    "branchGraph": "Branch Navigation",
+    "hideBranchGraph": "Hide Branch Navigation",
+    "showBranchGraph": "Show Branch Navigation",
+    "branchesCount": "{{count}} branches",
+    "currentBranch": "Current Branch",
+    "emptyWorkflow": "No workflow nodes yet",
+    "attachmentMessage": "[Attachment Message]",
+    "searchUserMessages": "Search user messages",
+    "noSearchResults": "No matching messages found"
   },
   "provider": {
     "selectModel": "Select Model",

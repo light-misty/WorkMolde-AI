@@ -83,7 +83,7 @@ export default function App() {
 
   // 子 Agent 工作流详情页：当前查看的子 Agent ID，非空时切换到详情页替代主工作流
   const currentSubAgentId = useWorkflowStore((s) => s.currentSubAgentId);
-  const { addNode, updateNode, setExecutionStatus, clearNodes, setPermissionHandler, loadFromMessages, executionStatus, initContextUsageListener, loadContextUsage, clearContextUsage, saveSessionToCache, restoreSessionFromCache, clearSessionCache, getCachedStreamingRefs, nodes, clearSubAgentWorkflow } = useWorkflowStore();
+  const { addNode, updateNode, setExecutionStatus, clearNodes, setPermissionHandler, loadFromMessages, executionStatus, initContextUsageListener, loadContextUsage, clearContextUsage, saveSessionToCache, restoreSessionFromCache, clearSessionCache, getCachedStreamingRefs, nodes, clearSubAgentWorkflow, pendingBranchSend, setPendingBranchSend, setRightSidebarVisible } = useWorkflowStore();
   const { switchSession, loadSessions, clearCurrentSession, currentSessionId, sessions } = useSessionStore();
   const updateSessionTitleLocal = useSessionStore((s) => s.updateSessionTitleLocal);
   const { loadSettings, initThemeListener } = useSettingsStore();
@@ -654,6 +654,69 @@ export default function App() {
     }
   }, [addNode, setExecutionStatus, sendMessage, workspaces, currentWorkspaceId]);
 
+  // 监听 pendingBranchSend：UserNode 创建分支后触发，复用 handleSend 流程发送新分支消息
+  // 不能让 UserNode 直接调用 startAgent，否则会绕过 useAgent.sendMessage 导致 ref 未重置
+  useEffect(() => {
+    if (!pendingBranchSend) return;
+
+    const { content, branchGroupId } = pendingBranchSend;
+    if (!content.trim()) {
+      setPendingBranchSend(null);
+      return;
+    }
+
+    // 复用 handleSend 的核心流程：resetRefs + addNode("user") + sendMessage
+    resetRefs();
+    lastSentTextRef.current = content;
+
+    // 计算分支切换器信息：branchTotal 和 branchIndex
+    // UserNode 创建分支后已调用 loadFromMessages 设置 branchGroups 和 activeBranchId 到 store
+    // 这里从 store 读取，让新创建的 user 节点立即带上分支切换器所需信息
+    const workflowState = useWorkflowStore.getState();
+    const currentActiveBranchId = workflowState.activeBranchId;
+    const group = workflowState.branchGroups.find((g) => g.branchGroupId === branchGroupId);
+    let branchIndex: number | undefined;
+    let branchTotal: number | undefined;
+    if (group && currentActiveBranchId) {
+      const idx = group.branches.findIndex((b) => b.branchId === currentActiveBranchId);
+      if (idx >= 0 && group.branches.length > 1) {
+        branchIndex = idx + 1;
+        branchTotal = group.branches.length;
+      }
+    }
+
+    addNode("user", {
+      content,
+      attachments: [],
+      branchGroupId,
+      branchId: currentActiveBranchId || undefined,
+      branchIndex,
+      branchTotal,
+    });
+    setExecutionStatus("running");
+
+    // 构造 options：传递 branchGroupId 和工作区相关参数
+    const currentWorkspace = workspaces.find((w) => w.id === currentWorkspaceId);
+    const workingDirectory = currentWorkspace?.path;
+    const workspaceId = currentWorkspaceId;
+    const providerId = useSettingsStore.getState().preferredProviderId;
+    const options: Record<string, unknown> = {
+      branchGroupId,
+      ...(workingDirectory ? { workingDirectory } : {}),
+      ...(workspaceId ? { workspaceId } : {}),
+      ...(providerId ? { providerId } : {}),
+    };
+    lastSentOptionsRef.current = options;
+
+    // 先清空 pendingBranchSend，避免 sendMessage 异步过程中重复触发
+    setPendingBranchSend(null);
+
+    sendMessage(content, options).catch((err) => {
+      console.error("[App] 分支消息发送失败:", err);
+      setExecutionStatus("failed");
+    });
+  }, [pendingBranchSend, addNode, setExecutionStatus, sendMessage, workspaces, currentWorkspaceId, setPendingBranchSend]);
+
   // 停止 Agent 执行，先显示加载状态，等待后端确认停止
   const handleStop = useCallback(async () => {
     // 设置为 stopping 状态，显示加载中
@@ -688,7 +751,8 @@ export default function App() {
     clearCurrentSession();
     clearContextUsage();
     resetRefs();
-  }, [clearNodes, resetAgent, clearCurrentSession, clearContextUsage, saveSessionToCache, currentSessionId]);
+    setRightSidebarVisible(false);
+  }, [clearNodes, resetAgent, clearCurrentSession, clearContextUsage, saveSessionToCache, currentSessionId, setRightSidebarVisible]);
 
   // 切换到历史会话：先保存当前会话状态到缓存，再从缓存或后端恢复目标会话
   const handleSwitchSession = useCallback(async (sessionId: string, workspaceId?: string) => {
@@ -734,11 +798,15 @@ export default function App() {
     // 无论是否缓存命中，都从后端加载最新消息以确保数据一致性
     let hasMessages = false;
     try {
-      const detail = await tauriCmd.getSession(sessionId);
+      // 并行获取分支组信息和会话详情，减少串行等待
+      const [branchGroups, detail] = await Promise.all([
+        tauriCmd.listBranchGroups(sessionId),
+        tauriCmd.getSession(sessionId),
+      ]);
       hasMessages = detail.messages.length > 0;
       // 仅在缓存未命中时使用后端数据覆盖（缓存命中时后端数据作为补充验证）
       if (!cacheHit) {
-        loadFromMessages(detail.messages);
+        loadFromMessages(detail.messages, branchGroups, detail.activeBranchId);
       }
     } catch (err) {
       console.error("[App] 加载历史会话失败:", err);
@@ -764,7 +832,15 @@ export default function App() {
     if (hasMessages) {
       loadContextUsage(sessionId);
     }
-  }, [clearNodes, resetAgent, clearContextUsage, clearSubAgentWorkflow, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, saveSessionToCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId, switchWorkspace, currentWorkspaceId, workspaces]);
+    // 切换会话前禁止 CSS 过渡动画，避免右侧栏收缩动画闪烁
+    document.documentElement.classList.add('no-transitions');
+    setRightSidebarVisible(false);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.documentElement.classList.remove('no-transitions');
+      });
+    });
+  }, [clearNodes, resetAgent, clearContextUsage, clearSubAgentWorkflow, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, saveSessionToCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId, switchWorkspace, currentWorkspaceId, workspaces, setRightSidebarVisible]);
 
   // 为指定工作区新建会话：仅切换工作区并重置到"待机"状态，不立即创建后端会话
   // 实际会话在用户首次提问时由 useAgent.sendMessage 自动创建（携带当前工作区 ID），
@@ -818,8 +894,12 @@ export default function App() {
       // 缓存未命中时从后端加载
       if (!cacheHit) {
         try {
-          const detail = await tauriCmd.getSession(nextSessionId);
-          loadFromMessages(detail.messages);
+          // 并行获取分支组信息和会话详情
+          const [branchGroups, detail] = await Promise.all([
+            tauriCmd.listBranchGroups(nextSessionId),
+            tauriCmd.getSession(nextSessionId),
+          ]);
+          loadFromMessages(detail.messages, branchGroups, detail.activeBranchId);
         } catch (err) {
           console.error("[App] 加载切换后的会话失败:", err);
           clearNodes();

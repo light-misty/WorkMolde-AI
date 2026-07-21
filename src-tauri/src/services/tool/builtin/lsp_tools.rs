@@ -218,7 +218,9 @@ impl LspTool {
         let file_path_str = params
             .get("file_path")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "Missing file_path parameter"))?;
+            .ok_or_else(|| {
+                CommandError::tool(TOOL_INVALID_PARAMS, "Missing file_path parameter")
+            })?;
 
         let line = params.get("line").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
         let character = params
@@ -304,7 +306,9 @@ impl LspTool {
         let file_path_str = params
             .get("file_path")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "Missing file_path parameter"))?;
+            .ok_or_else(|| {
+                CommandError::tool(TOOL_INVALID_PARAMS, "Missing file_path parameter")
+            })?;
 
         let line = params.get("line").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
         let character = params
@@ -369,7 +373,9 @@ impl LspTool {
         let file_path_str = params
             .get("file_path")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "Missing file_path parameter"))?;
+            .ok_or_else(|| {
+                CommandError::tool(TOOL_INVALID_PARAMS, "Missing file_path parameter")
+            })?;
 
         let line = params.get("line").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
         let character = params
@@ -442,7 +448,9 @@ impl LspTool {
         let file_path_str = params
             .get("file_path")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "Missing file_path parameter"))?;
+            .ok_or_else(|| {
+                CommandError::tool(TOOL_INVALID_PARAMS, "Missing file_path parameter")
+            })?;
 
         let abs_path = Self::resolve_path(file_path_str, workspace_root)?;
 
@@ -505,7 +513,9 @@ impl LspTool {
         let file_path_str = params
             .get("file_path")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "Missing file_path parameter"))?;
+            .ok_or_else(|| {
+                CommandError::tool(TOOL_INVALID_PARAMS, "Missing file_path parameter")
+            })?;
 
         let abs_path = Self::resolve_path(file_path_str, workspace_root)?;
 
@@ -583,7 +593,9 @@ impl LspTool {
         let file_path_str = params
             .get("file_path")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "Missing file_path parameter"))?;
+            .ok_or_else(|| {
+                CommandError::tool(TOOL_INVALID_PARAMS, "Missing file_path parameter")
+            })?;
 
         let line = params.get("line").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
         let character = params
@@ -647,7 +659,9 @@ impl LspTool {
         let file_path_str = params
             .get("file_path")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "Missing file_path parameter"))?;
+            .ok_or_else(|| {
+                CommandError::tool(TOOL_INVALID_PARAMS, "Missing file_path parameter")
+            })?;
 
         let line = params.get("line").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
         let character = params

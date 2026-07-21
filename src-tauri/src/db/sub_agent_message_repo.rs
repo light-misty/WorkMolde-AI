@@ -227,6 +227,8 @@ pub fn list_sub_agent_messages(
             reasoning_content,
             attachments,
             metadata: metadata_json.and_then(|json| serde_json::from_str(&json).ok()),
+            branch_id: None,
+            branch_group_id: None,
             created_at,
         });
     }

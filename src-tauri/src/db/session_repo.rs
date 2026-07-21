@@ -13,10 +13,17 @@ pub fn create_session(
     model: &str,
 ) -> Result<(), CommandError> {
     let now = Utc::now().to_rfc3339();
+    // 同时创建 main 分支记录并设为活跃分支，确保后续创建分支时 parent_branch_id 能找到 main 分支
+    let main_branch_id = format!("branch_{}_main", id);
     conn.execute(
-        "INSERT INTO sessions (id, workspace_id, title, created_at, updated_at, llm_provider, llm_model)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        rusqlite::params![id, workspace_id, title, now, now, provider, model],
+        "INSERT INTO sessions (id, workspace_id, title, created_at, updated_at, llm_provider, llm_model, active_branch_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        rusqlite::params![id, workspace_id, title, now, now, provider, model, main_branch_id],
+    )?;
+    conn.execute(
+        "INSERT INTO message_branches (id, session_id, name, sort_order, created_at)
+         VALUES (?1, ?2, 'main', 0, ?3)",
+        rusqlite::params![main_branch_id, id, now],
     )?;
     Ok(())
 }
@@ -24,12 +31,14 @@ pub fn create_session(
 /// 根据 ID 获取会话
 pub fn get_session(conn: &Connection, id: &str) -> Result<Session, CommandError> {
     conn.query_row(
-        "SELECT id, workspace_id, title, created_at, updated_at, llm_provider, llm_model
+        "SELECT id, workspace_id, title, created_at, updated_at, llm_provider, llm_model, active_branch_id
          FROM sessions WHERE id = ?1",
         rusqlite::params![id],
         |row| {
             let workspace_id: String = row.get(1)?;
             let provider_id: String = row.get(5)?;
+            // 读取活跃分支 ID（数据库列允许 NULL，映射为 Option<String>）
+            let active_branch_id: Option<String> = row.get(7)?;
             Ok(Session {
                 id: row.get(0)?,
                 workspace_id: if workspace_id.is_empty() {
@@ -43,6 +52,7 @@ pub fn get_session(conn: &Connection, id: &str) -> Result<Session, CommandError>
                 created_at: row.get(3)?,
                 updated_at: row.get(4)?,
                 status: String::from("active"),
+                active_branch_id,
             })
         },
     )

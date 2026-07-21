@@ -193,7 +193,10 @@ impl Tool for TaskTool {
             _ => ToolResult {
                 success: false,
                 output: None,
-                error: Some(format!("Unknown action: {}, supported: single/batch", action)),
+                error: Some(format!(
+                    "Unknown action: {}, supported: single/batch",
+                    action
+                )),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(TOOL_INVALID_PARAMS),
             },

@@ -13,6 +13,9 @@ pub struct Session {
     pub updated_at: String,
     /// 会话状态: "active" | "archived"
     pub status: String,
+    /// 当前活跃分支 ID
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_branch_id: Option<String>,
 }
 
 /// 创建会话的参数
@@ -57,4 +60,8 @@ pub struct SessionSummary {
 pub struct SessionDetail {
     pub session: Session,
     pub messages: Vec<super::Message>,
+    /// 会话的所有分支列表
+    pub branches: Vec<crate::models::Branch>,
+    /// 当前活跃分支 ID
+    pub active_branch_id: String,
 }

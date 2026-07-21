@@ -17,6 +17,14 @@ export interface UserNodeData {
   attachments: Attachment[];
   /** 对应数据库中消息的 ID，用于删除操作 */
   messageId?: string;
+  /** 消息所属分支 */
+  branchId?: string;
+  /** 分支组ID（用于定位切换器） */
+  branchGroupId?: string;
+  /** 当前分支在组内的序号（1-based） */
+  branchIndex?: number;
+  /** 组内分支总数 */
+  branchTotal?: number;
 }
 
 export interface ThinkingNodeData {

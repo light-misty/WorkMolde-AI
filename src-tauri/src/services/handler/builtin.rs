@@ -34,8 +34,12 @@ fn validate_workspace_path(resolved_path: &str, workspace_root: &str) -> Result<
     }
 
     // 规范化工作区根目录（必须存在）
-    let canonical_root = crate::utils::canonicalize(workspace_root)
-        .map_err(|e| format!("Invalid workspace root directory: {} ({})", workspace_root, e))?;
+    let canonical_root = crate::utils::canonicalize(workspace_root).map_err(|e| {
+        format!(
+            "Invalid workspace root directory: {} ({})",
+            workspace_root, e
+        )
+    })?;
 
     // 尝试规范化待校验路径
     // 路径可能不存在（如 convert 的 output_path），此时规范化父目录
@@ -49,8 +53,13 @@ fn validate_workspace_path(resolved_path: &str, workspace_root: &str) -> Result<
                 // 没有父目录（如 "file.txt"），直接用工作区根目录
                 canonical_root.join(path.file_name().unwrap_or_default())
             } else {
-                let canonical_parent = crate::utils::canonicalize(parent)
-                    .map_err(|e| format!("Invalid path parent directory: {} ({})", parent.display(), e))?;
+                let canonical_parent = crate::utils::canonicalize(parent).map_err(|e| {
+                    format!(
+                        "Invalid path parent directory: {} ({})",
+                        parent.display(),
+                        e
+                    )
+                })?;
                 canonical_parent.join(path.file_name().unwrap_or_default())
             }
         }
@@ -438,7 +447,10 @@ async fn execute_modify(
                                 return HandlerResult {
                                     success: false,
                                     output: None,
-                                    error: Some(format!("Merge input file path is not within workspace: {}", e)),
+                                    error: Some(format!(
+                                        "Merge input file path is not within workspace: {}",
+                                        e
+                                    )),
                                     duration_ms: start.elapsed().as_millis() as u64,
                                     error_code: Some(crate::errors::DOC_PERMISSION_DENIED),
                                 };
@@ -460,7 +472,10 @@ async fn execute_modify(
                         return HandlerResult {
                             success: false,
                             output: None,
-                            error: Some(format!("Split output directory is not within workspace: {}", e)),
+                            error: Some(format!(
+                                "Split output directory is not within workspace: {}",
+                                e
+                            )),
                             duration_ms: start.elapsed().as_millis() as u64,
                             error_code: Some(crate::errors::DOC_PERMISSION_DENIED),
                         };
@@ -479,7 +494,10 @@ async fn execute_modify(
                         return HandlerResult {
                             success: false,
                             output: None,
-                            error: Some(format!("Watermark image path is not within workspace: {}", e)),
+                            error: Some(format!(
+                                "Watermark image path is not within workspace: {}",
+                                e
+                            )),
                             duration_ms: start.elapsed().as_millis() as u64,
                             error_code: Some(crate::errors::DOC_PERMISSION_DENIED),
                         };
@@ -623,7 +641,10 @@ impl Handler for DocxHandler {
             _ => HandlerResult {
                 success: false,
                 output: None,
-                error: Some(format!("DocxHandler does not support operation type: {}", action)),
+                error: Some(format!(
+                    "DocxHandler does not support operation type: {}",
+                    action
+                )),
                 duration_ms: 0,
                 error_code: None,
             },
@@ -732,7 +753,10 @@ impl Handler for XlsxHandler {
             _ => HandlerResult {
                 success: false,
                 output: None,
-                error: Some(format!("XlsxHandler does not support operation type: {}", action)),
+                error: Some(format!(
+                    "XlsxHandler does not support operation type: {}",
+                    action
+                )),
                 duration_ms: 0,
                 error_code: None,
             },
@@ -818,7 +842,10 @@ impl Handler for PptxHandler {
             _ => HandlerResult {
                 success: false,
                 output: None,
-                error: Some(format!("PptxHandler does not support operation type: {}", action)),
+                error: Some(format!(
+                    "PptxHandler does not support operation type: {}",
+                    action
+                )),
                 duration_ms: 0,
                 error_code: None,
             },
@@ -1212,7 +1239,10 @@ impl Handler for PdfHandler {
             _ => HandlerResult {
                 success: false,
                 output: None,
-                error: Some(format!("PdfHandler does not support operation type: {}", action)),
+                error: Some(format!(
+                    "PdfHandler does not support operation type: {}",
+                    action
+                )),
                 duration_ms: 0,
                 error_code: None,
             },

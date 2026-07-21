@@ -193,6 +193,8 @@ const REASONING_COMPRESS_KEEP: usize = 500;
 pub struct AgentContext {
     /// 会话 ID
     pub session_id: String,
+    /// 当前分支 ID（用于消息持久化时标识归属）
+    pub branch_id: String,
     /// 对话消息历史
     pub messages: Vec<ChatMessage>,
     /// 系统提示词
@@ -236,9 +238,15 @@ pub struct AgentContext {
 }
 
 impl AgentContext {
-    pub fn new(session_id: String, system_prompt: String, context_window: usize) -> Self {
+    pub fn new(
+        session_id: String,
+        branch_id: String,
+        system_prompt: String,
+        context_window: usize,
+    ) -> Self {
         Self {
             session_id,
+            branch_id,
             messages: Vec::new(),
             system_prompt,
             max_iterations: 100,
@@ -264,7 +272,7 @@ impl AgentContext {
 
     /// 使用默认上下文窗口大小创建（128K），仅用于测试
     pub fn new_default(session_id: String, system_prompt: String) -> Self {
-        Self::new(session_id, system_prompt, 128_000)
+        Self::new(session_id, String::new(), system_prompt, 128_000)
     }
 
     /// 设置 Scratchpad 共享状态引用（由 executor 在初始化时注入）
@@ -386,9 +394,10 @@ impl AgentContext {
         // 从历史消息中推断任务类型
         self.update_task_type_from_history();
         log::info!(
-            "已加载 {} 条历史消息到上下文, session_id={}, persisted_count={}",
+            "已加载 {} 条历史消息到上下文, session_id={}, branch_id={}, persisted_count={}",
             count,
             self.session_id,
+            self.branch_id,
             self.persisted_count
         );
     }

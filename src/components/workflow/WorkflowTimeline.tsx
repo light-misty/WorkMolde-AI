@@ -1,10 +1,11 @@
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback, useMemo, useState } from "react";
 import { useTranslation } from 'react-i18next';
-import { useWorkflowStore } from "../../stores/useWorkflowStore";
+import { useWorkflowStore, nodeRefsMap } from "../../stores/useWorkflowStore";
 import { useAgentModeStore } from "../../stores/useAgentModeStore";
 import type { AgentMode } from "../../stores/useAgentModeStore";
 import { Icon, type IconName } from "../common/Icon";
 import { WorkflowNodeRenderer } from "./WorkflowNode";
+import { CustomScrollArea } from "../common/CustomScrollArea";
 
 interface WorkflowTimelineProps {
   /** 错误节点重试回调 */
@@ -39,6 +40,30 @@ function TypewriterText({ text }: { text: string }) {
 }
 
 /**
+ * 简单的 throttle 实现
+ * 在 delay 时间内只执行一次，最后一次调用会被延迟执行以确保尾部触发
+ */
+function throttle<T extends (...args: any[]) => void>(fn: T, delay: number): T {
+  let lastCall = 0;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  return ((...args: any[]) => {
+    const now = Date.now();
+    const remaining = delay - (now - lastCall);
+    if (remaining <= 0) {
+      if (timer) { clearTimeout(timer); timer = null; }
+      lastCall = now;
+      fn(...args);
+    } else if (!timer) {
+      timer = setTimeout(() => {
+        lastCall = Date.now();
+        timer = null;
+        fn(...args);
+      }, remaining);
+    }
+  }) as T;
+}
+
+/**
  * 工作流时间线组件（原生滚动版）
  * 使用 CSS content-visibility: auto 优化长列表渲染性能，
  * 避免虚拟滚动带来的 DOM 不完整和滚动卡顿问题。
@@ -46,7 +71,7 @@ function TypewriterText({ text }: { text: string }) {
  */
 export function WorkflowTimeline({ onRetryError, typewriterVisible = false }: WorkflowTimelineProps) {
   const { t } = useTranslation();
-  const { nodes } = useWorkflowStore();
+  const { nodes, registerNodeRef, unregisterNodeRef } = useWorkflowStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   // 追踪是否应自动滚动（用户未手动上滚时自动跟随）
   const autoScrollRef = useRef(true);
@@ -70,14 +95,55 @@ export function WorkflowTimeline({ onRetryError, typewriterVisible = false }: Wo
     return acc;
   }, 0);
 
+  // 计算当前可见节点：找到最接近容器视口中心的节点并更新 store
+  const computeCurrentVisibleNode = useCallback(() => {
+    // 直接读取模块级 nodeRefsMap（避免订阅 store state）
+    const refs = nodeRefsMap;
+    if (refs.size === 0) return;
+
+    const container = scrollRef.current;
+    if (!container) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const centerY = containerRect.top + containerRect.height / 2;
+
+    let closestNodeId: string | null = null;
+    let closestDistance = Infinity;
+
+    refs.forEach((el, nodeId) => {
+      const rect = el.getBoundingClientRect();
+      const nodeCenterY = rect.top + rect.height / 2;
+      const distance = Math.abs(nodeCenterY - centerY);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestNodeId = nodeId;
+      }
+    });
+
+    if (closestNodeId) {
+      const current = useWorkflowStore.getState().currentVisibleNodeId;
+      if (current !== closestNodeId) {
+        useWorkflowStore.getState().setCurrentVisibleNodeId(closestNodeId);
+      }
+    }
+  }, []);
+
+  // throttle 包裹，避免滚动时频繁计算
+  const throttledCompute = useMemo(
+    () => throttle(computeCurrentVisibleNode, 100),
+    [computeCurrentVisibleNode]
+  );
+
   // 检测用户是否手动上滚，决定是否自动跟随
   const handleScroll = useCallback(() => {
+    // 更新当前可见节点（throttle 内部控制频率）
+    throttledCompute();
     if (isProgrammaticScrollRef.current) return;
     const el = scrollRef.current;
     if (!el) return;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     autoScrollRef.current = distanceFromBottom < 50;
-  }, []);
+  }, [throttledCompute]);
 
   // 自动滚动到底部：根据场景选择合适的滚动行为
   useEffect(() => {
@@ -152,6 +218,15 @@ export function WorkflowTimeline({ onRetryError, typewriterVisible = false }: Wo
     return () => cancelAnimationFrame(rafIdRef.current);
   }, [nodes.length, streamingContentKey]);
 
+  // 节点数量变化时延迟计算一次当前可见节点，确保 DOM 已更新
+  useEffect(() => {
+    if (nodes.length === 0) return;
+    const timer = setTimeout(() => {
+      computeCurrentVisibleNode();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [nodes.length, computeCurrentVisibleNode]);
+
   if (nodes.length === 0) {
     return (
       <EmptySessionTitle typewriterVisible={typewriterVisible} />
@@ -159,18 +234,33 @@ export function WorkflowTimeline({ onRetryError, typewriterVisible = false }: Wo
   }
 
   return (
-    <div
-      ref={scrollRef}
+    <CustomScrollArea
       className="workflow-scroll-container"
+      scrollRef={scrollRef}
       onScroll={handleScroll}
-      role="log"
-      aria-label={t('workflow.timeline')}
-      aria-live="polite"
+      contentAttrs={{
+        role: 'log',
+        'aria-label': t('workflow.timeline'),
+        'aria-live': 'polite',
+      }}
     >
-      {nodes.map((node) => (
-        <WorkflowNodeRenderer key={node.id} node={node} onRetry={onRetryError} />
-      ))}
-    </div>
+      <div className="workflow-scroll-padding">
+        {nodes.map((node) => (
+          <WorkflowNodeRenderer
+            key={node.id}
+            node={node}
+            onRetry={onRetryError}
+            nodeRef={(el) => {
+              if (el) {
+                registerNodeRef(node.id, el);
+              } else {
+                unregisterNodeRef(node.id);
+              }
+            }}
+          />
+        ))}
+      </div>
+    </CustomScrollArea>
   );
 }
 

@@ -166,11 +166,80 @@ fn create_tables(conn: &Connection) -> Result<(), CommandError> {
         );",
     )?;
 
+    // message_branches 消息分支表（支持对话分支管理）
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS message_branches (
+            id                TEXT        NOT NULL PRIMARY KEY,
+            session_id        TEXT        NOT NULL,
+            parent_branch_id  TEXT        DEFAULT NULL,
+            fork_message_id   TEXT        DEFAULT NULL,
+            branch_group_id   TEXT        DEFAULT NULL,
+            name              TEXT        NOT NULL,
+            sort_order        INTEGER     NOT NULL DEFAULT 0,
+            created_at        TEXT        NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        );",
+    )?;
+
     // 迁移：为已有数据库的 session_messages 表添加 metadata 字段（新字段已存在时忽略错误）
     let _ = conn.execute(
         "ALTER TABLE session_messages ADD COLUMN metadata TEXT DEFAULT NULL",
         [],
     );
+
+    // 迁移：为分支功能添加新字段（新字段已存在时忽略错误）
+    let _ = conn.execute(
+        "ALTER TABLE session_messages ADD COLUMN branch_id TEXT DEFAULT NULL",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE session_messages ADD COLUMN branch_group_id TEXT DEFAULT NULL",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE sessions ADD COLUMN active_branch_id TEXT DEFAULT NULL",
+        [],
+    );
+
+    // 老数据迁移：为每个会话创建默认 main 分支
+    {
+        let mut stmt = conn.prepare("SELECT id FROM sessions")?;
+        let session_ids: Vec<String> = stmt
+            .query_map([], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+        drop(stmt);
+
+        for session_id in &session_ids {
+            let branch_id = format!("branch_{}_main", session_id);
+            // 检查是否已有分支记录
+            let exists: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM message_branches WHERE session_id = ?1",
+                    rusqlite::params![session_id],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+
+            if exists == 0 {
+                // 创建 main 分支
+                conn.execute(
+                    "INSERT INTO message_branches (id, session_id, parent_branch_id, fork_message_id, branch_group_id, name, sort_order) VALUES (?1, ?2, NULL, NULL, NULL, 'main', 0)",
+                    rusqlite::params![branch_id, session_id],
+                )?;
+                // 回填消息 branch_id
+                conn.execute(
+                    "UPDATE session_messages SET branch_id = ?1 WHERE session_id = ?2 AND branch_id IS NULL",
+                    rusqlite::params![branch_id, session_id],
+                )?;
+                // 设置 session.active_branch_id
+                conn.execute(
+                    "UPDATE sessions SET active_branch_id = ?1 WHERE id = ?2 AND active_branch_id IS NULL",
+                    rusqlite::params![branch_id, session_id],
+                )?;
+                log::info!("已为会话 {} 创建默认 main 分支", session_id);
+            }
+        }
+    }
 
     log::info!("数据表创建完成");
     Ok(())
@@ -230,6 +299,20 @@ fn create_indexes(conn: &Connection) -> Result<(), CommandError> {
             ON sub_agent_messages (agent_id);
         CREATE INDEX IF NOT EXISTS idx_sub_agent_messages_session
             ON sub_agent_messages (parent_session_id);",
+    )?;
+
+    // 分支相关索引
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_session_messages_branch_id ON session_messages (branch_id, created_at ASC)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_message_branches_session_id ON message_branches (session_id)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_message_branches_branch_group_id ON message_branches (branch_group_id)",
+        [],
     )?;
 
     log::info!("索引创建完成");

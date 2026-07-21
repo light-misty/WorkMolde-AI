@@ -724,6 +724,10 @@ pub fn run() {
             commands::session::clear_workspace_sessions,
             commands::session::delete_session_messages,
             commands::session::update_session_workspace,
+            commands::session::create_branch,
+            commands::session::switch_branch,
+            commands::session::list_branch_groups,
+            commands::session::list_all_branch_user_messages,
             // 工作区命令
             commands::workspace::list_workspaces,
             commands::workspace::add_workspace,

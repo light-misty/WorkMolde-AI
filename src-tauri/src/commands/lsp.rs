@@ -92,7 +92,11 @@ pub async fn lsp_initialize(
     // 启动所有已注册的服务器
     for server_config in &lsp_config.servers {
         if server_config.enabled {
-            if let Err(e) = state.lsp_manager.get_or_start(&server_config.language).await {
+            if let Err(e) = state
+                .lsp_manager
+                .get_or_start(&server_config.language)
+                .await
+            {
                 log::warn!("LSP 启动失败 ({}): {}", server_config.language, e.message);
             }
         }

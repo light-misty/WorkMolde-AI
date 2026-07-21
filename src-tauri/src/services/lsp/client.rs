@@ -126,7 +126,11 @@ impl LspClient {
             Ok(resp) => resp,
             Err(e) => {
                 // initialize 失败,清理已 spawn 的子进程,防止泄漏
-                log::warn!("LSP {} initialize 失败,清理子进程: {}", self.language, e.message);
+                log::warn!(
+                    "LSP {} initialize 失败,清理子进程: {}",
+                    self.language,
+                    e.message
+                );
                 let mut process = self.process.lock().await;
                 if let Some(mut child) = process.take() {
                     let _ = child.kill().await;
@@ -198,11 +202,10 @@ impl LspClient {
                             let mut info = server_info.lock().await;
                             if let Some(ref mut info) = *info {
                                 info.status = LspServerStatus::Terminated;
-                                info.error =
-                                    Some("LSP 服务器进程已退出(stdout 关闭)".to_string());
+                                info.error = Some("LSP 服务器进程已退出(stdout 关闭)".to_string());
                             }
                         } // 释放 server_info 锁,避免嵌套持锁
-                        // 清空 pending_requests,让所有等待响应的请求立即失败(sender drop 后 rx 收到 Err)
+                          // 清空 pending_requests,让所有等待响应的请求立即失败(sender drop 后 rx 收到 Err)
                         pending_requests.lock().await.clear();
                         break;
                     }
@@ -235,7 +238,7 @@ impl LspClient {
                                 info.error = Some(format!("LSP 读取 stdout 失败: {}", e));
                             }
                         } // 释放 server_info 锁,避免嵌套持锁
-                        // 清空 pending_requests,让所有等待响应的请求立即失败(sender drop 后 rx 收到 Err)
+                          // 清空 pending_requests,让所有等待响应的请求立即失败(sender drop 后 rx 收到 Err)
                         pending_requests.lock().await.clear();
                         break;
                     }

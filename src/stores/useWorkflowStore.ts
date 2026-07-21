@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import type { WorkflowNode, WorkflowNodeType, NodeStatus, ExecutionStatus, NodeDataMap, SubAgentNodeData } from "../types";
-import type { Message } from "../types/session";
+import type { WorkflowNode, WorkflowNodeType, NodeStatus, ExecutionStatus, NodeDataMap, SubAgentNodeData, UserNodeData } from "../types";
+import type { Message, BranchGroupInfo } from "../types/session";
 import type { ContextUsageInfo } from "../types/settings";
 
 import { extractToolPath } from "../utils/format";
@@ -46,10 +46,23 @@ export interface SessionCacheEntry {
   bgCompactionNodeId: string | null;
   /** 最后访问时间，用于 LRU 淘汰 */
   lastAccessedAt: number;
+  /** 分支组列表快照，restore 时恢复 */
+  branchGroups: BranchGroupInfo[];
 }
 
 /** 缓存上限：最多保留 20 个会话的缓存 */
 const MAX_CACHE_SIZE = 20;
+
+/**
+ * 节点 DOM ref 注册表（模块级 Map，不作为 store state）
+ *
+ * 设计原因：DOM ref 本质是命令式句柄，不应触发 React 重渲染。
+ * 若放入 store state，register/unregister 调用 set() 会触发订阅组件重渲染，
+ * 而 WorkflowTimeline 的 nodeRef callback 是内联函数（每次渲染新引用），
+ * React 会因 callback 引用变化重复调用 null+el，形成无限循环。
+ * 因此改为模块级 Map，所有访问通过 getState()/get() 或直接导入本 Map。
+ */
+export const nodeRefsMap = new Map<string, HTMLElement>();
 
 /** 后台 Agent 事件类型，用于 applyBackgroundEvent */
 export type BackgroundAgentEvent =
@@ -82,6 +95,20 @@ interface WorkflowState {
   currentSubAgentId: string | null;
   /** 子 Agent 工作流节点列表 */
   subAgentNodes: WorkflowNode[];
+  /** 当前会话的所有分支组信息，用于分支切换器渲染 */
+  branchGroups: BranchGroupInfo[];
+  /** 当前会话的活跃分支 ID（loadFromMessages 时保存，供组件查询） */
+  activeBranchId: string;
+  /** 创建分支后待发送的消息（由 UserNode 设置，App.tsx 监听消费） */
+  pendingBranchSend: { content: string; branchGroupId: string } | null;
+
+  /** 右侧边栏是否可见 */
+  rightSidebarVisible: boolean;
+  // 节点 DOM ref 注册表已移至模块级 nodeRefsMap，不作为 store state（避免触发重渲染）
+  /** 当前可见节点 ID */
+  currentVisibleNodeId: string | null;
+  /** 跳转后高亮节点 ID */
+  highlightNodeId: string | null;
 
   addNode: <T extends WorkflowNodeType>(type: T, data: NodeDataMap[T], status?: NodeStatus, iteration?: number) => string;
   updateNode: (id: string, updates: Partial<WorkflowNode>) => void;
@@ -93,7 +120,7 @@ interface WorkflowState {
   setConfirmHandler: (handler: ((approved: boolean, feedback?: string) => Promise<void>) | null) => void;
   /** 设置权限审批回调（与 setConfirmHandler 并存，permissionHandler 优先） */
   setPermissionHandler: (handler: ((response: 'once' | 'reject', feedback?: string) => Promise<void>) | null) => void;
-  loadFromMessages: (messages: Message[]) => void;
+  loadFromMessages: (messages: Message[], branchGroups: BranchGroupInfo[], activeBranchId: string) => void;
   /** 设置当前查看的子 Agent ID */
   setCurrentSubAgentId: (agentId: string | null) => void;
   /** 将子 Agent 消息转换为工作流节点，设置 subAgentNodes */
@@ -126,6 +153,21 @@ interface WorkflowState {
   applyBackgroundEvent: (sessionId: string, event: BackgroundAgentEvent) => void;
   /** 获取指定会话缓存的 contextUsage */
   getCachedContextUsage: (sessionId: string) => ContextUsageInfo | null;
+  /** 设置/清除待发送的分支消息（UserNode 创建分支后设置，App.tsx 消费后清空） */
+  setPendingBranchSend: (data: { content: string; branchGroupId: string } | null) => void;
+
+  /** 设置右侧边栏可见性并同步到 localStorage */
+  setRightSidebarVisible: (visible: boolean) => void;
+  /** 注册节点 DOM ref */
+  registerNodeRef: (nodeId: string, el: HTMLElement) => void;
+  /** 注销节点 DOM ref */
+  unregisterNodeRef: (nodeId: string) => void;
+  /** 跳转到指定节点（滚动+高亮），返回是否成功（元素存在为 true） */
+  jumpToNode: (nodeId: string) => boolean;
+  /** 通过 messageId 跳转到对应节点（用于跨分支搜索结果跳转） */
+  jumpToMessage: (messageId: string) => boolean;
+  /** 设置当前可见节点 ID */
+  setCurrentVisibleNodeId: (nodeId: string | null) => void;
 }
 
 /** 流式状态引用快照，切换会话时保存/恢复 */
@@ -158,7 +200,11 @@ function evictCacheIfNeeded(cache: Map<string, SessionCacheEntry>) {
 }
 
 /** 将消息列表转换为工作流节点列表的核心逻辑（供 loadFromMessages 和 loadSubAgentMessages 复用） */
-function convertMessagesToNodes(messages: Message[]): WorkflowNode[] {
+function convertMessagesToNodes(
+  messages: Message[],
+  branchGroups: BranchGroupInfo[] = [],
+  activeBranchId: string = ""
+): WorkflowNode[] {
   nodeCounter = 0;
   const nodes: WorkflowNode[] = [];
   let iterationCounter = 0;
@@ -194,12 +240,36 @@ function convertMessagesToNodes(messages: Message[]): WorkflowNode[] {
         size: att.size,
         mimeType: att.mimeType,
       }));
+
+      // 计算分支切换器信息
+      let branchIndex: number | undefined;
+      let branchTotal: number | undefined;
+      if (msg.branchGroupId && activeBranchId) {
+        const group = branchGroups.find((g) => g.branchGroupId === msg.branchGroupId);
+        if (group && group.branches.length > 1) {
+          branchTotal = group.branches.length;
+          // 找到 activeBranchId 在组内的位置（1-based）
+          const idx = group.branches.findIndex((b) => b.branchId === activeBranchId);
+          if (idx >= 0) {
+            branchIndex = idx + 1;
+          }
+        }
+      }
+
       nodes.push({
         id: `node_${++nodeCounter}`,
         type: "user",
         status: "completed",
         timestamp: msgTimestamp,
-        data: { content: msg.content, attachments: nodeAttachments, messageId: msg.id },
+        data: {
+          content: msg.content,
+          attachments: nodeAttachments,
+          messageId: msg.id,
+          branchId: msg.branchId,
+          branchGroupId: msg.branchGroupId,
+          branchIndex,
+          branchTotal,
+        } as UserNodeData,
         isExpanded: true,
       });
     } else if (msg.role === "assistant") {
@@ -359,6 +429,13 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   sessionCache: new Map(),
   currentSubAgentId: null,
   subAgentNodes: [],
+  branchGroups: [],
+  activeBranchId: "",
+  pendingBranchSend: null,
+  rightSidebarVisible: false,
+  // nodeRefs 已移至模块级 nodeRefsMap，不作为 store state
+  currentVisibleNodeId: null,
+  highlightNodeId: null,
 
   addNode: (type, data, status = "completed", iteration) => {
     const id = `node_${++nodeCounter}`;
@@ -421,9 +498,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     set({ permissionHandler: handler });
   },
 
-  loadFromMessages: (messages) => {
-    const nodes = convertMessagesToNodes(messages);
-    set({ nodes, error: null, executionStatus: "idle", confirmHandler: null, permissionHandler: null });
+  loadFromMessages: (messages, branchGroups, activeBranchId) => {
+    const nodes = convertMessagesToNodes(messages, branchGroups, activeBranchId);
+    set({ nodes, error: null, executionStatus: "idle", confirmHandler: null, permissionHandler: null, branchGroups, activeBranchId });
   },
 
   setCurrentSubAgentId: (agentId) => {
@@ -702,6 +779,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       bgLastClosedStreamingNodeId: cache.get(sessionId)?.bgLastClosedStreamingNodeId ?? null,
       bgCompactionNodeId: cache.get(sessionId)?.bgCompactionNodeId ?? null,
       lastAccessedAt: Date.now(),
+      branchGroups: state.branchGroups,
     });
 
     evictCacheIfNeeded(cache);
@@ -722,6 +800,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       contextUsage: entry.contextUsage,
       confirmHandler: null,
       permissionHandler: null,
+      branchGroups: entry.branchGroups,
     });
 
     // 更新缓存访问时间
@@ -1245,6 +1324,50 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const entry = get().sessionCache.get(sessionId);
     return entry?.contextUsage ?? null;
   },
+
+  // 设置/清除待发送的分支消息
+  setPendingBranchSend: (data) => set({ pendingBranchSend: data }),
+
+  // 设置右侧边栏可见性（仅在内存中，不持久化）
+  setRightSidebarVisible: (visible) => set({ rightSidebarVisible: visible }),
+
+  // 注册节点 DOM ref（直接操作模块级 Map，不触发 store 更新）
+  registerNodeRef: (nodeId, el) => {
+    nodeRefsMap.set(nodeId, el);
+  },
+
+  // 注销节点 DOM ref（直接操作模块级 Map，不触发 store 更新）
+  unregisterNodeRef: (nodeId) => {
+    nodeRefsMap.delete(nodeId);
+  },
+
+  // 跳转到指定节点：滚动到视图中央并高亮 1.5 秒
+  jumpToNode: (nodeId) => {
+    const el = nodeRefsMap.get(nodeId);
+    if (!el) return false;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    set({ highlightNodeId: nodeId });
+    setTimeout(() => {
+      // 仅当当前仍高亮本节点时才清空，避免连续跳转时竞态
+      if (get().highlightNodeId === nodeId) {
+        set({ highlightNodeId: null });
+      }
+    }, 1500);
+    return true;
+  },
+
+  // 通过 messageId 跳转到对应节点：遍历当前节点列表查找匹配的 user 节点
+  jumpToMessage: (messageId) => {
+    const nodes = get().nodes;
+    const targetNode = nodes.find(
+      (n) => n.type === "user" && (n.data as UserNodeData).messageId === messageId,
+    );
+    if (!targetNode) return false;
+    return get().jumpToNode(targetNode.id);
+  },
+
+  // 设置当前可见节点 ID
+  setCurrentVisibleNodeId: (nodeId) => set({ currentVisibleNodeId: nodeId }),
 }));
 
 /** 当前会话 ID 的外部追踪，供 initContextUsageListener 区分当前/后台会话 */

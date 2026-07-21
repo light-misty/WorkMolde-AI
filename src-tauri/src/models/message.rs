@@ -60,6 +60,12 @@ pub struct Message {
     /// 工作流节点扩展信息 (JSON 格式，用于持久化 question/confirm/error 节点详情)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<serde_json::Value>,
+    /// 分支 ID (用于会话分支功能)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch_id: Option<String>,
+    /// 分支组 ID (用于会话分支功能)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch_group_id: Option<String>,
     pub created_at: String,
 }
 
@@ -182,6 +188,8 @@ mod tests {
             reasoning_content: None,
             attachments: None,
             metadata: None,
+            branch_id: None,
+            branch_group_id: None,
             created_at: "2026-01-01T00:00:00Z".to_string(),
         };
 
@@ -203,6 +211,8 @@ mod tests {
             reasoning_content: Some("思考中...".to_string()),
             attachments: None,
             metadata: None,
+            branch_id: None,
+            branch_group_id: None,
             created_at: "2026-01-01T00:00:01Z".to_string(),
         };
 
@@ -229,6 +239,8 @@ mod tests {
             reasoning_content: None,
             attachments: None,
             metadata: None,
+            branch_id: None,
+            branch_group_id: None,
             created_at: "2026-01-01T00:00:02Z".to_string(),
         };
 
@@ -259,6 +271,8 @@ mod tests {
             reasoning_content: None,
             attachments: None,
             metadata: None,
+            branch_id: None,
+            branch_group_id: None,
             created_at: "2026-01-01T00:00:03Z".to_string(),
         };
 
@@ -280,6 +294,8 @@ mod tests {
             reasoning_content: None,
             attachments: None,
             metadata: None,
+            branch_id: None,
+            branch_group_id: None,
             created_at: "2026-01-01T00:00:00Z".to_string(),
         };
 
@@ -297,6 +313,8 @@ mod tests {
             reasoning_content: None,
             attachments: None,
             metadata: None,
+            branch_id: None,
+            branch_group_id: None,
             created_at: "2026-01-01T00:00:04Z".to_string(),
         };
 
@@ -327,6 +345,8 @@ mod tests {
             reasoning_content: None,
             attachments: None,
             metadata: None,
+            branch_id: None,
+            branch_group_id: None,
             created_at: "2026-01-01T00:00:05Z".to_string(),
         };
 

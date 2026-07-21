@@ -1,3 +1,4 @@
+pub mod branch;
 pub mod context_memory;
 pub mod document;
 pub mod handler;
@@ -13,6 +14,7 @@ pub mod todo;
 pub mod tool;
 pub mod workspace;
 
+pub use branch::*;
 pub use context_memory::*;
 pub use document::*;
 pub use handler::*;

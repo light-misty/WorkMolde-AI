@@ -207,7 +207,10 @@ Requirements:\n\
 
         // 按字符边界安全截断(避免 UTF-8 截断 panic)
         let truncated: String = msg.content.chars().take(max_chars).collect();
-        msg.content = format!("{}\n...[truncated, original length {} chars]", truncated, char_count);
+        msg.content = format!(
+            "{}\n...[truncated, original length {} chars]",
+            truncated, char_count
+        );
 
         log::debug!(
             "工具输出截断:原始 {} 字符 -> 保留 {} 字符",

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import i18n from "../i18n";
 import type { SessionSummary } from "../types";
 import * as tauriCmd from "../services/tauri";
+import { useWorkflowStore } from "./useWorkflowStore";
 
 interface SessionState {
   currentSessionId: string | null;
@@ -17,6 +18,8 @@ interface SessionState {
   loadSessions: (workspaceId?: string) => Promise<void>;
   clearAllSessions: () => Promise<number>;
   clearWorkspaceSessions: (workspaceId: string) => Promise<number>;
+  /** 切换当前会话的活跃分支 */
+  switchBranch: (branchId: string) => Promise<void>;
 }
 
 export const useSessionStore = create<SessionState>((set) => ({
@@ -141,6 +144,37 @@ export const useSessionStore = create<SessionState>((set) => ({
       return count;
     } catch (error) {
       console.error("[SessionStore] 清除工作区会话失败:", error);
+      throw error;
+    }
+  },
+
+  // 切换当前会话的活跃分支，并触发工作流重新加载
+  switchBranch: async (branchId) => {
+    const sessionId = useSessionStore.getState().currentSessionId;
+    if (!sessionId) {
+      console.warn("[SessionStore] switchBranch: 无当前会话");
+      return;
+    }
+    try {
+      // 1. 通知后端切换活跃分支
+      await tauriCmd.switchBranch(sessionId, branchId);
+      // 2. 清空 workflow store 中该会话的缓存，强制重新加载
+      useWorkflowStore.getState().clearSessionCache(sessionId);
+      // 3. 并行获取分支组信息和会话详情（SessionDetail 不含 branchGroups，需单独获取）
+      const [branchGroups, detail] = await Promise.all([
+        tauriCmd.listBranchGroups(sessionId),
+        tauriCmd.getSession(sessionId),
+      ]);
+      // 4. 重新生成工作流节点
+      useWorkflowStore.getState().loadFromMessages(
+        detail.messages,
+        branchGroups,
+        detail.activeBranchId
+      );
+      // 5. 重新加载上下文窗口使用信息
+      useWorkflowStore.getState().loadContextUsage(sessionId);
+    } catch (error) {
+      console.error("[SessionStore] 切换分支失败:", error);
       throw error;
     }
   },

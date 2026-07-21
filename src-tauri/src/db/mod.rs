@@ -1,3 +1,4 @@
+pub mod branch_repo;
 pub mod init;
 pub mod message_repo;
 pub mod permission_repo;

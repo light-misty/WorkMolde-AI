@@ -10,7 +10,7 @@ export type IconName =
   | "code" | "menu" | "minimize" | "maximize" | "unmaximize"
   | "refresh" | "edit" | "trash" | "stop" | "back"
   | "copy" | "eye" | "folder-plus" | "file-plus" | "external-link"
-  | "chart" | "clock" | "git-compare" | "undo"
+  | "chart" | "clock" | "git-compare" | "git-branch" | "undo"
   | "theme" | "moon" | "keyboard" | "info" | "image" | "book" | "more-vertical"
   // 空会话标题专用：规划模式清单图标、构建模式双尖括号图标
   | "plan-mode" | "code-brackets"
@@ -357,6 +357,15 @@ const paths: Record<IconName, React.JSX.Element> = {
       <circle cx="6" cy="6" r="3" />
       <path d="M13 6h3a2 2 0 0 1 2 2v7" />
       <path d="M11 18H8a2 2 0 0 1-2-2V9" />
+    </g>
+  ),
+  // 分支图标（用于分支组指示）
+  "git-branch": (
+    <g key="git-branch">
+      <line x1="6" y1="3" x2="6" y2="15" />
+      <circle cx="18" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <path d="M18 9a9 9 0 0 1-9 9" />
     </g>
   ),
   // 撤销/回滚

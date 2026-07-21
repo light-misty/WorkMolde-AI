@@ -17,9 +17,10 @@ use crate::db::sub_agent_message_repo;
 use crate::db::Database;
 use crate::errors::{CommandError, TOOL_INVALID_PARAMS, TOOL_NOT_FOUND};
 use crate::events::types::{
-    SubAgentContentPayload, SubAgentStatusPayload, SubAgentThinkingPayload, SubAgentToolCallPayload,
-    SubAgentToolResultPayload, AGENT_SUB_AGENT_CONTENT, AGENT_SUB_AGENT_STATUS,
-    AGENT_SUB_AGENT_THINKING, AGENT_SUB_AGENT_TOOL_CALL, AGENT_SUB_AGENT_TOOL_RESULT,
+    SubAgentContentPayload, SubAgentStatusPayload, SubAgentThinkingPayload,
+    SubAgentToolCallPayload, SubAgentToolResultPayload, AGENT_SUB_AGENT_CONTENT,
+    AGENT_SUB_AGENT_STATUS, AGENT_SUB_AGENT_THINKING, AGENT_SUB_AGENT_TOOL_CALL,
+    AGENT_SUB_AGENT_TOOL_RESULT,
 };
 use crate::models::llm::{ChatMessage, LlmToolCall, ToolDefinition};
 use crate::models::sub_agent::{SubAgentConfig, SubAgentResult, ToolCallRecord};
@@ -189,7 +190,14 @@ impl SubAgentExecutor {
         );
 
         // 发射状态变更事件：开始执行
-        self.emit_status(&parent_session_id, &agent_id, "running", None, 0, &config.task_description);
+        self.emit_status(
+            &parent_session_id,
+            &agent_id,
+            "running",
+            None,
+            0,
+            &config.task_description,
+        );
 
         // 使用超时控制执行
         let timeout = Duration::from_secs(config.timeout_seconds);
@@ -272,7 +280,10 @@ impl SubAgentExecutor {
                     agent_id,
                     success: false,
                     result: String::new(),
-                    error: Some(format!("Execution timeout ({} seconds)", config.timeout_seconds)),
+                    error: Some(format!(
+                        "Execution timeout ({} seconds)",
+                        config.timeout_seconds
+                    )),
                     iterations: 0,
                     duration_ms,
                     tool_calls: 0,
@@ -493,8 +504,7 @@ impl SubAgentExecutor {
                     let tool_args: Value = if tool_call.arguments.is_empty() {
                         serde_json::json!({})
                     } else {
-                        serde_json::from_str(&tool_call.arguments)
-                            .unwrap_or(serde_json::json!({}))
+                        serde_json::from_str(&tool_call.arguments).unwrap_or(serde_json::json!({}))
                     };
 
                     // 发射子 Agent 工具调用事件（含 tool_call_id）
@@ -610,12 +620,7 @@ impl SubAgentExecutor {
 
     /// 持久化子 Agent 消息到数据库
     /// 失败时仅记录警告日志，不中断子 Agent 执行
-    fn persist_sub_agent_message(
-        &self,
-        config: &SubAgentConfig,
-        seq: u32,
-        msg: &ChatMessage,
-    ) {
+    fn persist_sub_agent_message(&self, config: &SubAgentConfig, seq: u32, msg: &ChatMessage) {
         match self.db.conn() {
             Ok(conn) => {
                 if let Err(e) = sub_agent_message_repo::create_sub_agent_message(
@@ -648,7 +653,10 @@ impl SubAgentExecutor {
     ) -> Result<String, CommandError> {
         // 获取工具的 Arc 引用
         let tool = self.tool_registry.get_arc(&tool_call.name).ok_or_else(|| {
-            CommandError::tool(TOOL_NOT_FOUND, format!("Tool {} does not exist", tool_call.name))
+            CommandError::tool(
+                TOOL_NOT_FOUND,
+                format!("Tool {} does not exist", tool_call.name),
+            )
         })?;
 
         // 解析 tool_call.arguments（String）为 serde_json::Value

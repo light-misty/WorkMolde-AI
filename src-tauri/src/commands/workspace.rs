@@ -6,7 +6,9 @@ use crate::db::session_repo;
 use crate::errors::{CommandError, FS_NOT_A_DIRECTORY, FS_PATH_NOT_FOUND};
 use crate::events::types;
 use crate::events::AgentEmitter;
-use crate::models::workspace::{FileNode, SearchOptions, SearchResult, WorkspaceGitStatus, WorkspaceInfo};
+use crate::models::workspace::{
+    FileNode, SearchOptions, SearchResult, WorkspaceGitStatus, WorkspaceInfo,
+};
 use crate::AppState;
 
 /// 列出所有工作区
@@ -309,7 +311,10 @@ pub async fn search_files(
 pub async fn get_workspace_git_status(
     workspace_path: String,
 ) -> Result<WorkspaceGitStatus, CommandError> {
-    log::info!("get_workspace_git_status: 检查 Git 状态, path={}", workspace_path);
+    log::info!(
+        "get_workspace_git_status: 检查 Git 状态, path={}",
+        workspace_path
+    );
 
     use crate::utils::git_utils::create_git_command;
 
@@ -332,7 +337,11 @@ pub async fn get_workspace_git_status(
         .current_dir(&workspace_path)
         .output()
         .ok()
-        .and_then(|o| o.status.success().then(|| String::from_utf8_lossy(&o.stdout).trim().to_string()))
+        .and_then(|o| {
+            o.status
+                .success()
+                .then(|| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        })
         .unwrap_or_else(|| "HEAD".to_string());
 
     let changed_file_count = create_git_command()
@@ -340,7 +349,13 @@ pub async fn get_workspace_git_status(
         .current_dir(&workspace_path)
         .output()
         .ok()
-        .map(|o| std::str::from_utf8(&o.stdout).unwrap_or("").lines().filter(|l| !l.is_empty()).count() as u32)
+        .map(|o| {
+            std::str::from_utf8(&o.stdout)
+                .unwrap_or("")
+                .lines()
+                .filter(|l| !l.is_empty())
+                .count() as u32
+        })
         .unwrap_or(0);
 
     log::info!(

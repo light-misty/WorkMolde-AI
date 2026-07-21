@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { WorkflowNode, UserNodeData } from "../../types";
@@ -19,6 +19,9 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
   const hasAttachments = data.attachments && data.attachments.length > 0;
   const [copied, setCopied] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // 创建分支原位编辑模式状态
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState("");
 
   const executionStatus = useWorkflowStore((s) => s.executionStatus);
   const isAgentRunning = executionStatus === "running";
@@ -117,6 +120,128 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
     }
   };
 
+  // 进入原位编辑模式：用当前消息内容预填 textarea
+  const handleStartEdit = () => {
+    setEditContent(data.content);
+    setIsEditing(true);
+  };
+
+  // 取消编辑：退出编辑模式并清空编辑内容
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditContent("");
+  };
+
+  // 确认创建分支：调用后端 create_branch 复制前缀消息+切换活跃分支，
+  // 然后刷新 workflow 节点显示新分支，最后通过 pendingBranchSend 触发 App.tsx 发送新分支消息
+  const handleConfirmCreateBranch = async () => {
+    const sessionId = useSessionStore.getState().currentSessionId;
+    if (!sessionId) return;
+
+    const trimmedContent = editContent.trim();
+    if (!trimmedContent) {
+      // 空内容不允许创建分支
+      return;
+    }
+
+    // 获取要分叉的 user 消息 ID
+    // 实时对话中通过 addNode 创建的 user 节点没有 messageId，需要从后端按位置匹配查找
+    let forkMessageId = data.messageId;
+    if (!forkMessageId) {
+      try {
+        const { nodes } = useWorkflowStore.getState();
+        // 统计当前节点之前（含自身）的 user 节点数量，得到 1-based 索引
+        const userMsgIndex = nodes.slice(0, nodes.findIndex((n) => n.id === node.id) + 1)
+          .filter((n) => n.type === "user").length;
+        if (userMsgIndex === 0) return;
+
+        // 从后端获取消息列表，找到对应位置的 user 消息 id
+        const detail = await tauriCmd.getSession(sessionId);
+        const userMessages = detail.messages.filter((m) => m.role === "user");
+        forkMessageId = userMessages[userMsgIndex - 1]?.id;
+        if (!forkMessageId) return;
+      } catch (err) {
+        console.error("[UserNode] 获取会话消息失败:", err);
+        return;
+      }
+    }
+
+    try {
+      // 1. 调用后端创建分支（复制前缀消息+设置活跃分支）
+      //    新 user 消息由后续 startAgent 创建，并通过 branchGroupId 设置 branch_group_id
+      const branchResult = await tauriCmd.createBranch(sessionId, forkMessageId);
+
+      // 2. 退出编辑模式
+      setIsEditing(false);
+      setEditContent("");
+
+      // 3. 刷新 workflow 节点：从后端重新加载当前活跃分支的消息
+      const [branchGroups, detail] = await Promise.all([
+        tauriCmd.listBranchGroups(sessionId),
+        tauriCmd.getSession(sessionId),
+      ]);
+      useWorkflowStore.getState().loadFromMessages(
+        detail.messages,
+        branchGroups,
+        detail.activeBranchId,
+      );
+
+      // 4. 清空 workflow 缓存（分支已切换，旧缓存失效）
+      useWorkflowStore.getState().clearSessionCache(sessionId);
+
+      // 5. 通过 pendingBranchSend 触发 App.tsx 的 handleSend 流程
+      //    不能直接调用 tauriCmd.startAgent，否则会绕过 useAgent.sendMessage，
+      //    导致 deepThinkingContentRef 等 ref 未重置（思考过程追加问题），
+      //    且不会创建 user 节点（用户消息不显示问题）。
+      //    App.tsx 监听 pendingBranchSend 后会复用 handleSend 完整流程：
+      //    resetRefs + addNode("user") + setExecutionStatus + sendMessage(branchGroupId)
+      useWorkflowStore.getState().setPendingBranchSend({
+        content: trimmedContent,
+        branchGroupId: branchResult.branchGroupId,
+      });
+    } catch (err) {
+      console.error("[UserNode] 创建分支失败:", err);
+    }
+  };
+
+  // 编辑模式键盘事件：Ctrl/Cmd+Enter 触发创建分支，Esc 取消
+  const handleEditKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      void handleConfirmCreateBranch();
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      handleCancelEdit();
+    }
+  };
+
+  // 切换分支：根据方向（-1 上一个 / 1 下一个）在分支组内循环切换
+  const handleSwitchBranch = async (direction: 1 | -1) => {
+    if (!data.branchGroupId || !data.branchId) return;
+
+    // 从 useWorkflowStore 获取分支组信息
+    const branchGroups = useWorkflowStore.getState().branchGroups;
+    const group = branchGroups.find((g) => g.branchGroupId === data.branchGroupId);
+    if (!group || group.branches.length === 0) return;
+
+    // 找到当前分支在组内的位置
+    const currentIdx = group.branches.findIndex((b) => b.branchId === data.branchId);
+    if (currentIdx === -1) return;
+
+    // 计算下一个分支（循环切换）
+    const total = group.branches.length;
+    const nextIdx = (currentIdx + direction + total) % total;
+    const nextBranchId = group.branches[nextIdx].branchId;
+
+    // 调用 useSessionStore.switchBranch 切换分支
+    try {
+      await useSessionStore.getState().switchBranch(nextBranchId);
+    } catch (err) {
+      console.error("[UserNode] 切换分支失败:", err);
+    }
+  };
+
   const showActions = !hideCopy;
 
   return (
@@ -124,8 +249,19 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
       <div className="wf-user-msg-wrapper">
         <div className="wf-node-card">
           <div className="wf-node-body">
-            <div className="wf-user-text">{data.content}</div>
-            {hasAttachments && (
+            {isEditing ? (
+              <textarea
+                className="wf-user-edit-textarea"
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                onKeyDown={handleEditKeyDown}
+                autoFocus
+                rows={3}
+              />
+            ) : (
+              <div className="wf-user-text">{data.content}</div>
+            )}
+            {hasAttachments && !isEditing && (
               <div className="wf-user-attachments">
                 {data.attachments.map((att) => (
                   <span key={att.id} className="wf-attachment-tag" title={att.name}>
@@ -138,8 +274,63 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
             )}
           </div>
         </div>
-        {showActions && (
-          <div className={`wf-msg-actions-row${copied ? " wf-copy-visible" : ""}`}>
+        {showActions && isEditing && (
+          <div className="wf-edit-actions-row">
+            <button
+              className="wf-edit-confirm-button"
+              onClick={() => void handleConfirmCreateBranch()}
+              title={t('workflow.confirmCreateBranch')}
+            >
+              <Icon name="check" size={12} />
+            </button>
+            <button
+              className="wf-edit-cancel-button"
+              onClick={handleCancelEdit}
+              title={t('workflow.cancelCreateBranch')}
+            >
+              <Icon name="close" size={12} />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 非编辑模式下，底部行（分支切换器 + 操作按钮）在 wrapper 外，避免撑开消息框宽度 */}
+      {showActions && !isEditing && (
+        <div className={`wf-user-bottom-row${copied ? " wf-copy-visible" : ""}`}>
+          {/* 分支切换器：仅当存在分支组且分支数 > 1 时显示，位于创建分支按钮左边 */}
+          {data.branchGroupId && data.branchTotal && data.branchTotal > 1 && (
+            <div className="wf-branch-switcher">
+              <button
+                className="wf-branch-arrow"
+                onClick={() => handleSwitchBranch(-1)}
+                disabled={isAgentRunning}
+                title={t('workflow.previousBranch')}
+              >
+                <Icon name="chevron-left" size={12} />
+              </button>
+              <span className="wf-branch-counter">
+                {data.branchIndex}/{data.branchTotal}
+              </span>
+              <button
+                className="wf-branch-arrow"
+                onClick={() => handleSwitchBranch(1)}
+                disabled={isAgentRunning}
+                title={t('workflow.nextBranch')}
+              >
+                <Icon name="chevron-right" size={12} />
+              </button>
+            </div>
+          )}
+          <div className="wf-msg-actions-row">
+            {!isAgentRunning && (
+              <button
+                className="wf-branch-button"
+                onClick={handleStartEdit}
+                title={t('workflow.modifyAndCreateBranch')}
+              >
+                <Icon name="edit" size={12} />
+              </button>
+            )}
             {!isAgentRunning && (
               <button
                 className="wf-delete-button"
@@ -163,8 +354,8 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
               </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {showDeleteConfirm && createPortal(
         <div className="wf-del-overlay" onClick={() => setShowDeleteConfirm(false)}>

@@ -484,7 +484,10 @@ impl Tool for SearchFilesTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some(format!("Directory does not exist or is not a directory: {}", directory)),
+                error: Some(format!(
+                    "Directory does not exist or is not a directory: {}",
+                    directory
+                )),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: None,
             };
@@ -520,7 +523,9 @@ impl Tool for SearchFilesTool {
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some("Search directory is outside the workspace, access denied".to_string()),
+                    error: Some(
+                        "Search directory is outside the workspace, access denied".to_string(),
+                    ),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
                 };
@@ -1443,8 +1448,10 @@ mod tests {
     #[tokio::test]
     async fn test_edit_tool_replace_unique() {
         // 验证 edit 工具唯一匹配替换
-        let temp_dir =
-            std::env::temp_dir().join(format!("samoyed_work_edit_replace_{}", uuid::Uuid::new_v4()));
+        let temp_dir = std::env::temp_dir().join(format!(
+            "samoyed_work_edit_replace_{}",
+            uuid::Uuid::new_v4()
+        ));
         tokio::fs::create_dir_all(&temp_dir).await.unwrap();
 
         let file_path = "edit_test.txt";
@@ -1553,8 +1560,10 @@ mod tests {
     #[tokio::test]
     async fn test_edit_tool_no_match_error() {
         // 验证 edit 工具 0 匹配时报错
-        let temp_dir =
-            std::env::temp_dir().join(format!("samoyed_work_edit_nomatch_{}", uuid::Uuid::new_v4()));
+        let temp_dir = std::env::temp_dir().join(format!(
+            "samoyed_work_edit_nomatch_{}",
+            uuid::Uuid::new_v4()
+        ));
         tokio::fs::create_dir_all(&temp_dir).await.unwrap();
 
         let file_path = "nomatch_test.txt";
@@ -1605,7 +1614,8 @@ mod tests {
     #[tokio::test]
     async fn test_glob_find_rust_files() {
         // 验证 glob 工具查找 .rs 文件
-        let temp_dir = std::env::temp_dir().join(format!("samoyed_work_glob_{}", uuid::Uuid::new_v4()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("samoyed_work_glob_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&temp_dir).await.unwrap();
 
         // 创建测试文件
@@ -1740,7 +1750,8 @@ mod tests {
     #[tokio::test]
     async fn test_grep_basic_search() {
         // 验证 grep 工具基本正则搜索：搜索 "fn " 模式，应只匹配 .rs 文件中的函数定义
-        let temp_dir = std::env::temp_dir().join(format!("samoyed_work_grep_{}", uuid::Uuid::new_v4()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("samoyed_work_grep_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&temp_dir).await.unwrap();
 
         // 创建测试文件
@@ -2104,7 +2115,10 @@ mod tests {
 
         assert!(!result.success);
         assert!(result.error.is_some());
-        assert!(result.error.unwrap().contains("Missing workspace root path"));
+        assert!(result
+            .error
+            .unwrap()
+            .contains("Missing workspace root path"));
     }
 
     #[tokio::test]
@@ -2962,7 +2976,8 @@ mod tests {
         let workspace_root = "D:\\DeskTop\\test";
 
         // 直接执行 temp 目录中的脚本（不复制到工作区）
-        let cmd1 = "python \"C:/Users/a1926/AppData/Local/Temp/samoyed_work/scripts/script.py\" 2>&1";
+        let cmd1 =
+            "python \"C:/Users/a1926/AppData/Local/Temp/samoyed_work/scripts/script.py\" 2>&1";
         assert!(
             !is_script_leak_command(cmd1, workspace_root),
             "直接执行 temp 目录脚本不应被识别为脚本泄露"
@@ -3405,7 +3420,10 @@ impl Tool for DeleteFileTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("Missing workspace root path, unable to perform security validation".to_string()),
+                error: Some(
+                    "Missing workspace root path, unable to perform security validation"
+                        .to_string(),
+                ),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -3559,7 +3577,10 @@ impl Tool for CreateDirectoryTool {
                             return ToolResult {
                                 success: false,
                                 output: None,
-                                error: Some(format!("Parent directory path is invalid: {}", dir_path)),
+                                error: Some(format!(
+                                    "Parent directory path is invalid: {}",
+                                    dir_path
+                                )),
                                 duration_ms: start.elapsed().as_millis() as u64,
                                 error_code: None,
                             };
@@ -3594,7 +3615,9 @@ impl Tool for CreateDirectoryTool {
                                 return ToolResult {
                                     success: false,
                                     output: None,
-                                    error: Some("Workspace root directory path is invalid".to_string()),
+                                    error: Some(
+                                        "Workspace root directory path is invalid".to_string(),
+                                    ),
                                     duration_ms: start.elapsed().as_millis() as u64,
                                     error_code: None,
                                 };
@@ -3621,7 +3644,9 @@ impl Tool for CreateDirectoryTool {
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some("Directory path is outside the workspace, creation denied".to_string()),
+                    error: Some(
+                        "Directory path is outside the workspace, creation denied".to_string(),
+                    ),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
                 };
@@ -3805,7 +3830,10 @@ impl Tool for WriteTextFileTool {
                             return ToolResult {
                                 success: false,
                                 output: None,
-                                error: Some(format!("Parent directory path is invalid: {}", file_path)),
+                                error: Some(format!(
+                                    "Parent directory path is invalid: {}",
+                                    file_path
+                                )),
                                 duration_ms: start.elapsed().as_millis() as u64,
                                 error_code: None,
                             };
@@ -3826,7 +3854,10 @@ impl Tool for WriteTextFileTool {
                                     return ToolResult {
                                         success: false,
                                         output: None,
-                                        error: Some("File path is outside the workspace, write denied".to_string()),
+                                        error: Some(
+                                            "File path is outside the workspace, write denied"
+                                                .to_string(),
+                                        ),
                                         duration_ms: start.elapsed().as_millis() as u64,
                                         error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
                                     };
@@ -3837,7 +3868,9 @@ impl Tool for WriteTextFileTool {
                                 return ToolResult {
                                     success: false,
                                     output: None,
-                                    error: Some("Workspace root directory path is invalid".to_string()),
+                                    error: Some(
+                                        "Workspace root directory path is invalid".to_string(),
+                                    ),
                                     duration_ms: start.elapsed().as_millis() as u64,
                                     error_code: None,
                                 };
@@ -3989,11 +4022,18 @@ fn validate_existing_path_in_workspace(
     workspace_root: &str,
 ) -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
     if workspace_root.is_empty() {
-        return Err("Missing workspace root path, unable to perform security validation".to_string());
+        return Err(
+            "Missing workspace root path, unable to perform security validation".to_string(),
+        );
     }
 
-    let canonical_root = crate::utils::canonicalize(std::path::Path::new(workspace_root))
-        .map_err(|_| format!("Workspace root directory does not exist or is invalid: {}", workspace_root))?;
+    let canonical_root =
+        crate::utils::canonicalize(std::path::Path::new(workspace_root)).map_err(|_| {
+            format!(
+                "Workspace root directory does not exist or is invalid: {}",
+                workspace_root
+            )
+        })?;
 
     // 安全防线 1：词法归一化检查（不依赖文件系统）
     // 即使目标文件不存在（canonicalize 会失败），也能识别 `../` 越界并拒绝
@@ -4075,11 +4115,18 @@ fn validate_target_path_in_workspace(
     workspace_root: &str,
 ) -> Result<std::path::PathBuf, String> {
     if workspace_root.is_empty() {
-        return Err("Missing workspace root path, unable to perform security validation".to_string());
+        return Err(
+            "Missing workspace root path, unable to perform security validation".to_string(),
+        );
     }
 
-    let canonical_root = crate::utils::canonicalize(std::path::Path::new(workspace_root))
-        .map_err(|_| format!("Workspace root directory does not exist or is invalid: {}", workspace_root))?;
+    let canonical_root =
+        crate::utils::canonicalize(std::path::Path::new(workspace_root)).map_err(|_| {
+            format!(
+                "Workspace root directory does not exist or is invalid: {}",
+                workspace_root
+            )
+        })?;
 
     let target_path = std::path::Path::new(resolved_target);
     // 目标路径可能不存在，规范化父目录
@@ -4093,8 +4140,12 @@ fn validate_target_path_in_workspace(
             // 没有父目录（如 "file.txt"），用工作区根目录
             canonical_root.clone()
         } else {
-            crate::utils::canonicalize(parent)
-                .map_err(|_| format!("Parent directory of target path is invalid: {}", parent.display()))?
+            crate::utils::canonicalize(parent).map_err(|_| {
+                format!(
+                    "Parent directory of target path is invalid: {}",
+                    parent.display()
+                )
+            })?
         }
     };
 
@@ -4934,7 +4985,10 @@ impl Tool for EditTool {
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some("No matching string found, old_string does not exist in the file".to_string()),
+                    error: Some(
+                        "No matching string found, old_string does not exist in the file"
+                            .to_string(),
+                    ),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: None,
                 };
@@ -5688,7 +5742,10 @@ impl Tool for ScratchpadTool {
                 ToolResult {
                     success: false,
                     output: None,
-                    error: Some(format!("Unknown action: {} (supported: add/read/clear)", action)),
+                    error: Some(format!(
+                        "Unknown action: {} (supported: add/read/clear)",
+                        action
+                    )),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
                 }
@@ -5802,7 +5859,10 @@ impl Tool for WriteScriptTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some(format!("Filename contains illegal characters: {}", filename)),
+                error: Some(format!(
+                    "Filename contains illegal characters: {}",
+                    filename
+                )),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -5981,7 +6041,11 @@ fn truncate_safe(s: &str, max_chars: usize) -> String {
     while end > 0 && !s.is_char_boundary(end) {
         end -= 1;
     }
-    format!("{}...(truncated, total {} chars)", &s[..end], s.chars().count())
+    format!(
+        "{}...(truncated, total {} chars)",
+        &s[..end],
+        s.chars().count()
+    )
 }
 
 #[async_trait]

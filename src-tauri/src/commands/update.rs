@@ -189,7 +189,8 @@ pub async fn download_update(
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
                     .as_secs();
-                let installer_path = temp_dir.join(format!("samoyed_work_update_{}.exe", timestamp));
+                let installer_path =
+                    temp_dir.join(format!("samoyed_work_update_{}.exe", timestamp));
                 std::fs::write(&installer_path, &bytes).map_err(|e| {
                     CommandError::update(UPDATE_INSTALL_FAILED, format!("保存更新文件失败: {}", e))
                 })?;

@@ -281,8 +281,11 @@ mod tests {
 
     /// 创建临时测试目录（在系统临时目录下创建唯一子目录）
     fn make_test_dir(prefix: &str) -> PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("samoyed_work_test_{}_{}", prefix, std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "samoyed_work_test_{}_{}",
+            prefix,
+            std::process::id()
+        ));
         // 清理可能存在的旧目录
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).expect("创建测试目录失败");
@@ -315,7 +318,10 @@ mod tests {
         cleanup_old_logs(&dir, 7);
 
         // 验证过期文件被删除
-        assert!(!old_samoyed_work.exists(), "过期的 samoyed_work 日志应被删除");
+        assert!(
+            !old_samoyed_work.exists(),
+            "过期的 samoyed_work 日志应被删除"
+        );
         assert!(!old_sidecar.exists(), "过期的 sidecar 日志应被删除");
 
         // 清理测试目录
@@ -339,7 +345,10 @@ mod tests {
         cleanup_old_logs(&dir, 7);
 
         // 验证近期文件被保留
-        assert!(recent_samoyed_work.exists(), "7 天内的 samoyed_work 日志应保留");
+        assert!(
+            recent_samoyed_work.exists(),
+            "7 天内的 samoyed_work 日志应保留"
+        );
         assert!(recent_sidecar.exists(), "7 天内的 sidecar 日志应保留");
 
         // 清理测试目录

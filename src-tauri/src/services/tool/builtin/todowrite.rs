@@ -212,7 +212,10 @@ impl TodoWriteTool {
             .iter()
             .position(|i| i.id == task_id)
             .ok_or_else(|| {
-                CommandError::tool(errors::TOOL_NOT_FOUND, format!("Task not found: {}", task_id))
+                CommandError::tool(
+                    errors::TOOL_NOT_FOUND,
+                    format!("Task not found: {}", task_id),
+                )
             })?;
 
         let now = Self::now_ts();
