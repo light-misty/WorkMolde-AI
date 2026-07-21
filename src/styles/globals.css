@@ -126,22 +126,19 @@
 
 /* 滚动条 */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: #c9ccd3;
-  border-radius: 3px;
-  border: 1px solid transparent;
-  background-clip: padding-box;
+  border: none;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #a8acb4;
-  border: 1px solid transparent;
-  background-clip: padding-box;
+  border: none;
 }
 ::-webkit-scrollbar-corner {
   background: transparent;
@@ -441,9 +438,11 @@
 
   :root:not(.light) ::-webkit-scrollbar-thumb {
     background: #404142;
+    border: none;
   }
   :root:not(.light) ::-webkit-scrollbar-thumb:hover {
     background: #505152;
+    border: none;
   }
 
   :root:not(.light) .wf-node-card:hover {
@@ -469,10 +468,13 @@
 /* ===== 暗色模式滚动条 ===== */
 .dark ::-webkit-scrollbar-thumb {
   background: #404142;
+  border: none;
 }
 .dark ::-webkit-scrollbar-thumb:hover {
   background: #505152;
+  border: none;
 }
+
 
 /* ===== 暗色模式特殊覆盖 ===== */
 .dark .wf-node-card:hover {
@@ -502,11 +504,61 @@
 
 .workflow-scroll-container {
   height: 100%;
-  overflow-y: auto;
-  padding: 24px 32px;
   /* flex 横向布局中占据剩余空间，允许收缩 */
   flex: 1;
   min-width: 0;
+}
+/* 工作流时间线内容内边距，放在可滚动容器的子元素上 */
+.workflow-scroll-padding {
+  padding: 24px 32px;
+}
+
+/* 自定义滚动条区域 */
+.custom-scroll-area {
+  position: relative;
+  overflow: hidden;
+  height: 100%;
+}
+.custom-scroll-area-content {
+  height: 100%;
+  overflow-y: scroll;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.custom-scroll-area-content::-webkit-scrollbar {
+  display: none;
+}
+.custom-scroll-track {
+  position: absolute;
+  right: 2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: transparent;
+  pointer-events: none;
+}
+.custom-scroll-thumb {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: #c9ccd3;
+  cursor: pointer;
+  pointer-events: auto;
+  border-radius: 2px;
+  transition: background 0.15s;
+  will-change: transform;
+}
+.custom-scroll-thumb:hover,
+.custom-scroll-thumb.dragging {
+  background: #a8acb4;
+}
+.dark .custom-scroll-thumb {
+  background: #404142;
+}
+.dark .custom-scroll-thumb:hover,
+.dark .custom-scroll-thumb.dragging {
+  background: #505152;
 }
 
 /* 右侧分支导航边栏（外层：控制 width 动画，收起时宽度收缩为 0） */
@@ -605,7 +657,8 @@
 
 .branch-graph-content {
   flex: 1;
-  overflow-y: auto;
+}
+.branch-graph-padding {
   padding: 8px 12px;
 }
 

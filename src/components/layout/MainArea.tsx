@@ -77,7 +77,7 @@ export function MainArea({ workflow, inputArea, isEmpty = false }: MainAreaProps
           position: relative;
         }
         /* 右侧边栏收起时，为浮动按钮预留空间，避免消息框与按钮重叠 */
-        .workflow-area-reserved > .workflow-scroll-container {
+        .workflow-area-reserved > .workflow-scroll-container .workflow-scroll-padding {
           padding-right: 48px;
         }
         .workflow-right-sidebar-toggle {

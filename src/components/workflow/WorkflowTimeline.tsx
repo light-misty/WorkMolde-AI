@@ -5,6 +5,7 @@ import { useAgentModeStore } from "../../stores/useAgentModeStore";
 import type { AgentMode } from "../../stores/useAgentModeStore";
 import { Icon, type IconName } from "../common/Icon";
 import { WorkflowNodeRenderer } from "./WorkflowNode";
+import { CustomScrollArea } from "../common/CustomScrollArea";
 
 interface WorkflowTimelineProps {
   /** 错误节点重试回调 */
@@ -233,29 +234,33 @@ export function WorkflowTimeline({ onRetryError, typewriterVisible = false }: Wo
   }
 
   return (
-    <div
-      ref={scrollRef}
+    <CustomScrollArea
       className="workflow-scroll-container"
+      scrollRef={scrollRef}
       onScroll={handleScroll}
-      role="log"
-      aria-label={t('workflow.timeline')}
-      aria-live="polite"
+      contentAttrs={{
+        role: 'log',
+        'aria-label': t('workflow.timeline'),
+        'aria-live': 'polite',
+      }}
     >
-      {nodes.map((node) => (
-        <WorkflowNodeRenderer
-          key={node.id}
-          node={node}
-          onRetry={onRetryError}
-          nodeRef={(el) => {
-            if (el) {
-              registerNodeRef(node.id, el);
-            } else {
-              unregisterNodeRef(node.id);
-            }
-          }}
-        />
-      ))}
-    </div>
+      <div className="workflow-scroll-padding">
+        {nodes.map((node) => (
+          <WorkflowNodeRenderer
+            key={node.id}
+            node={node}
+            onRetry={onRetryError}
+            nodeRef={(el) => {
+              if (el) {
+                registerNodeRef(node.id, el);
+              } else {
+                unregisterNodeRef(node.id);
+              }
+            }}
+          />
+        ))}
+      </div>
+    </CustomScrollArea>
   );
 }
 

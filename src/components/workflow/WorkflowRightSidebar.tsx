@@ -4,6 +4,7 @@ import { useWorkflowStore } from '../../stores/useWorkflowStore';
 import { useSessionStore } from '../../stores/useSessionStore';
 import { listAllBranchUserMessages } from '../../services/tauri';
 import { Icon } from '../common/Icon';
+import { CustomScrollArea } from '../common/CustomScrollArea';
 import type { UserNodeData } from '../../types/workflow';
 import type { BranchUserMessage } from '../../types/session';
 
@@ -198,13 +199,13 @@ export function WorkflowRightSidebar({ collapsed = false }: WorkflowRightSidebar
             </>
           )}
         </div>
-        <div className="branch-graph-content">
+        <CustomScrollArea className="branch-graph-content">
           {currentUserNodes.length === 0 && !isSearching ? (
             <div className="branch-graph-empty">{t('workflow.emptyWorkflow')}</div>
           ) : isLoadingMessages && isSearching ? (
             <div className="branch-graph-empty">{t('common.loading') }</div>
           ) : (
-            <>
+            <div className="branch-graph-padding">
               {/* 当前分支的 user 节点列表（搜索时不清空，仅作为分支导航展示） */}
               {currentUserNodes.map((node, index) => {
                 const data = node.data as UserNodeData;
@@ -302,9 +303,9 @@ export function WorkflowRightSidebar({ collapsed = false }: WorkflowRightSidebar
                 searchResultsFromOtherBranches.length === 0 && (
                   <div className="branch-graph-empty">{t('workflow.noSearchResults')}</div>
                 )}
-            </>
+            </div>
           )}
-        </div>
+        </CustomScrollArea>
       </div>
     </div>
   );

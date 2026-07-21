@@ -4,6 +4,7 @@ import { useWorkflowStore } from "../../stores/useWorkflowStore";
 import { Icon } from "../common/Icon";
 import { WorkflowNodeRenderer } from "./WorkflowNode";
 import { listSubAgentMessages } from "../../services/tauri";
+import { CustomScrollArea } from "../common/CustomScrollArea";
 
 interface SubAgentWorkflowPageProps {
   agentId: string;
@@ -158,22 +159,28 @@ export function SubAgentWorkflowPage({ agentId }: SubAgentWorkflowPageProps) {
         ) : subAgentNodes.length === 0 ? (
           <div className="subagent-status">{t("subAgentWorkflow.empty")}</div>
         ) : (
-          <div ref={scrollRef} className="workflow-scroll-container" onScroll={handleScroll}>
-            {subAgentNodes.map((node) => (
-              <WorkflowNodeRenderer
-                key={node.id}
-                node={node}
-                hideCopy
-                nodeRef={(el) => {
-                  if (el) {
-                    registerNodeRef(node.id, el);
-                  } else {
-                    unregisterNodeRef(node.id);
-                  }
-                }}
-              />
-            ))}
-          </div>
+          <CustomScrollArea
+            className="workflow-scroll-container"
+            scrollRef={scrollRef}
+            onScroll={handleScroll}
+          >
+            <div className="workflow-scroll-padding">
+              {subAgentNodes.map((node) => (
+                <WorkflowNodeRenderer
+                  key={node.id}
+                  node={node}
+                  hideCopy
+                  nodeRef={(el) => {
+                    if (el) {
+                      registerNodeRef(node.id, el);
+                    } else {
+                      unregisterNodeRef(node.id);
+                    }
+                  }}
+                />
+              ))}
+            </div>
+          </CustomScrollArea>
         )}
       </div>
 
