@@ -60,6 +60,16 @@ impl Drop for AgentCleanupGuard {
     }
 }
 
+/// 将 provider_id 字符串转换为 Option<&str>，空字符串转为 None
+/// 用于 LlmRouter 的 *_for 方法的参数转换
+fn provider_id_to_option(provider_id: &str) -> Option<&str> {
+    if provider_id.is_empty() {
+        None
+    } else {
+        Some(provider_id)
+    }
+}
+
 /// 启动 Agent 执行，在后台 spawn 一个 tokio task
 #[tauri::command]
 pub async fn start_agent(
@@ -1419,14 +1429,9 @@ async fn run_agent(
     let has_image_attachments = AttachmentService::has_image_attachments(attachments);
 
     // 获取当前 Provider 是否支持视觉（提前获取，用于数据层面处理）
-    // 通过 Router 的主 Provider ID 精确查找（避免 list_providers 顺序不确定）
+    // 优先使用用户在对话框中选择的 provider_id，未指定时回退到主 Provider
     let supports_vision = if has_image_attachments {
-        let providers = llm_router.list_providers();
-        let main_provider_id = llm_router.default_provider_id();
-        let main_provider = main_provider_id
-            .and_then(|id| providers.iter().find(|p| p.id == id))
-            .or_else(|| providers.first());
-        main_provider.map(|p| p.supports_vision).unwrap_or(false)
+        llm_router.supports_vision_for(provider_id_to_option(provider_id))
     } else {
         true
     };

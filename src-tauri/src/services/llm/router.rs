@@ -665,15 +665,20 @@ impl LlmRouter {
     // 其他方法
     // ================================================================
 
-    /// 获取默认 Provider 的 max_tokens 配置
+    /// 获取指定 Provider 的 max_tokens 配置
     /// 用于截断重试时计算翻倍后的 max_tokens
-    pub async fn get_default_max_tokens(&self) -> u32 {
-        let default_id = match &self.default_id {
-            Some(id) => id.clone(),
+    /// 若 provider_id 为 None 或空，回退到默认 Provider
+    pub async fn get_max_tokens_for(&self, provider_id: Option<&str>) -> u32 {
+        let pid = provider_id
+            .filter(|s| !s.is_empty())
+            .or(self.default_id.as_deref())
+            .map(|s| s.to_string());
+        let pid = match pid {
+            Some(id) => id,
             None => return crate::config::llm_config::AdvancedConfig::default().max_tokens,
         };
         let providers = self.providers.read().await;
-        if let Some(provider) = providers.get(&default_id) {
+        if let Some(provider) = providers.get(&pid) {
             provider.get_max_tokens()
         } else {
             crate::config::llm_config::AdvancedConfig::default().max_tokens
@@ -793,11 +798,6 @@ impl LlmRouter {
         }
     }
 
-    /// 获取主 Provider ID（列表第一个，用于上下文窗口等查询）
-    pub fn default_provider_id(&self) -> Option<&str> {
-        self.default_id.as_deref()
-    }
-
     /// 按 provider_id 查询上下文窗口大小
     /// 若 provider_id 为 None 或空，回退到默认 Provider
     pub fn context_window_for(&self, provider_id: Option<&str>) -> usize {
@@ -842,5 +842,15 @@ impl LlmRouter {
                 _ => "none",
             })
             .unwrap_or("none")
+    }
+
+    /// 按 provider_id 查询是否支持视觉/图片多模态
+    /// 若 provider_id 为 None 或空，回退到默认 Provider
+    pub fn supports_vision_for(&self, provider_id: Option<&str>) -> bool {
+        let pid = provider_id.filter(|s| !s.is_empty()).or(self.default_id.as_deref());
+        pid
+            .and_then(|id| self.meta.get(id))
+            .map(|m| m.supports_vision)
+            .unwrap_or(false)
     }
 }

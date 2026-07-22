@@ -290,8 +290,14 @@ impl<R: Runtime> AgentExecutor<R> {
     }
 
     /// 获取当前 Provider 的 max_tokens 配置
-    async fn get_current_max_tokens(&self) -> u32 {
-        self.router.get_default_max_tokens().await
+    /// 优先使用用户在对话框中选择的 Provider（preferred_provider_id）
+    async fn get_current_max_tokens(&self, ctx: &AgentContext) -> u32 {
+        let pid: Option<&str> = if ctx.preferred_provider_id.is_empty() {
+            None
+        } else {
+            Some(&ctx.preferred_provider_id)
+        };
+        self.router.get_max_tokens_for(pid).await
     }
 
     /// 估算消息列表的 token 数（简化：字符数 / 3）
@@ -858,10 +864,10 @@ impl<R: Runtime> AgentExecutor<R> {
     ) {
         // 使用用户在对话框中选择的 Provider（preferred_provider_id）查询元数据
         // 若未指定则回退到默认 Provider，确保右侧栏显示与实际 LLM 调用一致的 Provider 信息
-        let pid = if ctx.preferred_provider_id.is_empty() {
+        let pid: Option<&str> = if ctx.preferred_provider_id.is_empty() {
             None
         } else {
-            Some(ctx.preferred_provider_id.as_str())
+            Some(&ctx.preferred_provider_id)
         };
         let model_name = self.router.model_name_for(pid);
         let cache_type = self.router.cache_type_for(pid).to_string();
@@ -1638,7 +1644,7 @@ impl<R: Runtime> AgentExecutor<R> {
 
                         // 用翻倍的 max_tokens 重试 LLM 调用
                         let mut truncation_retry_count = 0;
-                        let mut current_max_tokens = self.get_current_max_tokens().await;
+                        let mut current_max_tokens = self.get_current_max_tokens(ctx).await;
 
                         while truncation_retry_count < MAX_TRUNCATION_RETRIES {
                             truncation_retry_count += 1;
