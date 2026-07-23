@@ -235,6 +235,7 @@
     "authorInfo": "Author Info",
     "notSet": "Not set",
     "editAuthorInfo": "Edit author info",
+    "authorInfoTooltip": "Author info only applies in Document mode, used for auto-filling generated document metadata",
     "confirmLevel": "Confirmation Level",
     "confirmAlways": "Always confirm",
       "confirmEditOnly": "Confirm delete only",

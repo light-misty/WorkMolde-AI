@@ -87,7 +87,7 @@ export function AgentInfoSection() {
           <div className="ai-field">
             <span className="ai-field-label">{t('agentInfo.authorInfo')}</span>
             <div className="ai-field-author-info">
-              <span className="ai-field-author-summary">
+              <span className="ai-field-author-summary" title={t('agentInfo.authorInfoTooltip')}>
                 {settings.general.authorName || t('agentInfo.notSet')}
               </span>
               <button

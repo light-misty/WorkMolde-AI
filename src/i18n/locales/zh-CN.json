@@ -235,6 +235,7 @@
     "authorInfo": "作者信息",
     "notSet": "未设置",
     "editAuthorInfo": "修改作者信息",
+    "authorInfoTooltip": "作者信息仅在文档模式下生效，用于自动填充生成的文档元数据",
     "confirmLevel": "确认级别",
     "confirmAlways": "全部需确认",
     "confirmEditOnly": "仅删除确认",
